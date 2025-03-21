@@ -662,21 +662,65 @@ export default function CashRegister() {
 
       const today = format(new Date(), "yyyy-MM-dd");
       
-      const transaction = {
-        type: transactionData.type,
-        category: transactionData.category,
-        description: transactionData.description,
-        amount: parseFloat(transactionData.amount),
-        payment_method: transactionData.payment_method,
-        status: "pago",
-        payment_date: today,
-        due_date: today,
-        notes: transactionData.notes || "",
-        client_id: transactionData.client_id || null,
-        client_name: clients.find(c => c.id === transactionData.client_id)?.name || ""
-      };
+      // Array para armazenar todas as transações a serem criadas
+      const transactionsToCreate = [];
 
-      await FinancialTransaction.create(transaction);
+      // Para cada item no carrinho, criar uma transação específica
+      for (const item of transactionData.items) {
+        const baseTransaction = {
+          type: "receita",
+          status: "pago",
+          payment_date: today,
+          due_date: today,
+          notes: transactionData.notes || "",
+          client_id: transactionData.client_id || null,
+          client_name: clients.find(c => c.id === transactionData.client_id)?.name || "",
+          payment_method: transactionData.payment_method,
+          seller_id: transactionData.seller_id || null,
+          seller_name: transactionData.seller_name || ""
+        };
+
+        // Adicionar campos específicos baseado no tipo do item
+        const itemTransaction = {
+          ...baseTransaction,
+          amount: parseFloat(item.price),
+          description: item.name,
+          item_id: item.id,
+          item_type: item.type, // "produto", "servico", "pacote", "gift_card", "assinatura"
+          category: item.type, // Usar o tipo do item como categoria
+          quantity: item.quantity || 1,
+          unit_price: parseFloat(item.price),
+          total_price: parseFloat(item.price) * (item.quantity || 1)
+        };
+
+        // Adicionar campos específicos para cada tipo
+        switch (item.type) {
+          case "servico":
+            itemTransaction.professional_id = item.professional_id;
+            itemTransaction.professional_name = item.professional_name;
+            itemTransaction.duration = item.duration;
+            break;
+          case "pacote":
+            itemTransaction.package_sessions = item.sessions;
+            itemTransaction.package_validity = item.validity;
+            break;
+          case "gift_card":
+            itemTransaction.gift_card_code = item.code;
+            itemTransaction.gift_card_validity = item.validity;
+            break;
+          case "assinatura":
+            itemTransaction.subscription_plan = item.plan;
+            itemTransaction.subscription_duration = item.duration;
+            break;
+        }
+
+        transactionsToCreate.push(itemTransaction);
+      }
+
+      // Criar todas as transações no Firebase
+      await Promise.all(transactionsToCreate.map(transaction => 
+        FinancialTransaction.create(transaction)
+      ));
       
       loadTransactions();
       
@@ -691,10 +735,10 @@ export default function CashRegister() {
         client_id: ""
       });
       
-      toast.success("Transação registrada com sucesso!");
+      toast.success("Venda registrada com sucesso!");
     } catch (error) {
       console.error("Erro ao criar transação:", error);
-      setErrorMessage("Erro ao registrar a transação. Tente novamente.");
+      setErrorMessage("Erro ao registrar a venda. Tente novamente.");
     }
   };
 
