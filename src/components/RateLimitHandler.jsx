@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Database, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -8,11 +8,13 @@ export default function RateLimitHandler({
   onRetry, 
   allowReload = true,
   showWhenNoError = false,
-  className = ''
+  className = '',
+  useFirebaseCache = true
 }) {
   const [isRateLimited, setIsRateLimited] = useState(false);
   const [remainingTime, setRemainingTime] = useState(30);
   const [isVisible, setIsVisible] = useState(false);
+  const [usingFirebaseCache, setUsingFirebaseCache] = useState(useFirebaseCache);
   
   useEffect(() => {
     const isRateLimit = error && (
@@ -26,6 +28,9 @@ export default function RateLimitHandler({
     setIsVisible(isRateLimit || showWhenNoError);
     
     if (isRateLimit) {
+      // Quando ocorre um erro de limite de taxa, ativamos o cache do Firebase
+      setUsingFirebaseCache(true);
+      
       const timer = setInterval(() => {
         setRemainingTime(prev => {
           if (prev <= 1) {
@@ -58,9 +63,16 @@ export default function RateLimitHandler({
           <div className="p-3 rounded-md bg-red-100 border-l-4 border-red-500">
             <p className="text-sm">
               {isRateLimited 
-                ? `O sistema atingiu o limite de requisições. Aguarde ${remainingTime} segundos para tentar novamente ou clique no botão abaixo.`
+                ? `O sistema atingiu o limite de requisições. ${usingFirebaseCache ? 'Usando dados do cache do Firebase.' : ''} Aguarde ${remainingTime} segundos para tentar novamente ou clique no botão abaixo.`
                 : "Ocorreu um erro ao carregar os dados. Por favor, tente recarregar a página."}
             </p>
+            
+            {isRateLimited && usingFirebaseCache && (
+              <div className="mt-2 flex items-center text-xs text-red-700">
+                <Database className="w-3 h-3 mr-1" />
+                <span>Dados podem não estar totalmente atualizados enquanto estiver usando o cache.</span>
+              </div>
+            )}
           </div>
           
           <div className="flex gap-2">
@@ -69,6 +81,7 @@ export default function RateLimitHandler({
                 onClick={onRetry}
                 className="bg-red-600 hover:bg-red-700 text-white"
               >
+                <RefreshCw className="w-4 h-4 mr-1" />
                 Tentar novamente
               </Button>
             )}

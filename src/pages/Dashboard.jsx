@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,13 +25,8 @@ import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { format, subDays, startOfMonth, endOfMonth, addDays, isToday, setHours, setMinutes, isSameDay, isSameMonth, getDay, isWithinInterval, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Client } from "@/api/entities";
-import { Appointment } from "@/api/entities";
-import { Sale } from "@/api/entities";
-import { FinancialTransaction } from "@/api/entities";
-import { Product } from "@/api/entities";
-import { Service } from "@/api/entities";
-import { Employee } from "@/api/entities";
+import { Client, Appointment, Sale, FinancialTransaction } from "@/firebase/entities";
+import { Product, Service, Employee } from "@/api/entities";
 import {
   BarChart,
   Bar,
@@ -577,7 +571,7 @@ export default function Dashboard() {
             {week.map((day, dayIndex) => {
               const dayClass = getDayClass(day);
               const hasAppointment = calendarEvents.filter(event => 
-                isSameDay(new Date(event.start), day)
+                isSameDay(parseISO(event.start.toISOString()), day)
               ).length;
               
               return (
@@ -601,7 +595,7 @@ export default function Dashboard() {
   
   const renderDayEvents = () => {
     const dayEvents = calendarEvents.filter(event => 
-      isSameDay(new Date(event.start), selectedDate)
+      isSameDay(parseISO(event.start.toISOString()), selectedDate)
     ).sort((a, b) => new Date(a.start) - new Date(b.start));
     
     if (dayEvents.length === 0) {

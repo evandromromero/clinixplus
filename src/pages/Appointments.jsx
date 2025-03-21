@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Clock, Plus, Check, X, Filter, ArrowRight, User, DollarSign, History, Phone, Mail, FileText, Package as PackageIcon, Scissors, CalendarPlus, Trash2 } from "lucide-react";
-import { format, getDay } from "date-fns";
+import { format, parseISO, isToday, isTomorrow, isThisWeek, isAfter, getDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,10 +30,8 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { Appointment } from "@/api/entities";
-import { Client } from "@/api/entities";
-import { Service } from "@/api/entities";
-import { Employee } from "@/api/entities";
+import { Appointment, Client } from "@/firebase/entities";
+import { Employee, Service } from "@/api/entities";
 import { Package } from "@/api/entities";
 import { ClientPackage } from "@/api/entities";
 import { FinancialTransaction } from "@/api/entities";

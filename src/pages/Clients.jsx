@@ -27,7 +27,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { format } from "date-fns";
 import { Plus, Search, UserPlus, Phone, Mail, Edit, FileText, Trash2 } from "lucide-react";
-import { Client } from "@/api/entities";
+import { Client } from "@/firebase/entities";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import SimpleAlert from "@/components/SimpleAlert";

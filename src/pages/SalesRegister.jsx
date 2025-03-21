@@ -1,16 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Sale } from '@/api/entities';
-import { Client } from '@/api/entities';
-import { Product } from '@/api/entities';
-import { Service } from '@/api/entities';
+import { Client, Sale, FinancialTransaction } from "@/firebase/entities";
+import { Product, Service, Employee, PaymentMethod } from "@/api/entities";
 import { Package } from '@/api/entities';
 import { ClientPackage } from '@/api/entities';
-import { Employee } from '@/api/entities';
-import { PaymentMethod } from '@/api/entities';
 import { GiftCard } from '@/api/entities';
 import { SubscriptionPlan } from '@/api/entities';
 import { ClientSubscription } from '@/api/entities';
-import { FinancialTransaction } from '@/api/entities';
 import { UnfinishedSale } from '@/api/entities';
 import { Inventory } from '@/api/entities';
 import { Button } from "@/components/ui/button";
