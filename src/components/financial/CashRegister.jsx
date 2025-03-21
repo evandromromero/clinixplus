@@ -12,24 +12,24 @@ import { Calendar } from "@/components/ui/calendar";
 import { format, subDays, isSameDay, startOfDay, parseISO, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { 
-  RefreshCw,
-  X,
-  Plus,
-  FileText,
-  CalendarIcon,
-  DollarSign,
-  ArrowUpRight,
-  ArrowDownRight,
-  CircleDollarSign,
-  AlertTriangle,
-  Trash2,
-  Lock,
-  Unlock,
+  Plus, 
+  DollarSign, 
+  ArrowUpRight, 
+  ArrowDownRight, 
+  FileText, 
+  Printer,
   Download,
   CreditCard,
   Landmark,
+  CircleDollarSign,
+  Calendar as CalendarIcon,
   Check,
-  XCircle
+  XCircle,
+  AlertTriangle,
+  Lock,
+  Unlock,
+  RefreshCcw,
+  Trash2
 } from "lucide-react";
 import { FinancialTransaction, User, Client, Employee, Package, ClientPackage } from "@/firebase/entities";
 import { InvokeLLM } from "@/api/integrations";
@@ -134,25 +134,15 @@ export default function CashRegister() {
 
   // Monitorar mudanças no status do caixa e nos valores
   useEffect(() => {
+    console.log("[CashRegister] Status do caixa alterado:", cashIsOpen ? "Aberto" : "Fechado");
+    console.log("[CashRegister] Valor inicial:", initialAmount);
+    console.log("[CashRegister] Saldo do dia:", dailyBalance);
+    
+    // Forçar atualização dos dados quando o status mudar
     if (cashIsOpen) {
-      console.log("[CashRegister] Status do caixa alterado:", "Aberto");
-      console.log("[CashRegister] Valor inicial:", initialAmount);
-      console.log("[CashRegister] Saldo do dia:", dailyBalance);
-      
-      // Forçar atualização dos dados quando o status mudar
       loadTransactionsWithRetry();
     }
-  }, [cashIsOpen]);
-
-  // Monitorar mudanças nos valores
-  useEffect(() => {
-    console.log("[CashRegister] Valores atualizados:");
-    console.log("- Valor inicial:", initialAmount);
-    console.log("- Receitas:", dailyReceipts);
-    console.log("- Despesas:", dailyExpenses);
-    console.log("- Saldo:", dailyBalance);
-    console.log("- Saldo em dinheiro:", expectedCashAmount);
-  }, [initialAmount, dailyReceipts, dailyExpenses, dailyBalance, expectedCashAmount]);
+  }, [cashIsOpen, initialAmount, dailyBalance]);
 
   const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -292,90 +282,102 @@ export default function CashRegister() {
   // Alias para manter compatibilidade com o código existente
   const loadTransactions = loadTransactionsWithRetry;
 
-  const processTransactions = async (transactions) => {
+  const processTransactions = (transactions) => {
     try {
       const today = format(new Date(), "yyyy-MM-dd");
-      console.log("[CashRegister] Processando transações para:", today);
-
-      // Filtrar transações ativas
-      const activeTransactions = transactions.filter(t => !t.is_deleted);
-      console.log("[CashRegister] Total de transações:", transactions.length, "Ativas:", activeTransactions.length);
-
+      console.log("Data de hoje em processTransactions:", today);
+      
+      if (!transactions || !Array.isArray(transactions)) {
+        console.log("Nenhuma transação para processar");
+        return;
+      }
+      
+      // Filtrar transações excluídas
+      const activeTransactions = transactions.filter(transaction => 
+        transaction.status !== "excluido" && transaction.deleted !== true
+      );
+      
+      console.log(`Total de transações: ${transactions.length}, Ativas: ${activeTransactions.length}`);
+      
       // Filtrar transações de hoje
       const todayTransactions = activeTransactions.filter(transaction => {
-        const transactionDate = transaction.payment_date.split('T')[0];
-        return transactionDate === today;
+        const transactionDate = transaction.payment_date ? transaction.payment_date.split('T')[0] : null;
+        const isToday = transactionDate === today;
+        console.log(`Comparando datas: transação [${transactionDate}] vs hoje [${today}] ${isToday}`);
+        return isToday;
       });
-
-      console.log("[CashRegister] Transações de hoje:", todayTransactions.length);
-
-      // Encontrar transação de abertura
+      
+      console.log("Transações filtradas para hoje:", todayTransactions);
+      console.log("Número de transações de hoje:", todayTransactions.length);
+      
+      // Verificar se há transação de abertura
       const openingTransaction = todayTransactions.find(t => t.category === "abertura_caixa");
-      console.log("[CashRegister] Transação de abertura:", openingTransaction);
-
+      
       if (openingTransaction) {
+        console.log("Transação de abertura encontrada:", openingTransaction);
+        
         // Valor inicial do caixa
-        const initialAmount = parseFloat(openingTransaction.amount) || 0;
-        console.log("[CashRegister] Valor inicial do caixa: R$", initialAmount.toFixed(2));
-
-        // Calcular receitas e despesas
-        let totalReceipts = 0;
-        let totalExpenses = 0;
-        let cashReceipts = 0;
-        let cashExpenses = 0;
-
-        todayTransactions.forEach(transaction => {
-          if (transaction.category !== "abertura_caixa" && transaction.category !== "fechamento_caixa") {
-            const amount = parseFloat(transaction.amount) || 0;
-            console.log(`[CashRegister] Processando transação: ${transaction.id} - ${transaction.type} - R$ ${amount.toFixed(2)}`);
-            
-            if (transaction.type === "receita") {
-              totalReceipts += amount;
-              if (transaction.payment_method === "dinheiro") {
-                cashReceipts += amount;
-              }
-            } else if (transaction.type === "despesa") {
-              totalExpenses += amount;
-              if (transaction.payment_method === "dinheiro") {
-                cashExpenses += amount;
-              }
-            }
-          }
-        });
-
-        // Calcular saldos
-        const dailyBalance = initialAmount + totalReceipts - totalExpenses;
-        const cashBalance = initialAmount + cashReceipts - cashExpenses;
-
-        console.log("[CashRegister] === Resumo Financeiro ===");
-        console.log("- Valor inicial:", initialAmount.toFixed(2));
-        console.log("- Receitas totais:", totalReceipts.toFixed(2));
-        console.log("- Despesas totais:", totalExpenses.toFixed(2));
-        console.log("- Saldo do dia:", dailyBalance.toFixed(2));
-        console.log("- Receitas em dinheiro:", cashReceipts.toFixed(2));
-        console.log("- Despesas em dinheiro:", cashExpenses.toFixed(2));
-        console.log("- Saldo em dinheiro:", cashBalance.toFixed(2));
-
-        // Verificar status do caixa
-        const closingTransaction = todayTransactions.find(t => t.category === "fechamento_caixa");
-        const isOpen = !closingTransaction;
-
-        // Atualizar estados em lote para evitar re-renders
-        setInitialAmount(initialAmount);
+        const initialAmountValue = parseFloat(openingTransaction.amount) || 0;
+        console.log(`Valor inicial do caixa: R$ ${initialAmountValue.toFixed(2)}`);
+        
+        // Atualizar o valor inicial
+        setInitialAmount(initialAmountValue);
+        
+        // Filtrar transações de receita e despesa (excluindo abertura e fechamento)
+        const receiptTransactions = todayTransactions.filter(t => 
+          t.type === "receita" && 
+          t.category !== "abertura_caixa" && 
+          t.category !== "fechamento_caixa"
+        );
+        
+        const expenseTransactions = todayTransactions.filter(t => 
+          t.type === "despesa" && 
+          t.category !== "abertura_caixa" && 
+          t.category !== "fechamento_caixa"
+        );
+        
+        // Calcular totais
+        const totalReceipts = receiptTransactions.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+        const totalExpenses = expenseTransactions.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+        
+        // Atualizar os estados
         setDailyReceipts(totalReceipts);
         setDailyExpenses(totalExpenses);
-        setDailyBalance(dailyBalance);
-        setExpectedCashAmount(cashBalance);
+        
+        // Calcular saldo
+        const balance = initialAmountValue + totalReceipts - totalExpenses;
+        console.log(`Cálculo do saldo: ${initialAmountValue} (inicial) + ${totalReceipts} (receitas) - ${totalExpenses} (despesas) = ${balance}`);
+        setDailyBalance(balance);
+        
+        // Calcular saldo em dinheiro
+        const cashReceiptTransactions = receiptTransactions.filter(t => t.payment_method === "dinheiro");
+        const cashExpenseTransactions = expenseTransactions.filter(t => t.payment_method === "dinheiro");
+        
+        const cashReceipts = cashReceiptTransactions.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+        const cashExpenses = cashExpenseTransactions.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+        
+        const expectedCash = initialAmountValue + cashReceipts - cashExpenses;
+        console.log(`Saldo em dinheiro: ${initialAmountValue} (inicial) + ${cashReceipts} (receitas em dinheiro) - ${cashExpenses} (despesas em dinheiro) = ${expectedCash}`);
+        setExpectedCashAmount(expectedCash);
+        
+        // Verificar se há transação de fechamento
+        const closingTransaction = todayTransactions.find(t => t.category === "fechamento_caixa");
+        
+        // Atualizar o status do caixa
+        const isOpen = !!openingTransaction && !closingTransaction;
+        console.log(`Status do caixa após processamento: ${isOpen ? 'Aberto' : 'Fechado'}`);
         setCashIsOpen(isOpen);
-
-        console.log("[CashRegister] Estados atualizados com sucesso");
       } else {
-        console.log("[CashRegister] Nenhuma transação de abertura encontrada para hoje");
+        console.log("Nenhuma transação de abertura encontrada para hoje");
         setCashIsOpen(false);
+        setInitialAmount(0);
+        setDailyReceipts(0);
+        setDailyExpenses(0);
+        setDailyBalance(0);
+        setExpectedCashAmount(0);
       }
     } catch (error) {
-      console.error("[CashRegister] Erro ao processar transações:", error);
-      setErrorMessage("Erro ao processar transações. Por favor, tente novamente.");
+      console.error("Erro ao processar transações:", error);
     }
   };
 
@@ -906,6 +908,16 @@ export default function CashRegister() {
     }
   };
   
+  const printReport = () => {
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(reportHtml);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+    }, 500);
+  };
+  
   const downloadReport = () => {
     const element = document.createElement('a');
     const file = new Blob([reportHtml], {type: 'text/html'});
@@ -1124,153 +1136,84 @@ export default function CashRegister() {
     );
   };
   
-  const formatCurrency = (value) => {
-    if (typeof value !== 'number') {
-      value = parseFloat(value) || 0;
-    }
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    }).format(value);
-  };
-
-  const handleRetry = async () => {
-    setErrorMessage(null);
-    await loadTransactionsWithRetry();
-  };
-
-  const clearCache = () => {
-    console.log("[CashRegister] Limpando cache local...");
-    localStorage.removeItem('cashRegisterData');
-    localStorage.removeItem('lastUpdate');
-    loadTransactionsWithRetry();
-  };
-
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-[#0D0F36]">Caixa</h2>
-          <h3 className="text-sm text-gray-500">Controle de entradas e saídas do caixa</h3>
-        </div>
-        
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleRetry}
+        <h2 className="text-3xl font-bold text-[#0D0F36]">
+          Caixa
+          <span className="text-base font-normal text-gray-500 ml-2">Controle de entradas e saídas do caixa</span>
+        </h2>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={() => {
+              loadTransactionsWithRetry();
+              loadClients();
+              loadAuthorizedEmployees();
+            }}
             disabled={isLoading}
+            className="flex items-center gap-2"
           >
-            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+            <RefreshCcw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
             Atualizar
           </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={clearCache}
+          <Button 
+            variant="destructive" 
+            onClick={() => {
+              // Limpar o cache local
+              console.log("[CashRegister] Limpando cache local...");
+              
+              // Forçar atualização completa
+              loadTransactionsWithRetry();
+              loadClients();
+              loadAuthorizedEmployees();
+            }}
             disabled={isLoading}
+            className="flex items-center gap-2"
           >
-            <Trash2 className="h-4 w-4 mr-2" />
+            <Trash2 className="h-4 w-4" />
             Limpar Cache
           </Button>
-
-          <Button
-            variant="default"
-            size="sm"
+          <Button 
             onClick={() => setShowNewTransactionDialog(true)}
-            disabled={!cashIsOpen || isLoading}
             className="bg-[#294380] hover:bg-[#0D0F36]"
           >
-            <Plus className="h-4 w-4 mr-2" />
-            Nova Transação
+            <Plus className="w-4 h-4 mr-2" />
+              Nova Transação
           </Button>
-
-          {!cashIsOpen && (
-            <Button
-              variant="default"
-              size="sm"
-              onClick={() => setShowOpenCashDialog(true)}
-              disabled={isLoading}
-              className="bg-[#294380] hover:bg-[#0D0F36]"
-            >
-              <Unlock className="h-4 w-4 mr-2" />
-              Abrir Caixa
-            </Button>
-          )}
-
-          {cashIsOpen && (
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => setShowCloseCashDialog(true)}
-              disabled={isLoading}
-            >
-              <Lock className="h-4 w-4 mr-2" />
-              Fechar Caixa
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {errorMessage && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-          <div className="flex items-center gap-2 text-red-600 mb-2">
-            <AlertTriangle className="h-5 w-5" />
-            <span className="font-medium">Erro ao carregar dados</span>
-          </div>
-          <p className="text-red-600 mb-2">{errorMessage}</p>
-          <Button
-            onClick={handleRetry}
-            className="bg-red-600 hover:bg-red-700 text-white"
-            size="sm"
+          <Button 
+            onClick={() => setShowOpenCashDialog(true)}
+            variant="outline" 
+            className="text-[#294380] border-[#294380]"
+            disabled={cashIsOpen}
           >
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Tentar novamente
+            Abrir Caixa
+          </Button>
+          <Button 
+            onClick={() => setShowCloseCashDialog(true)}
+            variant="outline" 
+            className="text-[#294380] border-[#294380]"
+            disabled={!cashIsOpen}
+          >
+            Fechar Caixa
+          </Button>
+          <Button 
+            onClick={() => setShowReportDialog(true)}
+            variant="outline"
+            className="text-[#294380] border-[#294380]"
+          >
+            <FileText className="w-4 h-4 mr-2" />
+            Relatório
+          </Button>
+          <Button 
+            onClick={() => setShowHistoricCashDialog(true)}
+            variant="outline"
+            className="text-[#294380] border-[#294380]"
+          >
+            <CalendarIcon className="w-4 h-4 mr-2" />
+            Caixas Anteriores
           </Button>
         </div>
-      )}
-      
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="bg-yellow-50">
-          <CardContent className="pt-6">
-            <div className="text-sm font-medium text-gray-500">Saldo em Dinheiro</div>
-            <div className="text-2xl font-bold text-green-600">
-              <DollarSign className="h-5 w-5 inline-block mr-1" />
-              {formatCurrency(expectedCashAmount)}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-green-50">
-          <CardContent className="pt-6">
-            <div className="text-sm font-medium text-gray-500">Receitas de Hoje</div>
-            <div className="text-2xl font-bold text-green-600">
-              <ArrowUpRight className="h-5 w-5 inline-block mr-1" />
-              {formatCurrency(dailyReceipts)}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-red-50">
-          <CardContent className="pt-6">
-            <div className="text-sm font-medium text-gray-500">Despesas de Hoje</div>
-            <div className="text-2xl font-bold text-red-600">
-              <ArrowDownRight className="h-5 w-5 inline-block mr-1" />
-              {formatCurrency(dailyExpenses)}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-blue-900">
-          <CardContent className="pt-6">
-            <div className="text-sm font-medium text-gray-100">Saldo do Dia</div>
-            <div className="text-2xl font-bold text-white">
-              <CircleDollarSign className="h-5 w-5 inline-block mr-1" />
-              {formatCurrency(dailyBalance)}
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
       {errorMessage && (
@@ -1287,7 +1230,7 @@ export default function CashRegister() {
             className="mt-2 bg-amber-600 hover:bg-amber-700 text-white"
             size="sm"
           >
-            <RefreshCw className="h-4 w-4 mr-2" />
+            <RefreshCcw className="h-4 w-4 mr-2" />
               Tentar novamente
           </Button>
         </div>
@@ -1303,6 +1246,64 @@ export default function CashRegister() {
           </CardContent>
         </Card>
       )}
+
+      <div className="grid gap-6 md:grid-cols-4">
+        <Card className="bg-gradient-to-br from-[#F1F6CE] to-white">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-[#0D0F36]">Saldo em Dinheiro</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-2">
+              <DollarSign className={`h-5 w-5 ${getCashBalance() >= 0 ? 'text-green-500' : 'text-red-500'}`} />
+              <span className="text-2xl font-bold">
+                R$ {getCashBalance().toFixed(2)}
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-[#B9F1D6] to-white">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-[#0D0F36]">Receitas de Hoje</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-2">
+              <ArrowUpRight className="h-5 w-5 text-green-500" />
+              <span className="text-2xl font-bold text-green-600">
+                R$ {getIncomeByDate(format(new Date(), "yyyy-MM-dd")).toFixed(2)}
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-[#69D2CD]/30 to-white">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-[#0D0F36]">Despesas de Hoje</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-2">
+              <ArrowDownRight className="h-5 w-5 text-red-500" />
+              <span className="text-2xl font-bold text-red-600">
+                R$ {getExpensesByDate(format(new Date(), "yyyy-MM-dd")).toFixed(2)}
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-[#0D0F36] to-[#294380]">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-white">Saldo do Dia</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-2">
+              <CircleDollarSign className="h-5 w-5 text-[#F1F6CE]" />
+              <span className="text-2xl font-bold text-[#F1F6CE]">
+                R$ {(getIncomeByDate(format(new Date(), "yyyy-MM-dd")) - getExpensesByDate(format(new Date(), "yyyy-MM-dd"))).toFixed(2)}
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       <Card>
         <CardHeader>
@@ -1340,7 +1341,7 @@ export default function CashRegister() {
                       </TableCell>
                       <TableCell className={`text-right font-medium ${transaction.type === "receita" ? "text-green-500" : "text-red-500"}`}>
                         {transaction.type === "receita" ? "+" : "-"}
-                        {formatCurrency(transaction.amount)}
+                        R$ {transaction.amount.toFixed(2)}
                       </TableCell>
                     </TableRow>
                   ))
@@ -1392,12 +1393,9 @@ export default function CashRegister() {
                   <Download className="w-4 h-4 mr-2" />
                   Download
                 </Button>
-                <Button onClick={() => {
-                  console.log("[CashRegister] Fechando diálogo de relatório");
-                  setShowReportDialog(false);
-                }}>
-                  <X className="w-4 h-4 mr-2" />
-                  Fechar
+                <Button onClick={printReport}>
+                  <Printer className="w-4 h-4 mr-2" />
+                  Imprimir
                 </Button>
               </div>
             </DialogFooter>

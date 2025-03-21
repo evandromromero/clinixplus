@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { GiftCard, Client, Sale } from '@/firebase/entities';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,11 +53,11 @@ import {
 import { format, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { createPageUrl } from "@/utils";
+import { useNavigate } from 'react-router-dom';
 import GiftCardTemplate from '../components/giftcard/GiftCardTemplate';
 import RateLimitHandler from '@/components/RateLimitHandler';
 
 export default function GiftCards() {
-  const navigate = useNavigate();
   const [giftCards, setGiftCards] = useState([]);
   const [clients, setClients] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -71,6 +70,8 @@ export default function GiftCards() {
   const [searchClient, setSearchClient] = useState("");
   const [clientSearchResults, setClientSearchResults] = useState([]);
   
+  const navigate = useNavigate();
+
   const [newGiftCard, setNewGiftCard] = useState({
     value: 100,
     client_id: "",
@@ -146,22 +147,13 @@ export default function GiftCards() {
         status: "ativo"
       };
 
-      // Criar o gift card no Firebase
       const createdGiftCard = await GiftCard.create(giftCardData);
       
-      // Fechar o diálogo antes de redirecionar
+      // Redirecionar para a página de vendas com o gift card
+      navigate(createPageUrl(`SalesRegister?type=giftcard&giftcard_id=${createdGiftCard.id}`));
+      
       setShowCreateDialog(false);
       resetNewGiftCard();
-      
-      // Redirecionar para o registro de vendas
-      navigate('/sales-register', { 
-        state: { 
-          type: 'giftcard',
-          giftcard_id: createdGiftCard.id,
-          giftcard_value: giftCardData.value
-        }
-      });
-      
       await loadData();
     } catch (error) {
       console.error("Erro ao criar gift card:", error);

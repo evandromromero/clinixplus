@@ -34,7 +34,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { createPageUrl } from "@/utils";
 import { AlertTriangle } from "lucide-react";
 import RateLimitHandler from '@/components/RateLimitHandler';
@@ -71,7 +71,6 @@ export default function SalesRegister() {
   const [retryCount, setRetryCount] = useState(0);
   
   const navigate = useNavigate();
-  const { state } = useLocation();
 
   // Função para formatar valores monetários
   const formatCurrency = (value) => {
@@ -709,50 +708,75 @@ export default function SalesRegister() {
 
   // Inicialização - com tratamento de erros e retry
   useEffect(() => {
-    const loadInitialData = async () => {
+    const initializeApp = async () => {
       try {
-        // Verificar se o caixa está aberto
-        const today = format(new Date(), "yyyy-MM-dd");
-        const openingTransaction = await FinancialTransaction.filter({
-          category: "abertura_caixa",
-          payment_date: today
-        }, true);
-        
-        setCashIsOpen(openingTransaction && openingTransaction.length > 0);
-        
-        // Carregar dados iniciais
-        await Promise.all([
-          loadClients(),
-          loadProducts(),
-          loadServices(),
-          loadPackages(),
-          loadGiftCards(),
-          loadSubscriptionPlans(),
-          loadEmployees(),
-          loadPaymentMethods()
-        ]);
-
-        // Se veio da página de gift cards, adicionar automaticamente à venda
-        if (state?.type === 'giftcard' && state?.giftcard_id) {
-          const giftCard = await GiftCard.get(state.giftcard_id);
-          if (giftCard) {
-            addItemToCart({
-              type: 'giftcard',
-              id: giftCard.id,
-              name: 'Gift Card',
-              price: state.giftcard_value || giftCard.value,
-              quantity: 1,
-              total: state.giftcard_value || giftCard.value
-            });
-          }
-        }
+        await checkCashStatus();
+        await loadDataWithRetry(3);
+        await initializeSale();
       } catch (error) {
-        console.error("Erro ao carregar dados iniciais:", error);
+        console.error("Erro na inicialização do app:", error);
+        setErrorMessage("Ocorreu um erro ao inicializar a aplicação. Alguns recursos podem estar limitados.");
       }
     };
-
-    loadInitialData();
+    
+    initializeApp();
   }, []);
+
+  const initializeSale = async () => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const saleType = urlParams.get('type');
+      
+      if (saleType) {
+        setSaleType(saleType);
+      }
+      
+      const clientId = urlParams.get('client_id');
+      const packageId = urlParams.get('package_id');
+      const clientPackageId = urlParams.get('client_package_id');
+      const amount = urlParams.get('amount');
+      const unfinishedSaleIdParam = urlParams.get('unfinished_sale_id');
+      
+      if (unfinishedSaleIdParam) {
+        setUnfinishedSaleId(unfinishedSaleIdParam);
+      }
+      
+      if (clientId) {
+        try {
+          const clientData = await Client.get(clientId);
+          if (clientData) {
+            setSelectedClient(clientData);
+          }
+        } catch (error) {
+          console.error("Erro ao buscar cliente:", error);
+          // Em caso de erro, continua sem o cliente selecionado
+        }
+      }
+      
+      if (packageId && clientId && amount) {
+        try {
+          const packageData = await Package.get(packageId);
+          if (packageData) {
+            setCartItems([{
+              item_id: packageId,
+              client_package_id: clientPackageId,
+              type: 'pacote',
+              name: packageData.name,
+              quantity: 1,
+              price: parseFloat(amount),
+              discount: 0
+            }]);
+            setPaymentMethods([{ methodId: "", amount: parseFloat(amount), installments: 1 }]);
+          }
+        } catch (error) {
+          console.error("Erro ao carregar pacote:", error);
+          // Continua sem adicionar o item ao carrinho
+        }
+      }
+    } catch (error) {
+      console.error("Erro ao inicializar venda:", error);
+    }
+  };
 
   // Renderização condicional para caixa fechado
   if (!cashIsOpen) {
