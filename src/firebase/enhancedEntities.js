@@ -9,8 +9,54 @@ import {
   deleteDoc, 
   query, 
   where, 
-  writeBatch 
+  writeBatch,
+  enableIndexedDbPersistence
 } from 'firebase/firestore';
+
+// Habilita persistência offline para melhorar a experiência do usuário
+// e reduzir o número de requisições ao Firestore
+try {
+  enableIndexedDbPersistence(db).catch((err) => {
+    if (err.code === 'failed-precondition') {
+      console.warn('[Firebase] Persistência offline não pôde ser habilitada. Múltiplas abas abertas.');
+    } else if (err.code === 'unimplemented') {
+      console.warn('[Firebase] Navegador não suporta persistência offline.');
+    }
+  });
+} catch (e) {
+  console.warn('[Firebase] Erro ao configurar persistência:', e);
+}
+
+// Flag para controlar se devemos tentar usar o Firebase
+// Se ocorrerem muitos erros de permissão, desativamos temporariamente
+let useFirebaseCache = true;
+let permissionErrorCount = 0;
+const MAX_PERMISSION_ERRORS = 5;
+
+// Função para verificar e gerenciar erros de permissão
+const handleFirebaseError = (error, entityName, operation) => {
+  console.error(`[Firebase] Erro ao ${operation} ${entityName}:`, error);
+  
+  // Verifica se é um erro de permissão
+  if (error && 
+      (error.code === 'permission-denied' || 
+       (error.toString && error.toString().includes('permission-denied')))) {
+    permissionErrorCount++;
+    
+    // Se tivermos muitos erros de permissão, desativamos o Firebase temporariamente
+    if (permissionErrorCount >= MAX_PERMISSION_ERRORS) {
+      console.warn(`[Firebase] Muitos erros de permissão (${permissionErrorCount}). Desativando cache temporariamente.`);
+      useFirebaseCache = false;
+      
+      // Reativamos após 5 minutos
+      setTimeout(() => {
+        useFirebaseCache = true;
+        permissionErrorCount = 0;
+        console.log('[Firebase] Cache reativado após período de espera.');
+      }, 5 * 60 * 1000);
+    }
+  }
+};
 
 /**
  * Cria uma versão aprimorada de uma entidade do Base44 que também salva no Firebase
@@ -34,12 +80,13 @@ export function createEnhancedEntity(entityName, baseEntity) {
         const result = await baseEntity.create(data);
         
         // Depois salva no Firebase (não bloqueia a operação principal)
-        try {
-          await setDoc(doc(db, entityName, result.id), result);
-          console.log(`[Firebase] Documento ${entityName}/${result.id} criado com sucesso`);
-        } catch (firebaseError) {
-          console.error(`[Firebase] Erro ao criar documento ${entityName}:`, firebaseError);
-          // Não propaga o erro do Firebase para não afetar a operação principal
+        if (useFirebaseCache) {
+          try {
+            await setDoc(doc(db, entityName, result.id), result);
+            console.log(`[Firebase] Documento ${entityName}/${result.id} criado com sucesso`);
+          } catch (firebaseError) {
+            handleFirebaseError(firebaseError, entityName, 'criar documento');
+          }
         }
         
         return result;
@@ -61,22 +108,24 @@ export function createEnhancedEntity(entityName, baseEntity) {
         const result = await baseEntity.update(id, data);
         
         // Depois atualiza no Firebase
-        try {
-          // Obtém o documento atual do Firebase (se existir)
-          const docRef = doc(db, entityName, id);
-          const docSnap = await getDoc(docRef);
-          
-          if (docSnap.exists()) {
-            // Mescla os dados existentes com os novos
-            await setDoc(docRef, { ...docSnap.data(), ...result }, { merge: true });
-          } else {
-            // Se não existir, cria um novo
-            await setDoc(docRef, result);
+        if (useFirebaseCache) {
+          try {
+            // Obtém o documento atual do Firebase (se existir)
+            const docRef = doc(db, entityName, id);
+            const docSnap = await getDoc(docRef);
+            
+            if (docSnap.exists()) {
+              // Mescla os dados existentes com os novos
+              await setDoc(docRef, { ...docSnap.data(), ...result }, { merge: true });
+            } else {
+              // Se não existir, cria um novo
+              await setDoc(docRef, result);
+            }
+            
+            console.log(`[Firebase] Documento ${entityName}/${id} atualizado com sucesso`);
+          } catch (firebaseError) {
+            handleFirebaseError(firebaseError, entityName, `atualizar documento ${id}`);
           }
-          
-          console.log(`[Firebase] Documento ${entityName}/${id} atualizado com sucesso`);
-        } catch (firebaseError) {
-          console.error(`[Firebase] Erro ao atualizar documento ${entityName}/${id}:`, firebaseError);
         }
         
         return result;
@@ -97,11 +146,13 @@ export function createEnhancedEntity(entityName, baseEntity) {
         await baseEntity.delete(id);
         
         // Depois exclui do Firebase
-        try {
-          await deleteDoc(doc(db, entityName, id));
-          console.log(`[Firebase] Documento ${entityName}/${id} excluído com sucesso`);
-        } catch (firebaseError) {
-          console.error(`[Firebase] Erro ao excluir documento ${entityName}/${id}:`, firebaseError);
+        if (useFirebaseCache) {
+          try {
+            await deleteDoc(doc(db, entityName, id));
+            console.log(`[Firebase] Documento ${entityName}/${id} excluído com sucesso`);
+          } catch (firebaseError) {
+            handleFirebaseError(firebaseError, entityName, `excluir documento ${id}`);
+          }
         }
         
         return true;
@@ -117,17 +168,19 @@ export function createEnhancedEntity(entityName, baseEntity) {
      */
     async list() {
       try {
-        // Tenta buscar do Firebase primeiro
-        try {
-          const querySnapshot = await getDocs(collection(db, entityName));
-          
-          if (!querySnapshot.empty) {
-            const items = querySnapshot.docs.map(doc => doc.data());
-            console.log(`[Firebase] ${items.length} documentos de ${entityName} obtidos do cache`);
-            return items;
+        // Tenta buscar do Firebase primeiro se estiver habilitado
+        if (useFirebaseCache) {
+          try {
+            const querySnapshot = await getDocs(collection(db, entityName));
+            
+            if (!querySnapshot.empty) {
+              const items = querySnapshot.docs.map(doc => doc.data());
+              console.log(`[Firebase] ${items.length} documentos de ${entityName} obtidos do cache`);
+              return items;
+            }
+          } catch (firebaseError) {
+            handleFirebaseError(firebaseError, entityName, 'buscar documentos');
           }
-        } catch (firebaseError) {
-          console.warn(`[Firebase] Erro ao buscar documentos de ${entityName}:`, firebaseError);
         }
         
         // Se não encontrar no Firebase ou ocorrer erro, busca do Base44
@@ -135,20 +188,22 @@ export function createEnhancedEntity(entityName, baseEntity) {
         const items = await baseEntity.list();
         
         // Salva no Firebase para futuras consultas
-        try {
-          const batch = writeBatch(db);
-          
-          items.forEach(item => {
-            if (item && item.id) {
-              const docRef = doc(db, entityName, item.id);
-              batch.set(docRef, item);
-            }
-          });
-          
-          await batch.commit();
-          console.log(`[Firebase] ${items.length} documentos de ${entityName} salvos no cache`);
-        } catch (firebaseError) {
-          console.error(`[Firebase] Erro ao salvar documentos de ${entityName} no cache:`, firebaseError);
+        if (useFirebaseCache && items && items.length > 0) {
+          try {
+            const batch = writeBatch(db);
+            
+            items.forEach(item => {
+              if (item && item.id) {
+                const docRef = doc(db, entityName, item.id);
+                batch.set(docRef, item);
+              }
+            });
+            
+            await batch.commit();
+            console.log(`[Firebase] ${items.length} documentos de ${entityName} salvos no cache`);
+          } catch (firebaseError) {
+            handleFirebaseError(firebaseError, entityName, 'salvar documentos no cache');
+          }
         }
         
         return items;
@@ -170,16 +225,18 @@ export function createEnhancedEntity(entityName, baseEntity) {
       
       try {
         // Tenta buscar do Firebase primeiro
-        try {
-          const docRef = doc(db, entityName, id);
-          const docSnap = await getDoc(docRef);
-          
-          if (docSnap.exists()) {
-            console.log(`[Firebase] Documento ${entityName}/${id} obtido do cache`);
-            return docSnap.data();
+        if (useFirebaseCache) {
+          try {
+            const docRef = doc(db, entityName, id);
+            const docSnap = await getDoc(docRef);
+            
+            if (docSnap.exists()) {
+              console.log(`[Firebase] Documento ${entityName}/${id} obtido do cache`);
+              return docSnap.data();
+            }
+          } catch (firebaseError) {
+            handleFirebaseError(firebaseError, entityName, `buscar documento ${id}`);
           }
-        } catch (firebaseError) {
-          console.warn(`[Firebase] Erro ao buscar documento ${entityName}/${id}:`, firebaseError);
         }
         
         // Se não encontrar no Firebase ou ocorrer erro, busca do Base44
@@ -187,13 +244,13 @@ export function createEnhancedEntity(entityName, baseEntity) {
         const item = await baseEntity.get(id);
         
         // Salva no Firebase para futuras consultas
-        try {
-          if (item && item.id) {
+        if (useFirebaseCache && item && item.id) {
+          try {
             await setDoc(doc(db, entityName, id), item);
             console.log(`[Firebase] Documento ${entityName}/${id} salvo no cache`);
+          } catch (firebaseError) {
+            handleFirebaseError(firebaseError, entityName, `salvar documento ${id} no cache`);
           }
-        } catch (firebaseError) {
-          console.error(`[Firebase] Erro ao salvar documento ${entityName}/${id} no cache:`, firebaseError);
         }
         
         return item;

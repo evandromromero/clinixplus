@@ -1,0 +1,28 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Permitir leitura e escrita para todas as coleções
+    // Essa é uma configuração para desenvolvimento, em produção você deve restringir mais
+    match /{document=**} {
+      allow read, write: if true;
+    }
+    
+    // Regras específicas para cada coleção
+    match /clients/{clientId} {
+      allow read, write: if true;
+    }
+    
+    match /appointments/{appointmentId} {
+      allow read, write: if true;
+    }
+    
+    match /sales/{saleId} {
+      allow read, write: if true;
+    }
+    
+    match /financial_transactions/{transactionId} {
+      allow read, write: if true;
+    }
+  }
+}
