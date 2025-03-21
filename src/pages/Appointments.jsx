@@ -30,8 +30,8 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { Appointment, Client } from "@/firebase/entities";
-import { Employee, Service } from "@/api/entities";
+import { Appointment, Client, Employee } from "@/firebase/entities";
+import { Service } from "@/api/entities";
 import { Package } from "@/api/entities";
 import { ClientPackage } from "@/api/entities";
 import { FinancialTransaction } from "@/api/entities";
@@ -98,26 +98,50 @@ export default function Appointments() {
 
   const loadData = async () => {
     try {
-      const [appointmentsData, clientsData, servicesData, employeesData, packagesData] = await Promise.all([
+      console.log("[Agenda] Iniciando carregamento de dados...");
+      
+      // Carregar funcionários primeiro para garantir que estão disponíveis
+      console.log("[Agenda] Carregando funcionários do Firebase...");
+      const employeesData = await Employee.list();
+      console.log("[Agenda] Funcionários carregados:", employeesData);
+      
+      // Filtrar apenas funcionários ativos que prestam serviços
+      const providersData = employeesData.filter(
+        employee => employee.provides_services !== false && employee.active !== false
+      );
+      console.log("[Agenda] Funcionários filtrados:", providersData);
+      
+      // Carregar outros dados
+      const [appointmentsData, clientsData, servicesData, packagesData] = await Promise.all([
         Appointment.list(),
         Client.list(),
         Service.list(),
-        Employee.list(),
         Package.list()
       ]);
+
+      // Atualizar estados
+      setEmployees(providersData);
+      setSelectedEmployees(providersData.map(emp => emp.id));
       setAppointments(appointmentsData);
       setClients(clientsData);
       setServices(servicesData);
       setPackages(packagesData);
 
-      const providersData = employeesData.filter(
-        employee => employee.provides_services !== false && employee.active !== false
-      );
-      setEmployees(providersData);
-
-      setSelectedEmployees(providersData.map(emp => emp.id));
+      console.log("[Agenda] Todos os dados carregados com sucesso");
     } catch (error) {
-      console.error("Erro ao carregar dados:", error);
+      console.error("[Agenda] Erro ao carregar dados:", error);
+      // Tentar carregar funcionários novamente em caso de erro
+      try {
+        console.log("[Agenda] Tentando recarregar apenas funcionários...");
+        const employeesData = await Employee.list();
+        const providersData = employeesData.filter(
+          employee => employee.provides_services !== false && employee.active !== false
+        );
+        setEmployees(providersData);
+        setSelectedEmployees(providersData.map(emp => emp.id));
+      } catch (retryError) {
+        console.error("[Agenda] Erro ao recarregar funcionários:", retryError);
+      }
     }
   };
 
