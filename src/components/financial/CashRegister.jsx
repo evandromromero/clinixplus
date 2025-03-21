@@ -183,63 +183,41 @@ export default function CashRegister() {
   const loadTransactionsWithRetry = async (retries = 3, initialDelay = 1000) => {
     let lastError = null;
     
-    const cachedData = localStorage.getItem('transactions');
-    if (cachedData) {
-      try {
-        const parsedData = JSON.parse(cachedData);
-        if (parsedData && Array.isArray(parsedData)) {
-          processTransactions(parsedData);
-          console.log("Usando dados de transações em cache...");
-        }
-      } catch (e) {
-        console.warn("Erro ao usar dados em cache:", e);
+    try {
+      setIsLoading(true);
+      setErrorMessage("");
+      
+      const today = format(new Date(), "yyyy-MM-dd");
+      console.log("[CashRegister] Data de hoje formatada:", today);
+      
+      // Buscar transações diretamente do Firebase
+      console.log("[CashRegister] Buscando transações do Firebase...");
+      const todayTransactions = await FinancialTransaction.filter({
+        payment_date: today
+      });
+      
+      console.log("[CashRegister] Transações retornadas do Firebase:", todayTransactions);
+      console.log("[CashRegister] Número de transações retornadas:", todayTransactions ? todayTransactions.length : 0);
+      
+      // Verificar formato das datas
+      if (todayTransactions && Array.isArray(todayTransactions) && todayTransactions.length > 0) {
+        console.log("[CashRegister] Exemplo de payment_date:", todayTransactions[0].payment_date);
+        console.log("[CashRegister] Formato da data de payment_date:", typeof todayTransactions[0].payment_date);
       }
-    }
-    
-    for (let attempt = 0; attempt < retries; attempt++) {
-      try {
-        if (attempt > 0) {
-          const delayTime = initialDelay * Math.pow(2, attempt);
-          console.log(`Aguardando ${delayTime}ms antes da tentativa ${attempt + 1} de carregar transações`);
-          await delay(delayTime);
-        }
-        
-        setIsLoading(true);
-        setErrorMessage("");
-        
-        const today = format(new Date(), "yyyy-MM-dd");
-        const todayTransactions = await FinancialTransaction.filter({
-          payment_date: today
-        });
-        
-        console.log("Transações carregadas:", todayTransactions);
-        
-        if (todayTransactions && Array.isArray(todayTransactions)) {
-          localStorage.setItem('transactions', JSON.stringify(todayTransactions));
-          processTransactions(todayTransactions);
-          return todayTransactions;
-        }
-        
-        throw new Error("Dados inválidos retornados pela API");
-      } catch (error) {
-        console.error(`Tentativa ${attempt + 1} falhou:`, error);
-        lastError = error;
-        
-        const isRateLimit = error?.message?.includes('429') || 
-                           error?.message?.includes('Rate limit') ||
-                           error?.toString().includes('429');
-        
-        if (isRateLimit) {
-          setErrorMessage("Limite de requisições excedido. Aguardando para tentar novamente.");
-        }
-        
-        if (attempt >= retries - 1) {
-          setErrorMessage("Usando dados temporários devido a problemas de conexão.");
-          loadSimulatedData();
-        }
-      } finally {
-        setIsLoading(false);
+      
+      if (todayTransactions && Array.isArray(todayTransactions)) {
+        processTransactions(todayTransactions);
+        return todayTransactions;
       }
+      
+      throw new Error("Dados inválidos retornados pelo Firebase");
+    } catch (error) {
+      console.error("[CashRegister] Erro ao carregar transações:", error);
+      lastError = error;
+      setErrorMessage("Erro ao carregar transações. Usando dados temporários.");
+      loadSimulatedData();
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -254,10 +232,26 @@ export default function CashRegister() {
     }
     
     const today = format(new Date(), "yyyy-MM-dd");
-    const todayTransactions = transactions.filter(t => t.payment_date === today);
+    console.log("Data de hoje em processTransactions:", today);
+    
+    // Filtra transações do dia atual, considerando que payment_date pode estar em formato ISO
+    const todayTransactions = transactions.filter(t => {
+      if (!t.payment_date) {
+        console.log("Transação sem payment_date:", t);
+        return false;
+      }
+      
+      // Extrai apenas a parte da data (yyyy-MM-dd) do formato ISO
+      const transactionDate = t.payment_date.split('T')[0];
+      console.log(`Comparando datas: transação [${transactionDate}] vs hoje [${today}]`, transactionDate === today);
+      return transactionDate === today;
+    });
+    
+    console.log("Transações filtradas para hoje:", todayTransactions);
+    console.log("Número de transações de hoje:", todayTransactions.length);
     
     const openingTransaction = todayTransactions.find(t => 
-      t.category === 'abertura_caixa' && t.payment_date === today
+      t.category === 'abertura_caixa' && t.payment_date.split('T')[0] === today
     );
     
     const initialCashAmount = openingTransaction ? 
@@ -325,7 +319,7 @@ export default function CashRegister() {
     setPaymentMethodsTotal(methodTotals);
     
     const closingTransaction = todayTransactions.find(t => 
-      t.category === 'fechamento_caixa' && t.payment_date === today
+      t.category === 'fechamento_caixa' && t.payment_date.split('T')[0] === today
     );
     
     setCashIsOpen(!!openingTransaction && !closingTransaction);
@@ -400,39 +394,27 @@ export default function CashRegister() {
 
   const loadUserData = async () => {
     try {
-      const cachedUser = localStorage.getItem('userData');
-      if (cachedUser) {
-        try {
-          const userData = JSON.parse(cachedUser);
-          setUserData(userData);
-          setOpenCashData(prev => ({
-            ...prev,
-            opened_by: userData.full_name
-          }));
-          setCloseCashData(prev => ({
-            ...prev,
-            closed_by: userData.full_name
-          }));
-          console.log("Usando dados de usuário em cache");
-        } catch (e) {
-          console.warn("Erro ao usar dados de usuário em cache:", e);
-        }
-      }
+      console.log("[CashRegister] Carregando dados do usuário...");
       
-      const user = await User.me();
-      localStorage.setItem('userData', JSON.stringify(user));
+      // Usar dados do usuário padrão enquanto a migração para Firebase Auth não está completa
+      const defaultUser = { 
+        full_name: "Usuário do Sistema",
+        id: "system_user",
+        email: "sistema@clinixplus.com"
+      };
       
-      setUserData(user);
+      console.log("[CashRegister] Usando usuário padrão do sistema");
+      setUserData(defaultUser);
       setOpenCashData(prev => ({
         ...prev,
-        opened_by: user.full_name
+        opened_by: defaultUser.full_name
       }));
       setCloseCashData(prev => ({
         ...prev,
-        closed_by: user.full_name
+        closed_by: defaultUser.full_name
       }));
     } catch (error) {
-      console.error("Error loading user data:", error);
+      console.error("[CashRegister] Erro ao carregar dados do usuário:", error);
       
       if (!userData) {
         const fallbackUser = { full_name: "Usuário do Sistema" };
@@ -451,26 +433,15 @@ export default function CashRegister() {
 
   const loadClients = async () => {
     try {
-      const cachedClients = localStorage.getItem('clients');
-      if (cachedClients) {
-        try {
-          const clientsData = JSON.parse(cachedClients);
-          if (Array.isArray(clientsData) && clientsData.length > 0) {
-            setClients(clientsData);
-            console.log("Usando dados de clientes em cache");
-          }
-        } catch (e) {
-          console.warn("Erro ao usar dados de clientes em cache:", e);
-        }
-      }
-      
+      console.log("[CashRegister] Carregando clientes do Firebase...");
       const clientsData = await Client.list();
-      localStorage.setItem('clients', JSON.stringify(clientsData));
+      console.log(`[CashRegister] ${clientsData.length} clientes carregados do Firebase`);
       setClients(clientsData);
     } catch (error) {
-      console.error("Error loading clients:", error);
+      console.error("[CashRegister] Erro ao carregar clientes:", error);
       
       if (clients.length === 0) {
+        console.log("[CashRegister] Usando dados simulados de clientes");
         const simData = generateSimulatedData();
         setClients(simData.clients);
       }
@@ -479,28 +450,17 @@ export default function CashRegister() {
 
   const loadAuthorizedEmployees = async () => {
     try {
-      const cachedEmployees = localStorage.getItem('authorizedEmployees');
-      if (cachedEmployees) {
-        try {
-          const employeesData = JSON.parse(cachedEmployees);
-          if (Array.isArray(employeesData) && employeesData.length > 0) {
-            setAuthorizedEmployees(employeesData);
-            console.log("Usando dados de funcionários em cache");
-          }
-        } catch (e) {
-          console.warn("Erro ao usar dados de funcionários em cache:", e);
-        }
-      }
-      
+      console.log("[CashRegister] Carregando funcionários do Firebase...");
       const employees = await Employee.list();
       const authorized = employees.filter(emp => emp.can_manage_cash === true && emp.active === true);
       
-      localStorage.setItem('authorizedEmployees', JSON.stringify(authorized));
+      console.log(`[CashRegister] ${authorized.length} funcionários autorizados carregados do Firebase`);
       setAuthorizedEmployees(authorized);
     } catch (error) {
-      console.error("Erro ao carregar funcionários:", error);
+      console.error("[CashRegister] Erro ao carregar funcionários:", error);
       
       if (authorizedEmployees.length === 0) {
+        console.log("[CashRegister] Usando dados simulados de funcionários");
         const simData = generateSimulatedData();
         setAuthorizedEmployees(simData.employees);
       }
@@ -1100,6 +1060,19 @@ export default function CashRegister() {
           <span className="text-base font-normal text-gray-500 ml-2">Controle de entradas e saídas do caixa</span>
         </h2>
         <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={() => {
+              loadTransactions();
+              loadClients();
+              loadAuthorizedEmployees();
+            }}
+            disabled={isLoading}
+            className="flex items-center gap-2"
+          >
+            <RefreshCcw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+            Atualizar
+          </Button>
           <Button 
             onClick={() => setShowNewTransactionDialog(true)}
             className="bg-[#294380] hover:bg-[#0D0F36]"

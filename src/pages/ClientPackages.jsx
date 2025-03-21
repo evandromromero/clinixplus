@@ -156,7 +156,7 @@ export default function ClientPackages() {
           amount: packageDetails.total_price
         }).toString();
         
-        window.location.href = createPageUrl(`SalesRegister?${saleParams}`);
+        window.location.href = createPageUrl('SalesRegister', saleParams);
         return;
       }
       
@@ -218,7 +218,7 @@ export default function ClientPackages() {
         amount: selectedPackage.total_price
       }).toString();
 
-      window.location.href = createPageUrl(`SalesRegister?${saleParams}`);
+      window.location.href = createPageUrl('SalesRegister', saleParams);
 
       setShowSellDialog(false);
       setSellForm({

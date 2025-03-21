@@ -22,6 +22,7 @@ import { ptBR } from "date-fns/locale";
 import { Search, Filter, ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
 import { FinancialTransaction, Client } from "@/firebase/entities";
 import RateLimitHandler from '@/components/RateLimitHandler';
+import { toast } from "@/components/ui/use-toast";
 
 export default function AccountsReceivable() {
   const [transactions, setTransactions] = useState([]);
@@ -44,91 +45,63 @@ export default function AccountsReceivable() {
     try {
       setIsLoading(true);
       setError(null);
+      console.log('[AccountsReceivable] Carregando dados...');
       
-      // Usar Promise.allSettled para evitar que uma falha interrompa a outra requisição
-      const results = await Promise.allSettled([
-        FinancialTransaction.list(),
-        Client.list()
-      ]);
+      // Carrega as transações (agora exclusivamente do Firebase)
+      console.log('[AccountsReceivable] Buscando transações financeiras...');
+      const transactionsData = await FinancialTransaction.list();
+      console.log(`[AccountsReceivable] ${transactionsData.length} transações encontradas`);
       
-      // Processar resultados de transações
-      let transactionsData = [];
-      if (results[0].status === 'fulfilled') {
-        transactionsData = results[0].value;
-      } else {
-        console.error("Erro ao carregar transações:", results[0].reason);
-        throw results[0].reason;
-      }
-      
-      // Processar resultados de clientes
-      let clientsData = [];
-      if (results[1].status === 'fulfilled') {
-        clientsData = results[1].value;
-      } else {
-        console.warn("Erro ao carregar clientes:", results[1].reason);
-        // Não interrompemos completamente se os clientes falharem
-      }
-      
-      const receivables = transactionsData.filter(t => 
-        t.type === "receita" && 
-        t.category !== "abertura_caixa" && 
-        t.category !== "fechamento_caixa"
-      );
-      
-      const enrichedTransactions = receivables.map(transaction => {
-        const client = clientsData.find(c => c.id === transaction.client_id);
-        return {
-          ...transaction,
-          client_name: client ? client.name : "Cliente não encontrado"
-        };
-      });
-      
-      setTransactions(enrichedTransactions);
-      setFilteredTransactions(enrichedTransactions);
+      // Carrega os clientes para enriquecer as transações
+      console.log('[AccountsReceivable] Buscando clientes...');
+      const clientsData = await Client.list();
+      console.log(`[AccountsReceivable] ${clientsData.length} clientes encontrados`);
       setClients(clientsData);
       
-    } catch (err) {
-      console.error("Erro ao carregar dados:", err);
-      setError(err);
+      // Mapeamento de clientes por ID para facilitar o acesso
+      const clientsMap = clientsData.reduce((acc, client) => {
+        acc[client.id] = client;
+        return acc;
+      }, {});
+      
+      // Processa as transações para exibição
+      const processedTransactions = transactionsData
+        .filter(transaction => {
+          // Filtra apenas transações a receber (não pagas ou parcialmente pagas)
+          return transaction.status !== 'pago' && transaction.type === 'receita';
+        })
+        .map(transaction => {
+          // Enriquece a transação com dados do cliente
+          const client = clientsMap[transaction.client_id] || { name: 'Cliente não encontrado' };
+          
+          return {
+            ...transaction,
+            client_name: client.name,
+            formatted_amount: formatCurrency(transaction.amount),
+            formatted_due_date: transaction.due_date 
+              ? format(new Date(transaction.due_date), 'dd/MM/yyyy', { locale: ptBR })
+              : 'Sem data',
+            status_class: getStatusClass(transaction.status)
+          };
+        });
+      
+      setTransactions(processedTransactions);
+      setFilteredTransactions(processedTransactions);
+      console.log('[AccountsReceivable] Dados carregados com sucesso');
+    } catch (error) {
+      console.error('[AccountsReceivable] Erro ao carregar dados:', error);
+      setError(error);
+      
+      // Exibe mensagem de erro para o usuário
+      toast({
+        title: "Erro ao carregar dados",
+        description: "Não foi possível carregar as transações. Tente novamente mais tarde.",
+        variant: "destructive",
+        duration: 5000,
+      });
     } finally {
       setIsLoading(false);
     }
-  };
-
-  // Adicionar função para simular dados caso ocorra erro de carregamento
-  const generateDummyData = () => {
-    const today = new Date();
-    const dummyData = [
-      {
-        id: "dummy1",
-        description: "Serviço de Limpeza de Pele",
-        client_id: "client1",
-        client_name: "Maria Silva",
-        due_date: new Date().toISOString(),
-        amount: 150.00,
-        status: "pendente"
-      },
-      {
-        id: "dummy2",
-        description: "Massagem Terapêutica",
-        client_id: "client2",
-        client_name: "João Santos",
-        due_date: new Date(today.setDate(today.getDate() + 5)).toISOString(),
-        amount: 200.00,
-        status: "pendente"
-      },
-      {
-        id: "dummy3",
-        description: "Pacote Facial Premium",
-        client_id: "client3",
-        client_name: "Ana Oliveira",
-        due_date: new Date(today.setDate(today.getDate() - 5)).toISOString(),
-        amount: 450.00,
-        status: "pago"
-      }
-    ];
-    
-    return dummyData;
   };
 
   useEffect(() => {
@@ -136,10 +109,9 @@ export default function AccountsReceivable() {
   }, [statusFilter, dateFilter, searchTerm, clientFilter, transactions, sortField, sortDirection]);
 
   const applyFilters = () => {
-    // Se não há transações, verifica se é por erro e gera dados de exemplo
-    if (error && transactions.length === 0) {
-      const dummyData = generateDummyData();
-      setFilteredTransactions(dummyData);
+    // Se não há transações, não faz nada
+    if (transactions.length === 0) {
+      setFilteredTransactions([]);
       return;
     }
     
@@ -152,6 +124,7 @@ export default function AccountsReceivable() {
     const today = new Date();
     if (dateFilter === "today") {
       filtered = filtered.filter(t => {
+        if (!t.due_date) return false;
         const dueDate = new Date(t.due_date);
         return dueDate.toDateString() === today.toDateString();
       });
@@ -162,11 +135,13 @@ export default function AccountsReceivable() {
       endOfWeek.setDate(startOfWeek.getDate() + 6);
       
       filtered = filtered.filter(t => {
+        if (!t.due_date) return false;
         const dueDate = new Date(t.due_date);
         return dueDate >= startOfWeek && dueDate <= endOfWeek;
       });
     } else if (dateFilter === "thisMonth") {
       filtered = filtered.filter(t => {
+        if (!t.due_date) return false;
         const dueDate = new Date(t.due_date);
         return (
           dueDate.getMonth() === today.getMonth() && 
@@ -175,6 +150,7 @@ export default function AccountsReceivable() {
       });
     } else if (dateFilter === "overdue") {
       filtered = filtered.filter(t => {
+        if (!t.due_date) return false;
         const dueDate = new Date(t.due_date);
         return dueDate < today && t.status === "pendente";
       });
@@ -187,8 +163,8 @@ export default function AccountsReceivable() {
     if (searchTerm) {
       const search = searchTerm.toLowerCase();
       filtered = filtered.filter(t => 
-        t.description?.toLowerCase().includes(search) ||
-        t.client_name?.toLowerCase().includes(search)
+        (t.description?.toLowerCase().includes(search)) ||
+        (t.client_name?.toLowerCase().includes(search))
       );
     }
     
@@ -196,17 +172,17 @@ export default function AccountsReceivable() {
       let aValue, bValue;
       
       if (sortField === "due_date") {
-        aValue = new Date(a.due_date);
-        bValue = new Date(b.due_date);
+        aValue = a.due_date ? new Date(a.due_date) : new Date(0);
+        bValue = b.due_date ? new Date(b.due_date) : new Date(0);
       } else if (sortField === "amount") {
-        aValue = a.amount;
-        bValue = b.amount;
+        aValue = a.amount || 0;
+        bValue = b.amount || 0;
       } else if (sortField === "client_name") {
-        aValue = a.client_name;
-        bValue = b.client_name;
+        aValue = a.client_name || '';
+        bValue = b.client_name || '';
       } else {
-        aValue = a[sortField];
-        bValue = b[sortField];
+        aValue = a[sortField] || '';
+        bValue = b[sortField] || '';
       }
       
       if (sortDirection === "asc") {
@@ -251,6 +227,40 @@ export default function AccountsReceivable() {
     }
   };
 
+  const refreshFromSource = async () => {
+    try {
+      setIsLoading(true);
+      
+      // Marca para forçar atualização a partir da Base44
+      localStorage.setItem('force_refresh_financial_transactions', 'true');
+      localStorage.setItem('force_refresh_clients', 'true');
+      
+      toast({
+        title: "Atualizando dados",
+        description: "Buscando dados atualizados do servidor...",
+        duration: 3000,
+      });
+      
+      await loadData();
+      
+      toast({
+        title: "Dados atualizados",
+        description: "Os dados foram atualizados com sucesso.",
+        duration: 3000,
+      });
+    } catch (error) {
+      console.error("Erro ao atualizar dados:", error);
+      toast({
+        title: "Erro ao atualizar",
+        description: "Não foi possível atualizar os dados. Tente novamente.",
+        variant: "destructive",
+        duration: 5000,
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -279,9 +289,10 @@ export default function AccountsReceivable() {
         <Button 
           variant="outline" 
           onClick={loadData}
+          disabled={isLoading}
           className="flex items-center gap-2"
         >
-          <RefreshCw className="h-4 w-4" />
+          <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
           Atualizar
         </Button>
       </div>

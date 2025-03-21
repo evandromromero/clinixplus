@@ -374,12 +374,116 @@ export default function SalesRegister() {
   const confirmSale = async () => {
     try {
       setIsLoading(true);
-      // Implementação da finalização da venda
-      // Este é apenas um placeholder, a implementação real dependerá da lógica específica do negócio
+      
+      // Criar objeto de venda
+      const saleData = {
+        client_id: selectedClient.id,
+        employee_id: salesEmployee,
+        type: saleType,
+        items: cartItems,
+        total_amount: calculateCartTotal(),
+        final_discount: finalDiscount,
+        final_discount_type: finalDiscountType,
+        payment_methods: paymentMethods.map(pm => ({
+          method_id: pm.methodId,
+          amount: pm.amount,
+          installments: pm.installments
+        })),
+        installments: paymentMethods.reduce((total, pm) => total + (pm.installments > 1 ? pm.installments : 0), 0),
+        status: 'finalizada',
+        date: new Date().toISOString(),
+        notes: ''
+      };
+      
+      // Salvar a venda no banco de dados
+      const createdSale = await Sale.create(saleData);
+      
+      // Criar transações financeiras para cada método de pagamento
+      for (const payment of paymentMethods) {
+        const paymentMethod = availablePaymentMethods.find(m => m.id === payment.methodId);
+        const isPaid = !paymentMethod?.name?.toLowerCase().includes('crédito');
+        
+        // Criar transação financeira
+        await FinancialTransaction.create({
+          type: 'receita',
+          category: 'venda',
+          description: `Venda #${createdSale.id} - ${saleType}`,
+          amount: payment.amount,
+          payment_method: payment.methodId,
+          status: isPaid ? 'pago' : 'pendente',
+          due_date: new Date().toISOString(),
+          payment_date: isPaid ? new Date().toISOString() : null,
+          client_id: selectedClient.id,
+          sale_id: createdSale.id,
+          installments: payment.installments > 1 ? payment.installments : null,
+          installment_number: payment.installments > 1 ? 1 : null
+        });
+        
+        // Se for parcelado, criar as parcelas adicionais
+        if (payment.installments > 1) {
+          const installmentValue = payment.amount / payment.installments;
+          
+          for (let i = 1; i < payment.installments; i++) {
+            const dueDate = new Date();
+            dueDate.setMonth(dueDate.getMonth() + i);
+            
+            await FinancialTransaction.create({
+              type: 'receita',
+              category: 'venda',
+              description: `Venda #${createdSale.id} - ${saleType} (Parcela ${i + 1}/${payment.installments})`,
+              amount: installmentValue,
+              payment_method: payment.methodId,
+              status: 'pendente',
+              due_date: dueDate.toISOString(),
+              client_id: selectedClient.id,
+              sale_id: createdSale.id,
+              installments: payment.installments,
+              installment_number: i + 1
+            });
+          }
+        }
+      }
+      
+      // Atualizar inventário para produtos vendidos
+      for (const item of cartItems) {
+        if (item.type === 'produto') {
+          try {
+            // Buscar produto
+            const product = await Product.get(item.item_id);
+            if (product && product.track_inventory) {
+              // Criar movimento de inventário
+              await Inventory.create({
+                product_id: item.item_id,
+                type: 'saída',
+                quantity: item.quantity,
+                date: new Date().toISOString(),
+                notes: `Venda #${createdSale.id}`
+              });
+            }
+          } catch (error) {
+            console.error("Erro ao atualizar inventário:", error);
+          }
+        }
+      }
+      
+      // Limpar venda não finalizada se existir
+      if (unfinishedSaleId) {
+        try {
+          await UnfinishedSale.delete(unfinishedSaleId);
+        } catch (error) {
+          console.error("Erro ao excluir venda não finalizada:", error);
+        }
+      }
+      
       alert("Venda finalizada com sucesso!");
       setShowConfirmDialog(false);
       setCartItems([]);
       setSelectedClient(null);
+      setSalesEmployee("");
+      setPaymentMethods([{ methodId: "", amount: 0, installments: 1 }]);
+      setFinalDiscount(0);
+      setFinalDiscountType("percentage");
+      
       navigate(createPageUrl('Dashboard'));
     } catch (error) {
       console.error("Erro ao confirmar venda:", error);
@@ -1056,49 +1160,27 @@ export default function SalesRegister() {
                     </span>
                   </div>
                   
-                  <div className="pt-2 border-t">
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-600">Desconto adicional:</span>
-                      <div className="flex items-center">
-                        <div className="flex items-center space-x-1 mr-2">
-                          <Select
-                            value={finalDiscountType}
-                            onValueChange={setFinalDiscountType}
-                          >
-                            <SelectTrigger className="w-[60px]">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="percentage">%</SelectItem>
-                              <SelectItem value="fixed">R$</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          
-                          <Input
-                            type="number"
-                            value={finalDiscount}
-                            onChange={(e) => setFinalDiscount(parseFloat(e.target.value) || 0)}
-                            className="w-20"
-                            min={0}
-                          />
-                        </div>
-                        
-                        {finalDiscount > 0 && (
-                          <span className="text-red-500">
-                            -{formatCurrency(
-                              finalDiscountType === "percentage"
-                                ? cartItems.reduce((total, item) => total + getSubtotal(item), 0) * (finalDiscount / 100)
-                                : finalDiscount
-                            )}
-                          </span>
-                        )}
-                      </div>
-                    </div>
+                  <div className="pt-2 border-t flex justify-between font-bold">
+                    <span>Total:</span>
+                    <span>{formatCurrency(calculateCartTotal())}</span>
                   </div>
                   
-                  <div className="pt-2 border-t flex justify-between text-lg font-bold">
-                    <span>Total:</span>
-                    <span className="text-purple-600">{formatCurrency(calculateCartTotal())}</span>
+                  <div className="pt-2 space-y-2">
+                    <p className="font-medium">Formas de pagamento:</p>
+                    <ul className="space-y-1">
+                      {paymentMethods.map((payment, index) => {
+                        const method = availablePaymentMethods.find(m => m.id === payment.methodId);
+                        return (
+                          <li key={index} className="flex justify-between text-sm">
+                            <span>
+                              {method ? method.name : 'Método não selecionado'}
+                              {payment.installments > 1 ? ` (${payment.installments}x)` : ''}
+                            </span>
+                            <span>{formatCurrency(payment.amount)}</span>
+                          </li>
+                        );
+                      })}
+                    </ul>
                   </div>
                 </div>
               </div>
