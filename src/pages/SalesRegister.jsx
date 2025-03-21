@@ -1,13 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Client, Sale, FinancialTransaction } from "@/firebase/entities";
-import { Product, Service, Employee, PaymentMethod } from "@/api/entities";
-import { Package } from '@/api/entities';
-import { ClientPackage } from '@/api/entities';
-import { GiftCard } from '@/api/entities';
-import { SubscriptionPlan } from '@/api/entities';
-import { ClientSubscription } from '@/api/entities';
-import { UnfinishedSale } from '@/api/entities';
-import { Inventory } from '@/api/entities';
+import { 
+  Client, Sale, FinancialTransaction, Product, Service, 
+  Employee, PaymentMethod, Package, ClientPackage, 
+  GiftCard, SubscriptionPlan, ClientSubscription, 
+  UnfinishedSale, Inventory 
+} from "@/firebase/entities";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -40,6 +37,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { createPageUrl } from "@/utils";
 import { AlertTriangle } from "lucide-react";
+import RateLimitHandler from '@/components/RateLimitHandler';
 
 export default function SalesRegister() {
   const [cashIsOpen, setCashIsOpen] = useState(false);
@@ -1295,6 +1293,7 @@ export default function SalesRegister() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <RateLimitHandler />
     </div>
   );
 }

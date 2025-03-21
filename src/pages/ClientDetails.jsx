@@ -1,8 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
-import { Client } from "@/api/entities";
-import { Appointment } from "@/api/entities";
-import { Sale } from "@/api/entities";
+import { Client, Appointment, Sale } from "@/firebase/entities";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -25,6 +22,7 @@ import { createPageUrl } from "@/utils";
 import DependentList from '@/components/clients/DependentList'; // Corrigido o caminho
 import DependentForm from '@/components/clients/DependentForm'; // Corrigido o caminho
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import RateLimitHandler from '@/components/RateLimitHandler';
 
 export default function ClientDetails() {
   const [client, setClient] = useState(null);
@@ -32,6 +30,7 @@ export default function ClientDetails() {
   const [sales, setSales] = useState([]);
   const [showDependentForm, setShowDependentForm] = useState(false);
   const [editingDependent, setEditingDependent] = useState(null);
+  const [loadError, setLoadError] = useState(null);
   const urlParams = new URLSearchParams(window.location.search);
   const clientId = urlParams.get('id');
 
@@ -42,30 +41,47 @@ export default function ClientDetails() {
   }, [clientId]);
 
   const loadClientData = async () => {
-    const [clientData, appointmentsData, salesData] = await Promise.all([
-      Client.list(),
-      Appointment.list(),
-      Sale.list()
-    ]);
+    try {
+      const [clientData, appointmentsData, salesData] = await Promise.all([
+        Client.list(),
+        Appointment.list(),
+        Sale.list()
+      ]);
 
-    const client = clientData.find(c => c.id === clientId);
-    setClient(client);
+      const client = clientData.find(c => c.id === clientId);
+      setClient(client);
 
-    const clientAppointments = appointmentsData
-      .filter(a => a.client_id === clientId)
-      .sort((a, b) => new Date(b.date) - new Date(a.date));
-    setAppointments(clientAppointments);
+      const clientAppointments = appointmentsData
+        .filter(a => a.client_id === clientId)
+        .sort((a, b) => new Date(b.date) - new Date(a.date));
+      setAppointments(clientAppointments);
 
-    const clientSales = salesData
-      .filter(s => s.client_id === clientId)
-      .sort((a, b) => new Date(b.date) - new Date(a.date));
-    setSales(clientSales);
+      const clientSales = salesData
+        .filter(s => s.client_id === clientId)
+        .sort((a, b) => new Date(b.date) - new Date(a.date));
+      setSales(clientSales);
+    } catch (error) {
+      console.error(error);
+      setLoadError(error.message);
+    }
   };
 
-  if (!client) {
+  if (!client && !loadError) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <p>Carregando...</p>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="p-4">
+        <RateLimitHandler
+          error={loadError}
+          entityName="cliente"
+          onRetry={loadClientData}
+        />
       </div>
     );
   }

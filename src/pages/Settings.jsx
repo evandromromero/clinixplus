@@ -25,10 +25,7 @@ import {
 } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { CompanySettings } from '@/api/entities';
-import { Testimonial } from '@/api/entities';
-import { SlideShowImage } from '@/api/entities';
-import { Employee } from '@/api/entities';
+import { CompanySettings, SlideShowImage, Testimonial, Employee } from '@/firebase/entities';
 import {
   Building2,
   Settings as SettingsIcon,
@@ -1084,6 +1081,7 @@ export default function Settings() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <RateLimitHandler />
     </div>
   );
 }

@@ -20,8 +20,7 @@ import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Search, Filter, ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
-import { FinancialTransaction } from "@/api/entities";
-import { Client } from "@/api/entities";
+import { FinancialTransaction, Client } from "@/firebase/entities";
 import RateLimitHandler from '@/components/RateLimitHandler';
 
 export default function AccountsReceivable() {

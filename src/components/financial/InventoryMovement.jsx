@@ -8,9 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Plus, Search, AlertCircle, FileText } from "lucide-react";
-import { Inventory } from "@/api/entities";
-import { Product } from "@/api/entities";
-import { Supplier } from "@/api/entities";
+import { Inventory, Product, Supplier } from "@/firebase/entities";
+import RateLimitHandler from '@/components/RateLimitHandler';
 
 export default function InventoryMovement() {
   const [movements, setMovements] = useState([]);
@@ -309,6 +308,7 @@ export default function InventoryMovement() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <RateLimitHandler />
     </div>
   );
 }

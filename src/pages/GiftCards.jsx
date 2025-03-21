@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { GiftCard } from '@/api/entities';
-import { Client } from '@/api/entities';
-import { Sale } from '@/api/entities';
+import { GiftCard, Client, Sale } from '@/firebase/entities';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -57,6 +55,7 @@ import { ptBR } from 'date-fns/locale';
 import { createPageUrl } from "@/utils";
 import { useNavigate } from 'react-router-dom';
 import GiftCardTemplate from '../components/giftcard/GiftCardTemplate';
+import RateLimitHandler from '@/components/RateLimitHandler';
 
 export default function GiftCards() {
   const [giftCards, setGiftCards] = useState([]);
@@ -667,6 +666,7 @@ export default function GiftCards() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <RateLimitHandler />
     </div>
   );
 }

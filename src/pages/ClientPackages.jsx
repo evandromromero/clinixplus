@@ -1,9 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
-import { ClientPackage } from '@/api/entities';
-import { Package } from '@/api/entities';
-import { Client } from '@/api/entities';
-import { Service } from '@/api/entities';
+import { ClientPackage, Package, Client, Service } from '@/firebase/entities';
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,8 +29,9 @@ import {
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { toast } from "@/components/ui/toast";
-import { UnfinishedSale } from '@/api/entities';
-import { Sale } from '@/api/entities';
+import { UnfinishedSale } from '@/firebase/entities';
+import { Sale } from '@/firebase/entities';
+import RateLimitHandler from '@/components/RateLimitHandler';
 
 export default function ClientPackages() {
   const [clientPackages, setClientPackages] = useState([]);
@@ -1418,6 +1415,7 @@ export default function ClientPackages() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <RateLimitHandler />
     </div>
   );
 }

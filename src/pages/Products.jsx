@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Product } from '@/api/entities';
+import { Product } from '@/firebase/entities';
 import { Button } from "@/components/ui/button";
 import {
   Card,

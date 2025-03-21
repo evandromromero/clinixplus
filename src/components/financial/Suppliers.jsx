@@ -6,7 +6,8 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, Search, AlertCircle, Phone, Mail, Building2, FileText, Pencil } from "lucide-react";
-import { Supplier } from "@/api/entities";
+import { Supplier } from "@/firebase/entities";
+import RateLimitHandler from '@/components/RateLimitHandler';
 
 export default function Suppliers() {
   const [suppliers, setSuppliers] = useState([]);
@@ -362,6 +363,7 @@ export default function Suppliers() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <RateLimitHandler />
     </div>
   );
 }

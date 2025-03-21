@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,8 +37,9 @@ import {
   Globe,
   ImagePlus
 } from "lucide-react"; 
-import { Service } from "@/api/entities";
+import { Service } from "@/firebase/entities";
 import { Switch } from "@/components/ui/switch";
+import RateLimitHandler from '@/components/RateLimitHandler';
 
 export default function Services() {
   const [services, setServices] = useState([]);
@@ -426,6 +426,7 @@ export default function Services() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <RateLimitHandler />
     </div>
   );
 }

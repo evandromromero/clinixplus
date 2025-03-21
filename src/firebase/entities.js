@@ -7,27 +7,27 @@ export const Client = createEnhancedEntity('clients', base44.entities.Client);
 export const Appointment = createEnhancedEntity('appointments', base44.entities.Appointment);
 export const Sale = createEnhancedEntity('sales', base44.entities.Sale);
 export const FinancialTransaction = createEnhancedEntity('financial_transactions', base44.entities.FinancialTransaction);
+export const CompanySettings = createEnhancedEntity('company_settings', base44.entities.CompanySettings);
+export const SlideShowImage = createEnhancedEntity('slideshow_images', base44.entities.SlideShowImage);
+export const Testimonial = createEnhancedEntity('testimonials', base44.entities.Testimonial);
+export const Employee = createEnhancedEntity('employees', base44.entities.Employee);
+export const Service = createEnhancedEntity('services', base44.entities.Service);
+export const Product = createEnhancedEntity('products', base44.entities.Product);
+export const Package = createEnhancedEntity('packages', base44.entities.Package);
+export const Supplier = createEnhancedEntity('suppliers', base44.entities.Supplier);
+export const Role = createEnhancedEntity('roles', base44.entities.Role);
+export const PaymentMethod = createEnhancedEntity('payment_methods', base44.entities.PaymentMethod);
+export const Inventory = createEnhancedEntity('inventory', base44.entities.Inventory);
+export const ClientPackage = createEnhancedEntity('client_packages', base44.entities.ClientPackage);
+export const SubscriptionPlan = createEnhancedEntity('subscription_plans', base44.entities.SubscriptionPlan);
+export const ClientSubscription = createEnhancedEntity('client_subscriptions', base44.entities.ClientSubscription);
+export const GiftCard = createEnhancedEntity('gift_cards', base44.entities.GiftCard);
+export const ClientPackageSession = createEnhancedEntity('client_package_sessions', base44.entities.ClientPackageSession);
+export const Receipt = createEnhancedEntity('receipts', base44.entities.Receipt);
+export const UnfinishedSale = createEnhancedEntity('unfinished_sales', base44.entities.UnfinishedSale);
 
 // Exporta as entidades originais para as demais (que serão migradas gradualmente)
-export const Employee = base44.entities.Employee;
-export const Service = base44.entities.Service;
-export const Product = base44.entities.Product;
-export const Package = base44.entities.Package;
-export const Supplier = base44.entities.Supplier;
-export const Inventory = base44.entities.Inventory;
-export const ClientPackage = base44.entities.ClientPackage;
-export const SubscriptionPlan = base44.entities.SubscriptionPlan;
-export const ClientSubscription = base44.entities.ClientSubscription;
-export const Role = base44.entities.Role;
-export const PaymentMethod = base44.entities.PaymentMethod;
-export const GiftCard = base44.entities.GiftCard;
-export const ClientPackageSession = base44.entities.ClientPackageSession;
-export const Receipt = base44.entities.Receipt;
-export const CompanySettings = base44.entities.CompanySettings;
-export const SlideShowImage = base44.entities.SlideShowImage;
-export const Testimonial = base44.entities.Testimonial;
 export const ClientAuth = base44.entities.ClientAuth;
-export const UnfinishedSale = base44.entities.UnfinishedSale;
 
 // Auth SDK
 export const User = base44.auth;

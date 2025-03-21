@@ -247,7 +247,7 @@ export default function Clients() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        <Link to={createPageUrl(`ClientDetails?id=${client.id}`)}>
+                        <Link to={`/client-details?id=${client.id}`}>
                           <Button size="icon" variant="ghost">
                             <FileText className="h-4 w-4 text-[#294380]" />
                           </Button>

@@ -29,12 +29,8 @@ import { Badge } from "@/components/ui/badge";
 import { Search, Plus, UserPlus, Edit, Trash2, Check, X, Clock, AlertTriangle } from "lucide-react";
 import { format, addMonths, addDays, isBefore } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { SubscriptionPlan } from "@/api/entities";
-import { ClientSubscription } from "@/api/entities";
-import { Client } from "@/api/entities";
-import { Service } from "@/api/entities";
-import { Product } from "@/api/entities";
-import { FinancialTransaction } from "@/api/entities";
+import { SubscriptionPlan, ClientSubscription, Client, Service, Product, FinancialTransaction } from "@/firebase/entities";
+import RateLimitHandler from '@/components/RateLimitHandler';
 
 export default function Subscriptions() {
   const [activeTab, setActiveTab] = useState("planos");
@@ -1302,6 +1298,8 @@ export default function Subscriptions() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      
+      <RateLimitHandler />
     </div>
   );
 }

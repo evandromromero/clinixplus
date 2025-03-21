@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -31,14 +30,10 @@ import {
   Unlock,
   RefreshCcw
 } from "lucide-react";
-import { FinancialTransaction } from "@/api/entities";
-import { User } from "@/api/entities";
-import { Client } from "@/api/entities";
-import { Employee } from '@/api/entities';
+import { FinancialTransaction, User, Client, Employee, Package, ClientPackage } from "@/firebase/entities";
 import { InvokeLLM } from "@/api/integrations";
-import { Package } from "@/api/entities"; 
-import { ClientPackage } from "@/api/entities"; 
 import { toast } from "@/components/ui/toast";
+import RateLimitHandler from '@/components/RateLimitHandler';
 
 export default function CashRegister() {
   const [transactions, setTransactions] = useState([]);
@@ -247,6 +242,9 @@ export default function CashRegister() {
       }
     }
   };
+
+  // Alias para manter compatibilidade com o código existente
+  const loadTransactions = loadTransactionsWithRetry;
 
   const processTransactions = (transactions) => {
     if (!transactions || !Array.isArray(transactions)) {
@@ -1448,6 +1446,7 @@ export default function CashRegister() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <RateLimitHandler />
     </div>
   );
 }

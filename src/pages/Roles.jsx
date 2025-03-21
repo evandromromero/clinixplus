@@ -28,7 +28,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Role } from "@/api/entities";
+import { Role } from "@/firebase/entities";
 import { 
   Plus, 
   Search, 
@@ -39,6 +39,7 @@ import {
   Shield,
   UserCog
 } from "lucide-react";
+import RateLimitHandler from '@/components/RateLimitHandler';
 
 export default function Roles() {
   const [roles, setRoles] = useState([]);
@@ -482,6 +483,7 @@ export default function Roles() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <RateLimitHandler />
     </div>
   );
 }

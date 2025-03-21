@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
-import { PaymentMethod } from '@/api/entities';
+import { PaymentMethod } from '@/firebase/entities';
 import {
   Card,
   CardContent,
@@ -53,6 +52,7 @@ import {
   AlertTriangle,
   X
 } from "lucide-react";
+import RateLimitHandler from '@/components/RateLimitHandler';
 
 export default function PaymentMethods() {
   const [paymentMethods, setPaymentMethods] = useState([]);
@@ -660,6 +660,7 @@ export default function PaymentMethods() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <RateLimitHandler />
     </div>
   );
 }

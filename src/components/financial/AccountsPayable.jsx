@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,8 +10,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { format, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Plus, Search, AlertCircle, FileText, TrendingDown, CalendarIcon, CheckCircle, XCircle } from "lucide-react";
-import { FinancialTransaction } from "@/api/entities";
-import { Supplier } from "@/api/entities";
+import { FinancialTransaction, Supplier } from "@/firebase/entities";
+import RateLimitHandler from '@/components/RateLimitHandler';
 
 export default function AccountsPayable() {
   const [transactions, setTransactions] = useState([]);
@@ -404,6 +403,7 @@ export default function AccountsPayable() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <RateLimitHandler />
     </div>
   );
 }
