@@ -364,11 +364,13 @@ export function createEnhancedEntity(entityName, baseEntity) {
     /**
      * Filtra documentos com base em critérios
      * @param {Object} criteria - Critérios de filtro
+     * @param {Boolean} forceRefresh - Se true, força uma atualização do cache
      * @returns {Promise<Array>} Lista de documentos filtrados
      */
-    async filter(criteria) {
+    async filter(criteria, forceRefresh = false) {
       try {
         console.log(`[EnhancedEntity] Filtrando ${entityName} com critérios:`, criteria);
+        console.log(`[EnhancedEntity] Forçar atualização: ${forceRefresh}`);
         
         // Para filtros de data, precisamos verificar se estamos lidando com datas no formato ISO
         let isDateFilter = false;
@@ -389,12 +391,21 @@ export function createEnhancedEntity(entityName, baseEntity) {
         // Tenta buscar do Firebase primeiro se estiver habilitado
         if (useFirebaseCache) {
           try {
-            // Busca todos os documentos da coleção (limitação: Firebase não suporta filtros complexos sem índices)
-            const querySnapshot = await getDocs(collection(db, entityName));
+            // Se forceRefresh for true, busca diretamente do Firestore sem usar cache
+            const querySnapshot = await getDocs(
+              collection(db, entityName), 
+              forceRefresh ? { source: "server" } : undefined
+            );
             
             if (!querySnapshot.empty) {
               // Filtra os documentos em memória
-              let items = querySnapshot.docs.map(doc => doc.data());
+              let items = querySnapshot.docs.map(doc => ({
+                ...doc.data(),
+                _id: doc.id, // Garante que temos o ID do documento
+                id: doc.data().id || doc.id // Mantém compatibilidade com o código existente
+              }));
+              
+              console.log(`[Firebase] ${items.length} documentos brutos de ${entityName} recuperados`);
               
               // Aplica os filtros em memória
               for (const key in criteria) {
@@ -407,6 +418,13 @@ export function createEnhancedEntity(entityName, baseEntity) {
                     const itemDate = item[key].split('T')[0];
                     console.log(`[EnhancedEntity] Comparando datas: item[${key}]=${itemDate} vs criteria=${dateValue}`);
                     return itemDate === dateValue;
+                  });
+                } else if (Array.isArray(criteria[key])) {
+                  // Para filtros com arrays (como category: ["abertura_caixa", "fechamento_caixa"])
+                  console.log(`[EnhancedEntity] Filtrando por array de valores para ${key}:`, criteria[key]);
+                  items = items.filter(item => {
+                    if (!item[key]) return false;
+                    return criteria[key].includes(item[key]);
                   });
                 } else {
                   // Para outros filtros, compara diretamente

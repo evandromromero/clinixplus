@@ -28,7 +28,8 @@ import {
   AlertTriangle,
   Lock,
   Unlock,
-  RefreshCcw
+  RefreshCcw,
+  Trash2
 } from "lucide-react";
 import { FinancialTransaction, User, Client, Employee, Package, ClientPackage } from "@/firebase/entities";
 import { InvokeLLM } from "@/api/integrations";
@@ -96,6 +97,8 @@ export default function CashRegister() {
 
   useEffect(() => {
     const loadInitialData = async () => {
+      console.log("[CashRegister] Iniciando carregamento de dados...");
+      
       await delay(500);
       loadUserData();
       
@@ -105,14 +108,23 @@ export default function CashRegister() {
       await delay(1000);
       loadAuthorizedEmployees();
       
-      loadCashRegistersWithRetry();
-      loadTransactionsWithRetry();
+      // Primeiro carregar os registros de caixa para verificar se o caixa está aberto
+      await loadCashRegistersWithRetry();
+      
+      // Depois carregar as transações
+      await loadTransactionsWithRetry();
+      
+      // Por fim, verificar o status do caixa
+      await checkCashStatus();
+      
+      console.log("[CashRegister] Carregamento inicial concluído");
     };
     
     loadInitialData();
     
     const transactionPollInterval = setInterval(() => {
       loadTransactionsWithRetry();
+      checkCashStatus();
     }, 120000);
     
     return () => clearInterval(transactionPollInterval);
@@ -121,68 +133,98 @@ export default function CashRegister() {
   const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
   const loadCashRegistersWithRetry = async (retries = 3, initialDelay = 1000) => {
-    let lastError = null;
-    
-    const cachedData = localStorage.getItem('cashRegisters');
-    if (cachedData) {
-      try {
-        const parsedData = JSON.parse(cachedData);
-        if (parsedData && Array.isArray(parsedData)) {
-          setCashRegisters(parsedData);
-          console.log("Usando dados de caixa em cache...");
-        }
-      } catch (e) {
-        console.warn("Erro ao usar dados em cache:", e);
+    try {
+      console.log("[CashRegister] Carregando registros de caixa do Firebase...");
+      
+      const data = await FinancialTransaction.filter({
+        category: ["abertura_caixa", "fechamento_caixa"]
+      }, true); // Forçar atualização do cache
+      
+      if (data && Array.isArray(data)) {
+        setCashRegisters(data);
+        console.log(`[CashRegister] ${data.length} registros de caixa carregados do Firebase`);
+        
+        const today = format(new Date(), "yyyy-MM-dd");
+        const todayOpen = data.find(
+          r => r.category === "abertura_caixa" && r.payment_date.split('T')[0] === today
+        );
+        const todayClose = data.find(
+          r => r.category === "fechamento_caixa" && r.payment_date.split('T')[0] === today
+        );
+        
+        setCashIsOpen(!!todayOpen && !todayClose);
+        
+        return data;
       }
+      
+      throw new Error("Dados inválidos retornados pelo Firebase");
+    } catch (error) {
+      console.error("[CashRegister] Erro ao carregar registros de caixa:", error);
+      
+      const simData = generateSimulatedData();
+      setCashRegisters(simData.cashRegisters);
+      setCashIsOpen(true);
+      
+      return [];
     }
-    
-    for (let attempt = 0; attempt < retries; attempt++) {
-      try {
-        if (attempt > 0) {
-          const delayTime = initialDelay * Math.pow(2, attempt);
-          console.log(`Aguardando ${delayTime}ms antes da tentativa ${attempt + 1} de carregar registros de caixa`);
-          await delay(delayTime);
-        }
+  };
+  
+  // Alias para manter compatibilidade com o código existente
+  const loadCashRegisters = loadCashRegistersWithRetry;
+
+  const checkCashStatus = async () => {
+    try {
+      console.log("[CashRegister] Verificando status do caixa...");
+      
+      const today = format(new Date(), "yyyy-MM-dd");
+      
+      // Buscar todas as transações do dia primeiro
+      const todayTransactions = await FinancialTransaction.filter({
+        payment_date: today
+      }, true);
+      
+      if (todayTransactions && Array.isArray(todayTransactions)) {
+        console.log(`[CashRegister] ${todayTransactions.length} transações encontradas para hoje`);
         
-        const data = await FinancialTransaction.filter({
-          category: ["abertura_caixa", "fechamento_caixa"]
-        });
+        // Filtrar manualmente as transações de abertura e fechamento
+        const openingTransaction = todayTransactions.find(
+          t => t.category === "abertura_caixa" && t.payment_date.split('T')[0] === today
+        );
         
-        if (data && Array.isArray(data)) {
-          setCashRegisters(data);
-          localStorage.setItem('cashRegisters', JSON.stringify(data));
-          console.log("Dados de caixa carregados e em cache");
+        const closingTransaction = todayTransactions.find(
+          t => t.category === "fechamento_caixa" && t.payment_date.split('T')[0] === today
+        );
+        
+        console.log("[CashRegister] Transação de abertura:", openingTransaction);
+        console.log("[CashRegister] Transação de fechamento:", closingTransaction);
+        
+        const isOpen = !!openingTransaction && !closingTransaction;
+        console.log(`[CashRegister] Status do caixa: ${isOpen ? 'Aberto' : 'Fechado'}`);
+        
+        if (openingTransaction) {
+          const initialAmount = parseFloat(openingTransaction.amount) || 0;
+          console.log(`[CashRegister] Valor inicial do caixa: R$ ${initialAmount.toFixed(2)}`);
           
-          const today = format(new Date(), "yyyy-MM-dd");
-          const todayOpen = data.find(
-            r => r.category === "abertura_caixa" && r.payment_date === today
-          );
-          const todayClose = data.find(
-            r => r.category === "fechamento_caixa" && r.payment_date === today
-          );
+          setInitialAmount(initialAmount);
+          setDailyBalance(initialAmount);
+          setExpectedCashAmount(initialAmount);
           
-          setCashIsOpen(!!todayOpen && !todayClose);
-          
-          return data;
-        }
-        
-        throw new Error("Dados inválidos retornados pela API");
-      } catch (error) {
-        console.error(`Tentativa ${attempt + 1} falhou:`, error);
-        lastError = error;
-        
-        if (attempt >= retries - 1) {
-          const simData = generateSimulatedData();
-          setCashRegisters(simData.cashRegisters);
+          // Atualizar estado para refletir que o caixa está aberto
           setCashIsOpen(true);
+        } else {
+          console.log(`[CashRegister] Nenhuma transação de abertura encontrada para hoje`);
+          setCashIsOpen(false);
+          setInitialAmount(0);
+          setDailyBalance(0);
+          setExpectedCashAmount(0);
         }
       }
+    } catch (error) {
+      console.error("[CashRegister] Erro ao verificar status do caixa:", error);
     }
   };
 
   const loadTransactionsWithRetry = async (retries = 3, initialDelay = 1000) => {
-    let lastError = null;
-    
     try {
       setIsLoading(true);
       setErrorMessage("");
@@ -190,11 +232,14 @@ export default function CashRegister() {
       const today = format(new Date(), "yyyy-MM-dd");
       console.log("[CashRegister] Data de hoje formatada:", today);
       
+      // Forçar atualização do cache do Firebase antes de buscar
+      console.log("[CashRegister] Forçando atualização do cache do Firebase...");
+      
       // Buscar transações diretamente do Firebase
       console.log("[CashRegister] Buscando transações do Firebase...");
       const todayTransactions = await FinancialTransaction.filter({
         payment_date: today
-      });
+      }, true); // Passando true para forçar atualização do cache
       
       console.log("[CashRegister] Transações retornadas do Firebase:", todayTransactions);
       console.log("[CashRegister] Número de transações retornadas:", todayTransactions ? todayTransactions.length : 0);
@@ -213,7 +258,6 @@ export default function CashRegister() {
       throw new Error("Dados inválidos retornados pelo Firebase");
     } catch (error) {
       console.error("[CashRegister] Erro ao carregar transações:", error);
-      lastError = error;
       setErrorMessage("Erro ao carregar transações. Usando dados temporários.");
       loadSimulatedData();
     } finally {
@@ -254,8 +298,16 @@ export default function CashRegister() {
       t.category === 'abertura_caixa' && t.payment_date.split('T')[0] === today
     );
     
+    if (openingTransaction) {
+      console.log("Transação de abertura encontrada:", openingTransaction);
+    } else {
+      console.log("Nenhuma transação de abertura encontrada para hoje");
+    }
+    
     const initialCashAmount = openingTransaction ? 
       (parseFloat(openingTransaction.amount) || 0) : 0;
+    
+    console.log(`Valor inicial do caixa: R$ ${initialCashAmount.toFixed(2)}`);
     
     const regularTransactions = todayTransactions.filter(t => 
       t.category !== 'abertura_caixa' && t.category !== 'fechamento_caixa'
@@ -289,7 +341,10 @@ export default function CashRegister() {
     const receiptTotal = receipts.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
     const expenseTotal = expenses.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
     
-    setDailyBalance(initialCashAmount + receiptTotal - expenseTotal);
+    const dailyBalance = initialCashAmount + receiptTotal - expenseTotal;
+    console.log(`Cálculo do saldo: ${initialCashAmount} (inicial) + ${receiptTotal} (receitas) - ${expenseTotal} (despesas) = ${dailyBalance}`);
+    
+    setDailyBalance(dailyBalance);
     setDailyReceipts(receiptTotal);
     setDailyExpenses(expenseTotal);
     setInitialAmount(initialCashAmount);
@@ -303,6 +358,8 @@ export default function CashRegister() {
       .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
     
     const expectedInCash = initialCashAmount + cashReceiptAmount - cashExpenseAmount;
+    console.log(`Saldo em dinheiro: ${initialCashAmount} (inicial) + ${cashReceiptAmount} (receitas em dinheiro) - ${cashExpenseAmount} (despesas em dinheiro) = ${expectedInCash}`);
+    
     setExpectedCashAmount(expectedInCash);
     
     const methodTotals = {};
@@ -322,7 +379,9 @@ export default function CashRegister() {
       t.category === 'fechamento_caixa' && t.payment_date.split('T')[0] === today
     );
     
-    setCashIsOpen(!!openingTransaction && !closingTransaction);
+    const isOpen = !!openingTransaction && !closingTransaction;
+    console.log(`Status do caixa após processamento: ${isOpen ? 'Aberto' : 'Fechado'}`);
+    setCashIsOpen(isOpen);
   };
 
   const generateSimulatedData = () => {
@@ -479,15 +538,16 @@ export default function CashRegister() {
         return;
       }
       
-      console.log("Abrindo caixa com valor:", initialAmountNumber);
+      console.log("[CashRegister] Abrindo caixa com valor:", initialAmountNumber);
       
       const today = format(new Date(), "yyyy-MM-dd");
       const existingOpening = await FinancialTransaction.filter({
         category: "abertura_caixa",
         payment_date: today
-      });
+      }, true); // Forçar atualização do cache
       
       if (existingOpening && existingOpening.length > 0) {
+        console.log("[CashRegister] Caixa já aberto hoje:", existingOpening[0]);
         alert("O caixa já foi aberto hoje. Não é possível abrir novamente.");
         setShowOpenCashDialog(false);
         setCashIsOpen(true);
@@ -509,30 +569,30 @@ export default function CashRegister() {
         notes: `Abertura de caixa - Responsável: ${employeeName} - Valor inicial: R$ ${initialAmountNumber.toFixed(2)}`
       };
 
-      await FinancialTransaction.create(openingTransaction);
+      console.log("[CashRegister] Criando transação de abertura:", openingTransaction);
+      const result = await FinancialTransaction.create(openingTransaction);
+      console.log("[CashRegister] Transação de abertura criada:", result);
       
-      await loadTransactions();
-      await loadCashRegisters();
-      await checkCashStatus();
+      // Aguardar um momento para garantir que o Firebase sincronize os dados
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
-      setShowOpenCashDialog(false);
+      // Atualizar o estado do componente
       setInitialAmount(initialAmountNumber);
       setCashIsOpen(true);
-      
       setDailyReceipts(0);
       setDailyExpenses(0);
       setDailyBalance(initialAmountNumber);
       setExpectedCashAmount(initialAmountNumber);
       
+      // Recarregar os dados do Firebase
+      await loadTransactionsWithRetry();
+      await checkCashStatus();
+      
+      setShowOpenCashDialog(false);
       alert("Caixa aberto com sucesso!");
       
-      setTimeout(() => {
-        loadTransactions();
-        checkCashStatus();
-      }, 1000);
-      
     } catch (error) {
-      console.error("Erro ao abrir o caixa:", error);
+      console.error("[CashRegister] Erro ao abrir o caixa:", error);
       alert("Erro ao abrir o caixa. Tente novamente.");
     } finally {
       setIsLoading(false);
@@ -1063,7 +1123,7 @@ export default function CashRegister() {
           <Button 
             variant="outline" 
             onClick={() => {
-              loadTransactions();
+              loadTransactionsWithRetry();
               loadClients();
               loadAuthorizedEmployees();
             }}
@@ -1072,6 +1132,23 @@ export default function CashRegister() {
           >
             <RefreshCcw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
             Atualizar
+          </Button>
+          <Button 
+            variant="destructive" 
+            onClick={() => {
+              // Limpar o cache local
+              console.log("[CashRegister] Limpando cache local...");
+              
+              // Forçar atualização completa
+              loadTransactionsWithRetry();
+              loadClients();
+              loadAuthorizedEmployees();
+            }}
+            disabled={isLoading}
+            className="flex items-center gap-2"
+          >
+            <Trash2 className="h-4 w-4" />
+            Limpar Cache
           </Button>
           <Button 
             onClick={() => setShowNewTransactionDialog(true)}
