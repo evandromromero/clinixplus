@@ -1,39 +1,48 @@
 import React, { useState, useEffect } from 'react';
-import { ClientPackage, Package, Client, Service } from '@/firebase/entities';
-import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Calendar, Plus, ShoppingBag, Trash2, PlusCircle, Search, PackageCheck } from "lucide-react";
-import { format, isBefore, addDays } from 'date-fns';
+import { format, addDays, isBefore } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { 
+  Client, 
+  Package, 
+  ClientPackage, 
+  Service, 
+  Sale, 
+  UnfinishedSale 
+} from "@/firebase/entities";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { toast } from "@/components/ui/toast";
-import { UnfinishedSale } from '@/firebase/entities';
-import { Sale } from '@/firebase/entities';
+import { useToast } from "@/components/ui/use-toast";
 import RateLimitHandler from '@/components/RateLimitHandler';
+import { 
+  Calendar, 
+  Plus, 
+  ShoppingBag, 
+  Trash2, 
+  PlusCircle, 
+  Search, 
+  PackageCheck 
+} from "lucide-react";
 
 export default function ClientPackages() {
+  const { toast } = useToast();
+  const navigate = useNavigate();
   const [clientPackages, setClientPackages] = useState([]);
   const [packages, setPackages] = useState([]);
   const [clients, setClients] = useState([]);
@@ -152,14 +161,14 @@ export default function ClientPackages() {
       
       if (newPackage.sell_now) {
         // Redireciona para a página de vendas com os parâmetros necessários
-        const saleParams = new URLSearchParams({
+        const params = new URLSearchParams({
           type: 'pacote',
           client_id: newPackage.client_id,
           client_package_id: createdPackage.id,
           amount: packageDetails.total_price
         });
         
-        window.location.href = createPageUrl('SalesRegister', saleParams.toString());
+        navigate(createPageUrl('SalesRegister', params.toString()));
         return;
       }
       
@@ -233,7 +242,7 @@ export default function ClientPackages() {
         amount: selectedPackage.total_price
       }).toString();
 
-      window.location.href = createPageUrl('SalesRegister', saleParams);
+      navigate(createPageUrl('SalesRegister', saleParams));
 
       setShowSellDialog(false);
       setSellForm({
@@ -314,7 +323,7 @@ export default function ClientPackages() {
   const checkUnfinishedSaleStatus = async () => {
     try {
       const sales = await Sale.list();
-      const completedSales = sales.filter(sale => sale.status === 'pago');
+      const completedSales = sales.filter(sale => sale.status === 'finalizada');
 
       const unfinishedSalesList = await UnfinishedSale.list();
 
@@ -323,9 +332,8 @@ export default function ClientPackages() {
           const matchingCompletedSale = completedSales.find(sale => 
             sale.items && 
             sale.items.some(item => 
-              unfinishedSale.items && 
-              unfinishedSale.items.length > 0 && 
-              item.item_id === unfinishedSale.items[0].item_id &&
+              item.type === 'pacote' &&
+              item.item_id === unfinishedSale.client_package_id &&
               sale.client_id === unfinishedSale.client_id
             )
           );
@@ -828,6 +836,46 @@ export default function ClientPackages() {
     }
   };
 
+  const handleContinueSale = async (sale) => {
+    try {
+      const params = new URLSearchParams({
+        type: 'pacote',
+        client_id: sale.client_id,
+        client_package_id: sale.client_package_id,
+        amount: sale.total_amount,
+        unfinished_sale_id: sale.id
+      });
+      
+      navigate(createPageUrl('SalesRegister', params.toString()));
+    } catch (error) {
+      console.error("Erro ao continuar venda:", error);
+      toast({
+        title: "Erro",
+        description: "Erro ao continuar a venda. Tente novamente.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleCancelUnfinishedSale = async (saleId) => {
+    try {
+      await UnfinishedSale.update(saleId, { status: 'cancelada' });
+      toast({
+        title: "Sucesso",
+        description: "Venda não finalizada cancelada com sucesso",
+        variant: "success"
+      });
+      checkUnfinishedSales();
+    } catch (error) {
+      console.error("Erro ao cancelar venda:", error);
+      toast({
+        title: "Erro",
+        description: "Erro ao cancelar venda. Tente novamente.",
+        variant: "destructive"
+      });
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -850,6 +898,50 @@ export default function ClientPackages() {
         </div>
       </div>
 
+      {hasUnfinishedSales && (
+        <div className="bg-yellow-100 border border-yellow-400 text-yellow-800 px-4 py-3 rounded relative mb-4">
+          <h3 className="font-medium mb-2">Vendas de pacotes não finalizadas</h3>
+          <div className="space-y-2">
+            {unfinishedSales.map(sale => {
+              const clientPackage = clientPackages.find(pkg => pkg.id === sale.client_package_id);
+              const client = clients.find(c => c.id === sale.client_id);
+              return (
+                <div key={sale.id} className="flex justify-between items-center">
+                  <div>
+                    <p>Cliente: {client?.name || 'Cliente não encontrado'}</p>
+                    <p className="text-sm text-yellow-700">
+                      Pacote: {clientPackage?.package_snapshot?.name || "Pacote"} - 
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(sale.total_amount)}
+                    </p>
+                    <p className="text-xs text-yellow-600">
+                      Iniciado em: {format(new Date(sale.date_created), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button 
+                      onClick={() => handleContinueSale(sale)}
+                      className="bg-yellow-500 hover:bg-yellow-600 text-white"
+                    >
+                      Continuar venda
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="border-red-500 text-red-500 hover:bg-red-50"
+                      onClick={() => {
+                        if (confirm("Deseja cancelar esta venda não finalizada?")) {
+                          handleCancelUnfinishedSale(sale.id);
+                        }
+                      }}
+                    >
+                      Cancelar
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
       <Card>
         <CardContent className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">

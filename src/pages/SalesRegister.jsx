@@ -1,4 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { 
   Client, Sale, FinancialTransaction, Product, Service, 
   Employee, PaymentMethod, Package, ClientPackage, 
@@ -10,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { toast } from "@/components/ui/toast";
+import { useToast } from "@/components/ui/use-toast";
 import {
   Search,
   ShoppingBag,
@@ -26,21 +29,14 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { format, addDays, addMonths } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { useNavigate } from 'react-router-dom';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, } from "@/components/ui/dialog";
 import { createPageUrl } from "@/utils";
 import { AlertTriangle } from "lucide-react";
 import RateLimitHandler from '@/components/RateLimitHandler';
 
 export default function SalesRegister() {
+  const { toast } = useToast();
+  const navigate = useNavigate();
   const [cashIsOpen, setCashIsOpen] = useState(false);
   const [clients, setClients] = useState([]);
   const [products, setProducts] = useState([]);
@@ -69,8 +65,6 @@ export default function SalesRegister() {
   const [isLoading, setIsLoading] = useState(true);
   const [retryCount, setRetryCount] = useState(0);
   
-  const navigate = useNavigate();
-
   // Função para formatar valores monetários
   const formatCurrency = (value) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -752,6 +746,7 @@ export default function SalesRegister() {
         const type = params.get('type');
         const amount = params.get('amount');
         const clientPackageId = params.get('client_package_id');
+        const unfinishedSaleId = params.get('unfinished_sale_id');
 
         if (type) {
           setSaleType(type);
@@ -768,10 +763,13 @@ export default function SalesRegister() {
         if (amount && clientPackageId) {
           const packageData = await ClientPackage.get(clientPackageId);
           if (packageData) {
+            // Busca o pacote original para ter os detalhes completos
+            const originalPackage = await Package.get(packageData.package_id);
+            
             const cartItem = {
               item_id: packageData.id,
               type: 'pacote',
-              name: packageData.package_snapshot.name,
+              name: originalPackage?.name || packageData.package_snapshot?.name || 'Pacote',
               quantity: 1,
               price: parseFloat(amount),
               discount: 0
@@ -785,6 +783,10 @@ export default function SalesRegister() {
               installments: 1
             }]);
           }
+        }
+
+        if (unfinishedSaleId) {
+          setUnfinishedSaleId(unfinishedSaleId);
         }
       } catch (error) {
         console.error('Erro ao carregar dados da URL:', error);
