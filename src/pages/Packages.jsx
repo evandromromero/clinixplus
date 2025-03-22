@@ -100,14 +100,42 @@ export default function Packages() {
   };
 
   const handleEditPackage = async (packageToEdit) => {
+    // Garantir que temos os dados completos dos serviços
+    const updatedServices = await Promise.all(
+      (packageToEdit.services || []).map(async (service) => {
+        const fullService = services.find(s => s.id === service.service_id);
+        return {
+          service_id: service.service_id,
+          name: fullService ? fullService.name : 'Serviço não encontrado',
+          price: fullService ? fullService.price : 0,
+          quantity: service.quantity || 1
+        };
+      })
+    );
+
     setPackageForm({
       name: packageToEdit.name,
       description: packageToEdit.description || "",
       validity_days: packageToEdit.validity_days,
       total_price: packageToEdit.total_price,
       discount: packageToEdit.discount || 0,
-      services: packageToEdit.services || []
+      services: updatedServices
     });
+
+    // Recalcular o preço total após carregar os serviços
+    const servicesTotal = updatedServices.reduce((total, service) => {
+      return total + (service.price * service.quantity);
+    }, 0);
+    
+    const discountAmount = (packageToEdit.discount || 0) > 0 
+      ? (servicesTotal * ((packageToEdit.discount || 0) / 100)) 
+      : 0;
+
+    setPackageForm(prev => ({
+      ...prev,
+      total_price: servicesTotal - discountAmount
+    }));
+
     setCurrentPackage(packageToEdit);
     setIsEditing(true);
     setShowDialog(true);

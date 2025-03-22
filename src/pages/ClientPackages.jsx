@@ -699,6 +699,59 @@ export default function ClientPackages() {
     }
   };
 
+  const handleEditPackage = async (packageToEdit) => {
+    try {
+      // Busca os serviços atualizados
+      const servicesData = await Service.list();
+      
+      console.log('Package to edit:', packageToEdit);
+      console.log('Services data:', servicesData);
+
+      // Pega os serviços do pacote
+      const packageServices = [];
+      const packageServicesList = packageToEdit.services || [];
+      
+      for (const svc of packageServicesList) {
+        // Busca os detalhes do serviço
+        const serviceDetails = servicesData.find(s => s.id === svc.service_id);
+        console.log('Service details for', svc.service_id, ':', serviceDetails);
+        
+        // Adiciona o serviço com todos os dados necessários
+        packageServices.push({
+          service_id: svc.service_id,
+          name: serviceDetails?.name || "Serviço não encontrado",
+          quantity: parseInt(svc.quantity) || 0,
+          price: parseFloat(serviceDetails?.price) || 0
+        });
+      }
+
+      console.log('Mapped package services:', packageServices);
+
+      // Calcula os valores finais
+      const subtotal = packageServices.reduce((sum, service) => 
+        sum + (service.price * service.quantity), 0);
+      const discount = parseFloat(packageToEdit.discount) || 0;
+      const total = subtotal - (subtotal * discount / 100);
+
+      // Atualiza o formulário com os dados do pacote
+      setPackageForm({
+        name: packageToEdit.name || "",
+        description: packageToEdit.description || "",
+        validity_days: parseInt(packageToEdit.validity_days) || 90,
+        services: packageServices,
+        discount: discount,
+        total_price: total
+      });
+
+      console.log('Form data to set:', packageForm);
+      setCurrentPackage(packageToEdit);
+      setShowNewPackageDialog(true);
+    } catch (error) {
+      console.error("Erro ao carregar dados para edição:", error);
+      setSuccessMessage("Erro ao carregar dados do pacote para edição");
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
