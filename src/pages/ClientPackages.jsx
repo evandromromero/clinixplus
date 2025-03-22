@@ -1220,13 +1220,21 @@ export default function ClientPackages() {
                       <div key={index} className="p-3 border rounded-lg">
                         <div className="flex justify-between items-center">
                           <div>
-                            <p className="font-medium">Sessão {index + 1}</p>
+                            <p className="font-medium">{session.service_name || "Sessão " + (index + 1)}</p>
                             <p className="text-sm text-gray-500">
                               {format(new Date(session.date), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                             </p>
                           </div>
-                          <Badge variant="outline" className="bg-green-50 text-green-700">
-                            Realizada
+                          <Badge 
+                            variant="outline" 
+                            className={
+                              session.status === 'realizada' ? 'bg-green-50 text-green-700' :
+                              session.status === 'agendada' ? 'bg-blue-50 text-blue-700' :
+                              session.status === 'cancelada' ? 'bg-red-50 text-red-700' :
+                              'bg-gray-50 text-gray-700'
+                            }
+                          >
+                            {session.status ? session.status.charAt(0).toUpperCase() + session.status.slice(1) : 'Agendada'}
                           </Badge>
                         </div>
                       </div>

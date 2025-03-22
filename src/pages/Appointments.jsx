@@ -176,6 +176,8 @@ export default function Appointments() {
           employee_id: appointmentData.employee_id,
           appointment_id: createdAppointment.id,
           service_id: appointmentData.service_id,
+          service_name: services.find(s => s.id === appointmentData.service_id)?.name || "",
+          status: appointmentData.status,
           notes: appointmentData.notes || ""
         };
 
@@ -186,10 +188,28 @@ export default function Appointments() {
             ? currentPackage.session_history 
             : [];
           
+          // Encontra e atualiza a sessão existente ou adiciona uma nova
+          const existingSessionIndex = currentSessionHistory.findIndex(
+            s => s.appointment_id === createdAppointment.id
+          );
+
+          let updatedSessionHistory;
+          if (existingSessionIndex >= 0) {
+            // Atualiza a sessão existente
+            updatedSessionHistory = [...currentSessionHistory];
+            updatedSessionHistory[existingSessionIndex] = sessionHistoryEntry;
+          } else {
+            // Adiciona nova sessão
+            updatedSessionHistory = [...currentSessionHistory, sessionHistoryEntry];
+          }
+          
+          // Se o status for concluído, incrementa as sessões usadas
+          const sessionsToAdd = appointmentData.status === 'concluído' ? 1 : 0;
+          
           await ClientPackage.update(selectedClientPackage.id, {
-            sessions_used: (currentPackage.sessions_used || 0) + 1,
-            session_history: [...currentSessionHistory, sessionHistoryEntry],
-            status: (currentPackage.sessions_used || 0) + 1 >= currentPackage.total_sessions ? 'finalizado' : 'ativo'
+            sessions_used: (currentPackage.sessions_used || 0) + sessionsToAdd,
+            session_history: updatedSessionHistory,
+            status: (currentPackage.sessions_used || 0) + sessionsToAdd >= currentPackage.total_sessions ? 'finalizado' : 'ativo'
           });
         } catch (error) {
           console.error("Erro ao atualizar pacote do cliente:", error);
@@ -405,11 +425,14 @@ export default function Appointments() {
         });
 
         if (relevantPackage) {
+          const serviceData = services.find(s => s.id === appointment.service_id);
           const sessionHistoryEntry = {
             date: appointment.date,
             employee_id: appointment.employee_id,
             appointment_id: appointmentId,
             service_id: appointment.service_id,
+            service_name: serviceData ? serviceData.name : "",
+            status: newStatus,
             notes: appointment.notes || ""
           };
 
@@ -418,10 +441,28 @@ export default function Appointments() {
             ? currentPackage.session_history 
             : [];
           
+          // Encontra e atualiza a sessão existente ou adiciona uma nova
+          const existingSessionIndex = currentSessionHistory.findIndex(
+            s => s.appointment_id === appointmentId
+          );
+
+          let updatedSessionHistory;
+          if (existingSessionIndex >= 0) {
+            // Atualiza a sessão existente
+            updatedSessionHistory = [...currentSessionHistory];
+            updatedSessionHistory[existingSessionIndex] = sessionHistoryEntry;
+          } else {
+            // Adiciona nova sessão
+            updatedSessionHistory = [...currentSessionHistory, sessionHistoryEntry];
+          }
+          
+          // Se o status for concluído, incrementa as sessões usadas
+          const sessionsToAdd = newStatus === 'concluído' ? 1 : 0;
+          
           await ClientPackage.update(relevantPackage.id, {
-            sessions_used: (currentPackage.sessions_used || 0) + 1,
-            session_history: [...currentSessionHistory, sessionHistoryEntry],
-            status: (currentPackage.sessions_used || 0) + 1 >= currentPackage.total_sessions ? 'finalizado' : 'ativo'
+            sessions_used: (currentPackage.sessions_used || 0) + sessionsToAdd,
+            session_history: updatedSessionHistory,
+            status: (currentPackage.sessions_used || 0) + sessionsToAdd >= currentPackage.total_sessions ? 'finalizado' : 'ativo'
           });
         }
       }
@@ -1224,6 +1265,14 @@ export default function Appointments() {
                                       onClick={() => showConfirmDialog('complete', app.id)}
                                     >
                                       <Check className="w-4 h-4" />
+                                    </Button>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="text-red-600 border-red-600 hover:bg-red-50"
+                                      onClick={() => showConfirmDialog('delete', app.id)}
+                                    >
+                                      <Trash2 className="w-4 h-4" />
                                     </Button>
                                   </>
                                 )}
