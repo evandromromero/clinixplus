@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Plus, Search, AlertCircle, FileText } from "lucide-react";
+import { Plus, Search, AlertCircle, FileText, X } from "lucide-react";
 import { Inventory, Product, Supplier } from "@/firebase/entities";
 import RateLimitHandler from '@/components/RateLimitHandler';
 
@@ -20,13 +20,14 @@ export default function InventoryMovement() {
   const [newMovement, setNewMovement] = useState({
     product_id: "",
     type: "entrada",
-    quantity: 1,
-    unit_price: 0,
+    quantity: "1",
+    unit_price: "0",
     supplier_id: "",
     invoice_number: "",
     batch_number: "",
     expiration_date: ""
   });
+  const [alert, setAlert] = useState(null);
 
   useEffect(() => {
     loadData();
@@ -34,47 +35,113 @@ export default function InventoryMovement() {
 
   const loadData = async () => {
     try {
+      console.log("[Estoque] Carregando dados do Firebase...");
       const [movementsData, productsData, suppliersData] = await Promise.all([
         Inventory.list(),
         Product.list(),
         Supplier.list()
       ]);
-      setMovements(movementsData);
+      console.log("[Estoque] Dados carregados:", {
+        movements: movementsData.length,
+        products: productsData.length,
+        suppliers: suppliersData.length
+      });
+      
+      setMovements(movementsData.sort((a, b) => new Date(b.created_date) - new Date(a.created_date)));
       setProducts(productsData);
       setSuppliers(suppliersData);
     } catch (error) {
-      console.error("Error loading data:", error);
+      console.error("[Estoque] Erro ao carregar dados:", error);
+      setAlert({
+        type: "error",
+        message: "Erro ao carregar dados do estoque. Por favor, tente novamente."
+      });
     }
   };
 
   const handleCreateMovement = async () => {
     try {
-      await Inventory.create(newMovement);
+      console.log("[Estoque] Iniciando nova movimentação...");
       
-      // Update product stock
+      // Validações
+      if (!newMovement.product_id) {
+        setAlert({
+          type: "error",
+          message: "Selecione um produto."
+        });
+        return;
+      }
+
+      if (!newMovement.quantity || newMovement.quantity <= 0) {
+        setAlert({
+          type: "error",
+          message: "A quantidade deve ser maior que zero."
+        });
+        return;
+      }
+
+      // Criar movimentação
+      const movementData = {
+        ...newMovement,
+        created_date: new Date().toISOString(),
+        unit_price: parseFloat(newMovement.unit_price) || 0
+      };
+      
+      console.log("[Estoque] Criando movimentação:", movementData);
+      await Inventory.create(movementData);
+      
+      // Atualizar estoque do produto
       const product = products.find(p => p.id === newMovement.product_id);
       if (product) {
         const newStock = newMovement.type === "entrada"
-          ? product.stock + newMovement.quantity
-          : product.stock - newMovement.quantity;
+          ? (product.stock || 0) + parseInt(newMovement.quantity)
+          : (product.stock || 0) - parseInt(newMovement.quantity);
         
-        await Product.update(product.id, { ...product, stock: newStock });
+        if (newMovement.type === "saida" && newStock < 0) {
+          setAlert({
+            type: "error",
+            message: "Estoque insuficiente para esta saída."
+          });
+          return;
+        }
+
+        console.log("[Estoque] Atualizando estoque do produto:", {
+          produto: product.name,
+          estoqueAtual: product.stock,
+          novoEstoque: newStock
+        });
+        
+        await Product.update(product.id, { 
+          ...product, 
+          stock: newStock,
+          updated_date: new Date().toISOString()
+        });
       }
 
       setShowNewMovementDialog(false);
       setNewMovement({
         product_id: "",
         type: "entrada",
-        quantity: 1,
-        unit_price: 0,
+        quantity: "1",
+        unit_price: "0",
         supplier_id: "",
         invoice_number: "",
         batch_number: "",
         expiration_date: ""
       });
-      loadData();
+      
+      setAlert({
+        type: "success",
+        message: "Movimentação registrada com sucesso!"
+      });
+      
+      await loadData();
     } catch (error) {
-      console.error("Error creating movement:", error);
+      console.error("[Estoque] Erro ao criar movimentação:", error);
+      setAlert({
+        type: "error",
+        message: "Erro ao registrar movimentação. Por favor, tente novamente."
+      });
     }
   };
 
@@ -90,161 +157,203 @@ export default function InventoryMovement() {
   });
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h3 className="text-2xl font-bold text-[#0D0F36]">Movimentação de Estoque</h3>
-          <p className="text-[#294380] text-sm">Controle de entrada e saída de produtos</p>
+    <>
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h3 className="text-2xl font-bold text-[#0D0F36]">Movimentação de Estoque</h3>
+            <p className="text-[#294380] text-sm">Controle de entrada e saída de produtos</p>
+          </div>
+          <Button 
+            onClick={() => {
+              setNewMovement({
+                product_id: "",
+                type: "entrada",
+                quantity: "1",
+                unit_price: "0",
+                supplier_id: "",
+                invoice_number: "",
+                batch_number: "",
+                expiration_date: ""
+              });
+              setShowNewMovementDialog(true);
+            }}
+            className="bg-[#294380] hover:bg-[#0D0F36]"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Nova Movimentação
+          </Button>
         </div>
-        <Button 
-          onClick={() => setShowNewMovementDialog(true)}
-          className="bg-[#294380] hover:bg-[#0D0F36]"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Nova Movimentação
-        </Button>
-      </div>
 
-      <div className="flex items-center space-x-2">
-        <div className="relative flex-1">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
-          <Input
-            placeholder="Buscar por produto, fornecedor ou nota fiscal..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-8"
-          />
+        {alert && (
+          <div className={`flex items-center p-4 mb-4 text-sm rounded-lg ${
+            alert.type === "success" 
+              ? "text-green-800 bg-green-50" 
+              : "text-red-800 bg-red-50"
+          }`} role="alert">
+            <AlertCircle className="w-4 h-4 mr-2" />
+            <span className="sr-only">Info</span>
+            <div>
+              <span className="font-medium">{alert.message}</span>
+            </div>
+            <button
+              onClick={() => setAlert(null)}
+              className="ml-auto -mx-1.5 -my-1.5 rounded-lg focus:ring-2 p-1.5 inline-flex h-8 w-8"
+            >
+              <span className="sr-only">Fechar</span>
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        <div className="flex items-center space-x-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
+            <Input
+              placeholder="Buscar por produto, fornecedor ou nota fiscal..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-8"
+            />
+          </div>
         </div>
-      </div>
 
-      <div className="border rounded-lg overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Data</TableHead>
-              <TableHead>Tipo</TableHead>
-              <TableHead>Produto</TableHead>
-              <TableHead>Quantidade</TableHead>
-              <TableHead>Valor Unit.</TableHead>
-              <TableHead>Fornecedor</TableHead>
-              <TableHead>NF</TableHead>
-              <TableHead>Lote</TableHead>
-              <TableHead>Validade</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredMovements.map((movement) => {
-              const product = products.find(p => p.id === movement.product_id);
-              const supplier = suppliers.find(s => s.id === movement.supplier_id);
-              
-              return (
-                <TableRow key={movement.id}>
-                  <TableCell>
-                    {format(new Date(movement.created_date), "dd/MM/yyyy")}
-                  </TableCell>
-                  <TableCell>
-                    <span
-                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                        movement.type === 'entrada'
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-red-100 text-red-800'
-                      }`}
-                    >
-                      {movement.type}
-                    </span>
-                  </TableCell>
-                  <TableCell>{product?.name || '-'}</TableCell>
-                  <TableCell>{movement.quantity}</TableCell>
-                  <TableCell>R$ {movement.unit_price?.toFixed(2)}</TableCell>
-                  <TableCell>{supplier?.name || '-'}</TableCell>
-                  <TableCell>{movement.invoice_number || '-'}</TableCell>
-                  <TableCell>{movement.batch_number || '-'}</TableCell>
-                  <TableCell>
-                    {movement.expiration_date
-                      ? format(new Date(movement.expiration_date), "dd/MM/yyyy")
-                      : '-'}
-                  </TableCell>
+        <div className="border rounded-lg">
+          {filteredMovements.length > 0 ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Data</TableHead>
+                  <TableHead>Tipo</TableHead>
+                  <TableHead>Produto</TableHead>
+                  <TableHead>Quantidade</TableHead>
+                  <TableHead>Valor Unit.</TableHead>
+                  <TableHead>Fornecedor</TableHead>
+                  <TableHead>NF</TableHead>
+                  <TableHead>Lote</TableHead>
+                  <TableHead>Validade</TableHead>
                 </TableRow>
-              );
-            })}
-            {filteredMovements.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={9} className="text-center py-6">
-                  <div className="flex flex-col items-center">
-                    <AlertCircle className="h-6 w-6 text-gray-400 mb-2" />
-                    <p className="text-gray-500">Nenhuma movimentação encontrada</p>
-                  </div>
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
+              </TableHeader>
+              <TableBody>
+                {filteredMovements.map((movement) => {
+                  const product = products.find(p => p.id === movement.product_id);
+                  const supplier = suppliers.find(s => s.id === movement.supplier_id);
+                  
+                  return (
+                    <TableRow key={movement.id}>
+                      <TableCell>
+                        {format(new Date(movement.created_date), "dd/MM/yyyy")}
+                      </TableCell>
+                      <TableCell>
+                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                          movement.type === 'entrada'
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-red-100 text-red-800'
+                        }`}>
+                          {movement.type === 'entrada' ? 'Entrada' : 'Saída'}
+                        </span>
+                      </TableCell>
+                      <TableCell>{product?.name || 'N/A'}</TableCell>
+                      <TableCell>{movement.quantity}</TableCell>
+                      <TableCell>
+                        {new Intl.NumberFormat('pt-BR', {
+                          style: 'currency',
+                          currency: 'BRL'
+                        }).format(movement.unit_price)}
+                      </TableCell>
+                      <TableCell>{supplier?.name || 'N/A'}</TableCell>
+                      <TableCell>{movement.invoice_number || 'N/A'}</TableCell>
+                      <TableCell>{movement.batch_number || 'N/A'}</TableCell>
+                      <TableCell>
+                        {movement.expiration_date 
+                          ? format(new Date(movement.expiration_date), "dd/MM/yyyy")
+                          : 'N/A'
+                        }
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          ) : (
+            <div className="flex flex-col items-center justify-center p-8 text-center">
+              <FileText className="h-12 w-12 text-gray-400 mb-3" />
+              <h3 className="text-sm font-semibold text-gray-900">Nenhuma movimentação encontrada</h3>
+              <p className="text-sm text-gray-500">
+                {searchTerm 
+                  ? "Tente ajustar sua busca para encontrar o que você está procurando."
+                  : "Comece registrando uma nova movimentação de estoque."}
+              </p>
+            </div>
+          )}
+        </div>
       </div>
 
       <Dialog open={showNewMovementDialog} onOpenChange={setShowNewMovementDialog}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
             <DialogTitle>Nova Movimentação de Estoque</DialogTitle>
           </DialogHeader>
+          
           <div className="grid gap-4 py-4">
-            <div className="space-y-2">
-              <Label>Tipo de Movimentação</Label>
-              <Select
-                value={newMovement.type}
-                onValueChange={(value) => setNewMovement({...newMovement, type: value})}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="entrada">Entrada</SelectItem>
-                  <SelectItem value="saida">Saída</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="type">Tipo*</Label>
+                <Select
+                  value={newMovement.type}
+                  onValueChange={(value) => setNewMovement({ ...newMovement, type: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="entrada">Entrada</SelectItem>
+                    <SelectItem value="saida">Saída</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-            <div className="space-y-2">
-              <Label>Produto</Label>
-              <Select
-                value={newMovement.product_id}
-                onValueChange={(value) => {
-                  const product = products.find(p => p.id === value);
-                  setNewMovement({
-                    ...newMovement, 
-                    product_id: value,
-                    unit_price: product?.price || 0
-                  });
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o produto..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {products.map(product => (
-                    <SelectItem key={product.id} value={product.id}>
-                      {product.name} (Estoque: {product.stock})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="space-y-2">
+                <Label htmlFor="product">Produto*</Label>
+                <Select
+                  value={newMovement.product_id}
+                  onValueChange={(value) => setNewMovement({ ...newMovement, product_id: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {products.map((product) => (
+                      <SelectItem key={product.id} value={product.id}>
+                        {product.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Quantidade</Label>
+                <Label htmlFor="quantity">Quantidade*</Label>
                 <Input
+                  id="quantity"
                   type="number"
-                  value={newMovement.quantity}
-                  onChange={(e) => setNewMovement({...newMovement, quantity: parseInt(e.target.value)})}
                   min="1"
+                  value={newMovement.quantity}
+                  onChange={(e) => setNewMovement({ ...newMovement, quantity: e.target.value })}
                 />
               </div>
+
               <div className="space-y-2">
-                <Label>Valor Unitário (R$)</Label>
+                <Label htmlFor="unit_price">Valor Unitário</Label>
                 <Input
+                  id="unit_price"
                   type="number"
+                  min="0"
+                  step="0.01"
                   value={newMovement.unit_price}
-                  onChange={(e) => setNewMovement({...newMovement, unit_price: parseFloat(e.target.value)})}
+                  onChange={(e) => setNewMovement({ ...newMovement, unit_price: e.target.value })}
                 />
               </div>
             </div>
@@ -252,16 +361,16 @@ export default function InventoryMovement() {
             {newMovement.type === "entrada" && (
               <>
                 <div className="space-y-2">
-                  <Label>Fornecedor</Label>
+                  <Label htmlFor="supplier">Fornecedor</Label>
                   <Select
                     value={newMovement.supplier_id}
-                    onValueChange={(value) => setNewMovement({...newMovement, supplier_id: value})}
+                    onValueChange={(value) => setNewMovement({ ...newMovement, supplier_id: value })}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Selecione o fornecedor..." />
+                      <SelectValue placeholder="Selecione..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {suppliers.map(supplier => (
+                      {suppliers.map((supplier) => (
                         <SelectItem key={supplier.id} value={supplier.id}>
                           {supplier.name}
                         </SelectItem>
@@ -272,32 +381,37 @@ export default function InventoryMovement() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Nota Fiscal</Label>
+                    <Label htmlFor="invoice">Nota Fiscal</Label>
                     <Input
+                      id="invoice"
                       value={newMovement.invoice_number}
-                      onChange={(e) => setNewMovement({...newMovement, invoice_number: e.target.value})}
+                      onChange={(e) => setNewMovement({ ...newMovement, invoice_number: e.target.value })}
                     />
                   </div>
+
                   <div className="space-y-2">
-                    <Label>Número do Lote</Label>
+                    <Label htmlFor="batch">Lote</Label>
                     <Input
+                      id="batch"
                       value={newMovement.batch_number}
-                      onChange={(e) => setNewMovement({...newMovement, batch_number: e.target.value})}
+                      onChange={(e) => setNewMovement({ ...newMovement, batch_number: e.target.value })}
                     />
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Data de Validade</Label>
+                  <Label htmlFor="expiration">Data de Validade</Label>
                   <Input
+                    id="expiration"
                     type="date"
                     value={newMovement.expiration_date}
-                    onChange={(e) => setNewMovement({...newMovement, expiration_date: e.target.value})}
+                    onChange={(e) => setNewMovement({ ...newMovement, expiration_date: e.target.value })}
                   />
                 </div>
               </>
             )}
           </div>
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowNewMovementDialog(false)}>
               Cancelar
@@ -308,7 +422,8 @@ export default function InventoryMovement() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
       <RateLimitHandler />
-    </div>
+    </>
   );
 }

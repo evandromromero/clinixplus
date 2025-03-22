@@ -69,8 +69,8 @@ export default function PaymentMethods() {
     type: "cartao_credito",
     isActive: true,
     allowsInstallments: false,
-    maxInstallments: 1,
-    interestRate: 0,
+    maxInstallments: "1",
+    interestRate: "0",
     fees: [],
     paymentProvider: "",
     accountDetails: {
@@ -85,11 +85,11 @@ export default function PaymentMethods() {
 
   const [newFee, setNewFee] = useState({
     installmentRange: {
-      min: 1,
-      max: 1
+      min: "1",
+      max: "1"
     },
-    feePercentage: 0,
-    daysToReceive: 1
+    feePercentage: "0",
+    daysToReceive: "1"
   });
 
   useEffect(() => {
@@ -201,11 +201,11 @@ export default function PaymentMethods() {
     
     setNewFee({
       installmentRange: {
-        min: 1,
-        max: 1
+        min: "1",
+        max: "1"
       },
-      feePercentage: 0,
-      daysToReceive: 1
+      feePercentage: "0",
+      daysToReceive: "1"
     });
   };
 
@@ -225,8 +225,8 @@ export default function PaymentMethods() {
       type: "cartao_credito",
       isActive: true,
       allowsInstallments: false,
-      maxInstallments: 1,
-      interestRate: 0,
+      maxInstallments: "1",
+      interestRate: "0",
       fees: [],
       paymentProvider: "",
       accountDetails: {
@@ -237,6 +237,14 @@ export default function PaymentMethods() {
       color: "#7c3aed",
       icon: "credit_card",
       notes: ""
+    });
+    setNewFee({
+      installmentRange: {
+        min: "1",
+        max: "1"
+      },
+      feePercentage: "0",
+      daysToReceive: "1"
     });
     setCurrentMethod(null);
     setIsEditing(false);
@@ -441,7 +449,7 @@ export default function PaymentMethods() {
                     type="number"
                     min="1"
                     value={methodForm.maxInstallments}
-                    onChange={(e) => setMethodForm({ ...methodForm, maxInstallments: parseInt(e.target.value) })}
+                    onChange={(e) => setMethodForm({ ...methodForm, maxInstallments: e.target.value })}
                   />
                 </div>
                 
@@ -453,7 +461,7 @@ export default function PaymentMethods() {
                     min="0"
                     step="0.01"
                     value={methodForm.interestRate}
-                    onChange={(e) => setMethodForm({ ...methodForm, interestRate: parseFloat(e.target.value) })}
+                    onChange={(e) => setMethodForm({ ...methodForm, interestRate: e.target.value })}
                   />
                 </div>
               </div>
@@ -505,12 +513,12 @@ export default function PaymentMethods() {
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center">
-                              {fee.feePercentage.toFixed(2)}%
+                              {fee.feePercentage}% 
                             </div>
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center">
-                              {fee.daysToReceive} {fee.daysToReceive === 1 ? 'dia' : 'dias'}
+                              {fee.daysToReceive} {fee.daysToReceive === "1" ? 'dia' : 'dias'}
                             </div>
                           </TableCell>
                           <TableCell>
@@ -545,7 +553,7 @@ export default function PaymentMethods() {
                         ...newFee,
                         installmentRange: {
                           ...newFee.installmentRange,
-                          min: parseInt(e.target.value)
+                          min: e.target.value
                         }
                       })}
                       className="h-8"
@@ -563,7 +571,7 @@ export default function PaymentMethods() {
                         ...newFee,
                         installmentRange: {
                           ...newFee.installmentRange,
-                          max: parseInt(e.target.value)
+                          max: e.target.value
                         }
                       })}
                       className="h-8"
@@ -581,7 +589,7 @@ export default function PaymentMethods() {
                         value={newFee.feePercentage}
                         onChange={(e) => setNewFee({
                           ...newFee,
-                          feePercentage: parseFloat(e.target.value)
+                          feePercentage: e.target.value
                         })}
                         className="h-8 pr-6"
                       />
@@ -599,7 +607,7 @@ export default function PaymentMethods() {
                         value={newFee.daysToReceive}
                         onChange={(e) => setNewFee({
                           ...newFee,
-                          daysToReceive: parseInt(e.target.value)
+                          daysToReceive: e.target.value
                         })}
                         className="h-8 pr-6"
                       />
