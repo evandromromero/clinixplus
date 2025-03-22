@@ -34,7 +34,7 @@ let permissionErrorCount = 0;
 const MAX_PERMISSION_ERRORS = 5;
 
 // Lista de entidades que usam exclusivamente o Firebase (sem fallback para Base44)
-const FIREBASE_ONLY_ENTITIES = ['financial_transactions', 'employees'];
+const FIREBASE_ONLY_ENTITIES = ['financial_transactions', 'employees', 'services'];
 
 /**
  * Verifica se uma entidade deve usar apenas o Firebase

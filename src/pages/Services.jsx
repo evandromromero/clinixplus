@@ -69,25 +69,57 @@ export default function Services() {
 
   const loadServices = async () => {
     try {
+      console.log("[Serviços] Carregando serviços do Firebase...");
       const serviceData = await Service.list();
+      console.log("[Serviços] Serviços carregados:", serviceData);
       setServices(serviceData);
     } catch (error) {
-      console.error("Error loading services:", error);
+      console.error("[Serviços] Erro ao carregar serviços:", error);
     }
   };
 
   const handleCreateService = async () => {
     try {
+      console.log("[Serviços] Iniciando " + (isEditing ? "atualização" : "criação") + " de serviço...");
+      
       if (isEditing && selectedService) {
-        await Service.update(selectedService.id, newService);
+        console.log("[Serviços] Atualizando serviço:", selectedService.id);
+        await Service.update(selectedService.id, {
+          ...newService,
+          updated_date: new Date().toISOString()
+        });
+        console.log("[Serviços] Serviço atualizado com sucesso");
       } else {
-        await Service.create(newService);
+        console.log("[Serviços] Criando novo serviço");
+        await Service.create({
+          ...newService,
+          created_date: new Date().toISOString()
+        });
+        console.log("[Serviços] Serviço criado com sucesso");
       }
+      
       setShowNewServiceDialog(false);
       resetForm();
-      loadServices();
+      await loadServices();
     } catch (error) {
-      console.error("Error saving service:", error);
+      console.error("[Serviços] Erro ao salvar serviço:", error);
+      alert("Erro ao salvar serviço. Por favor, tente novamente.");
+    }
+  };
+
+  const handleDeleteService = async (serviceId) => {
+    if (!confirm("Tem certeza que deseja excluir este serviço?")) {
+      return;
+    }
+
+    try {
+      console.log("[Serviços] Excluindo serviço:", serviceId);
+      await Service.delete(serviceId);
+      console.log("[Serviços] Serviço excluído com sucesso");
+      await loadServices();
+    } catch (error) {
+      console.error("[Serviços] Erro ao excluir serviço:", error);
+      alert("Erro ao excluir serviço. Por favor, tente novamente.");
     }
   };
 
@@ -235,6 +267,14 @@ export default function Services() {
                 >
                   <Pencil className="w-4 h-4 mr-1" />
                   Editar
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => handleDeleteService(service.id)}
+                >
+                  <Trash2 className="w-4 h-4 mr-1" />
+                  Excluir
                 </Button>
               </div>
             </CardContent>
