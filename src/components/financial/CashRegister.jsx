@@ -530,7 +530,11 @@ export default function CashRegister() {
       const initialAmountNumber = parseFloat(initialAmountValue);
       
       if (isNaN(initialAmountNumber)) {
-        alert("Valor inicial inválido. Por favor, tente novamente.");
+        toast({
+          title: "Erro",
+          description: "Valor inicial inválido. Por favor, tente novamente.",
+          variant: "destructive"
+        });
         setIsLoading(false);
         return;
       }
@@ -545,7 +549,11 @@ export default function CashRegister() {
       
       if (existingOpening && existingOpening.length > 0) {
         console.log("[CashRegister] Caixa já aberto hoje:", existingOpening[0]);
-        alert("O caixa já foi aberto hoje. Não é possível abrir novamente.");
+        toast({
+          title: "Aviso",
+          description: "O caixa já foi aberto hoje. Não é possível abrir novamente.",
+          variant: "warning"
+        });
         setShowOpenCashDialog(false);
         setCashIsOpen(true);
         setIsLoading(false);
@@ -581,18 +589,28 @@ export default function CashRegister() {
       setDailyBalance(initialAmountNumber);
       setExpectedCashAmount(initialAmountNumber);
       
-      // Mostrar mensagem de sucesso
-      alert("Caixa aberto com sucesso!");
+      // Mostrar mensagem de sucesso usando toast
+      toast({
+        title: "Sucesso",
+        description: "Caixa aberto com sucesso!",
+        variant: "success"
+      });
       
       // Forçar atualização imediata dos dados
       await Promise.all([
         loadTransactionsWithRetry(),
-        checkCashStatus()
+        checkCashStatus(),
+        loadClients(),
+        loadAuthorizedEmployees()
       ]);
       
     } catch (error) {
       console.error("[CashRegister] Erro ao abrir o caixa:", error);
-      alert("Erro ao abrir o caixa. Tente novamente.");
+      toast({
+        title: "Erro",
+        description: "Erro ao abrir o caixa. Tente novamente.",
+        variant: "destructive"
+      });
     } finally {
       setIsLoading(false);
     }
@@ -762,7 +780,7 @@ export default function CashRegister() {
     const today = format(new Date(), "yyyy-MM-dd");
     const todayOpening = transactions.find(t => 
       t.category === "abertura_caixa" && 
-      t.payment_date === today
+      t.payment_date.split('T')[0] === today
     ) || cashRegisters.find(r => 
       r.category === "abertura_caixa" && 
       r.payment_date === today
