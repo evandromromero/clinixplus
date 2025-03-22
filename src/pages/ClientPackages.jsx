@@ -201,6 +201,8 @@ export default function ClientPackages() {
         return;
       }
 
+      const selectedPackage = packages.find(p => p.id === sellForm.package_id);
+
       const newClientPackage = {
         client_id: sellForm.client_id,
         package_id: sellForm.package_id,
@@ -209,12 +211,18 @@ export default function ClientPackages() {
         total_sessions: sellForm.total_sessions,
         sessions_used: 0,
         status: 'ativo',
-        session_history: []
+        session_history: [],
+        package_snapshot: {
+          id: selectedPackage.id,
+          name: selectedPackage.name,
+          description: selectedPackage.description,
+          services: selectedPackage.services,
+          total_price: selectedPackage.total_price,
+          validity_days: selectedPackage.validity_days
+        }
       };
 
       const createdPackage = await ClientPackage.create(newClientPackage);
-
-      const selectedPackage = packages.find(p => p.id === sellForm.package_id);
 
       await UnfinishedSale.create({
         client_id: sellForm.client_id,
@@ -1178,6 +1186,20 @@ export default function ClientPackages() {
                           style={{ width: getProgressBarWidth(selectedPackage.sessions_used, selectedPackage.total_sessions) }}
                         ></div>
                       </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-500 mb-2">Serviços Incluídos</h3>
+                    <div className="space-y-2">
+                      {selectedPackage.package_snapshot?.services?.map((service, index) => (
+                        <div key={index} className="p-4 bg-gray-50 rounded-lg flex justify-between items-center">
+                          <div>
+                            <span className="font-medium">{service.name || getServiceName(service.service_id)}</span>
+                            <span className="text-gray-500 ml-2">({service.quantity}x)</span>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>
