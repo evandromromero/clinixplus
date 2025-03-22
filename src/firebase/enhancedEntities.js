@@ -42,7 +42,10 @@ const FIREBASE_ONLY_ENTITIES = [
   'payment_methods',
   'inventory',
   'inventory_movements',
-  'products'
+  'products',
+  'company_settings',
+  'slideshow_images',
+  'testimonials'
 ];
 
 /**
