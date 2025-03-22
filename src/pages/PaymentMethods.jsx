@@ -98,27 +98,41 @@ export default function PaymentMethods() {
 
   const loadPaymentMethods = async () => {
     try {
+      console.log("[Métodos de Pagamento] Carregando métodos do Firebase...");
       const data = await PaymentMethod.list();
+      console.log("[Métodos de Pagamento] Métodos carregados:", data);
       setPaymentMethods(data);
     } catch (error) {
-      console.error("Erro ao carregar formas de pagamento:", error);
+      console.error("[Métodos de Pagamento] Erro ao carregar formas de pagamento:", error);
       setAlert({
         type: "error",
-        message: "Erro ao carregar formas de pagamento"
+        message: "Erro ao carregar formas de pagamento. Por favor, tente novamente."
       });
     }
   };
 
   const handleAddMethod = async () => {
     try {
+      console.log("[Métodos de Pagamento] Iniciando " + (isEditing ? "atualização" : "criação") + " de método...");
+      
       if (isEditing && currentMethod) {
-        await PaymentMethod.update(currentMethod.id, methodForm);
+        console.log("[Métodos de Pagamento] Atualizando método:", currentMethod.id);
+        await PaymentMethod.update(currentMethod.id, {
+          ...methodForm,
+          updated_date: new Date().toISOString()
+        });
+        console.log("[Métodos de Pagamento] Método atualizado com sucesso");
         setAlert({
           type: "success",
           message: "Forma de pagamento atualizada com sucesso!"
         });
       } else {
-        await PaymentMethod.create(methodForm);
+        console.log("[Métodos de Pagamento] Criando novo método");
+        await PaymentMethod.create({
+          ...methodForm,
+          created_date: new Date().toISOString()
+        });
+        console.log("[Métodos de Pagamento] Método criado com sucesso");
         setAlert({
           type: "success",
           message: "Forma de pagamento criada com sucesso!"
@@ -127,12 +141,12 @@ export default function PaymentMethods() {
       
       setShowNewDialog(false);
       resetForm();
-      loadPaymentMethods();
+      await loadPaymentMethods();
     } catch (error) {
-      console.error("Erro ao salvar forma de pagamento:", error);
+      console.error("[Métodos de Pagamento] Erro ao salvar forma de pagamento:", error);
       setAlert({
         type: "error",
-        message: "Erro ao salvar forma de pagamento"
+        message: "Erro ao salvar forma de pagamento. Por favor, tente novamente."
       });
     }
   };
@@ -155,19 +169,22 @@ export default function PaymentMethods() {
     if (!methodToDelete) return;
     
     try {
+      console.log("[Métodos de Pagamento] Excluindo método:", methodToDelete.id);
       await PaymentMethod.delete(methodToDelete.id);
+      console.log("[Métodos de Pagamento] Método excluído com sucesso");
+      
       setShowDeleteDialog(false);
       setMethodToDelete(null);
-      loadPaymentMethods();
       setAlert({
         type: "success",
         message: "Forma de pagamento excluída com sucesso!"
       });
+      await loadPaymentMethods();
     } catch (error) {
-      console.error("Erro ao excluir forma de pagamento:", error);
+      console.error("[Métodos de Pagamento] Erro ao excluir forma de pagamento:", error);
       setAlert({
         type: "error",
-        message: "Erro ao excluir forma de pagamento"
+        message: "Erro ao excluir forma de pagamento. Por favor, tente novamente."
       });
     }
   };
