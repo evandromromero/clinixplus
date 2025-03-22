@@ -83,8 +83,6 @@ export default function ClientPackages() {
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [packageToDelete, setPackageToDelete] = useState(null);
-  const [successMessage, setSuccessMessage] = useState("");
-  const [errorMessage, setErrorMessage] = useState("");
 
   const [hasUnfinishedSales, setHasUnfinishedSales] = useState(false);
   const [unfinishedSales, setUnfinishedSales] = useState([]);
@@ -110,7 +108,11 @@ export default function ClientPackages() {
   const handleCreateNewPackage = async () => {
     try {
       if (!newPackage.client_id || !newPackage.package_id) {
-        setErrorMessage("Por favor, selecione um cliente e um pacote.");
+        toast({
+          title: "Erro",
+          description: "Por favor, selecione um cliente e um pacote",
+          variant: "destructive"
+        });
         return;
       }
 
@@ -149,31 +151,44 @@ export default function ClientPackages() {
       const createdPackage = await ClientPackage.create(packageToCreate);
       
       if (newPackage.sell_now) {
+        // Redireciona para a página de vendas com os parâmetros necessários
         const saleParams = new URLSearchParams({
           type: 'pacote',
           client_id: newPackage.client_id,
           client_package_id: createdPackage.id,
           amount: packageDetails.total_price
-        }).toString();
+        });
         
-        window.location.href = createPageUrl('SalesRegister', saleParams);
+        window.location.href = createPageUrl('SalesRegister', saleParams.toString());
         return;
       }
       
-      setSuccessMessage("Pacote adicionado com sucesso!");
+      toast({
+        title: "Sucesso",
+        description: "Pacote adicionado com sucesso!",
+        variant: "success"
+      });
       setShowNewPackageDialog(false);
       resetNewPackageForm();
       loadData();
     } catch (error) {
       console.error("Erro ao criar pacote:", error);
-      setErrorMessage("Erro ao adicionar pacote. Tente novamente.");
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao adicionar pacote. Tente novamente.",
+        variant: "destructive"
+      });
     }
   };
 
   const handleSellPackage = async () => {
     try {
       if (!sellForm.client_id || !sellForm.package_id) {
-        setSuccessMessage("Selecione o cliente e o pacote");
+        toast({
+          title: "Erro",
+          description: "Selecione o cliente e o pacote",
+          variant: "destructive"
+        });
         return;
       }
 
@@ -229,11 +244,18 @@ export default function ClientPackages() {
         expiration_date: ""
       });
 
-      setSuccessMessage("Pacote criado com sucesso! Redirecionando para lançar a venda...");
-
+      toast({
+        title: "Sucesso",
+        description: "Pacote criado com sucesso! Redirecionando para lançar a venda...",
+        variant: "success"
+      });
     } catch (error) {
       console.error("Erro ao vender pacote:", error);
-      setSuccessMessage("Erro ao criar pacote. Tente novamente.");
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao criar pacote. Tente novamente.",
+        variant: "destructive"
+      });
     }
   };
 
@@ -242,15 +264,6 @@ export default function ClientPackages() {
     checkUnfinishedSales();
     checkUnfinishedSaleStatus();
   }, []);
-
-  useEffect(() => {
-    if (successMessage) {
-      const timer = setTimeout(() => {
-        setSuccessMessage("");
-      }, 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [successMessage]);
 
   const loadData = async () => {
     try {
@@ -268,6 +281,11 @@ export default function ClientPackages() {
       setServices(servicesData);
     } catch (error) {
       console.error("Erro ao carregar dados:", error);
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao carregar dados. Tente novamente.",
+        variant: "destructive"
+      });
     } finally {
       setLoading(false);
     }
@@ -285,6 +303,11 @@ export default function ClientPackages() {
       setHasUnfinishedSales(pendingSales.length > 0);
     } catch (error) {
       console.error("Erro ao verificar vendas não finalizadas:", error);
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao verificar vendas não finalizadas. Tente novamente.",
+        variant: "destructive"
+      });
     }
   };
 
@@ -316,6 +339,11 @@ export default function ClientPackages() {
       await checkUnfinishedSales();
     } catch (error) {
       console.error("Erro ao verificar status de vendas não finalizadas:", error);
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao verificar status de vendas não finalizadas. Tente novamente.",
+        variant: "destructive"
+      });
     }
   };
 
@@ -434,7 +462,11 @@ export default function ClientPackages() {
 
   const confirmDeletePackage = (packageId) => {
     if (!packageId) {
-      setSuccessMessage("Erro: Pacote não encontrado");
+      toast({
+        title: "Erro",
+        description: "Pacote não encontrado",
+        variant: "destructive"
+      });
       return;
     }
 
@@ -445,7 +477,11 @@ export default function ClientPackages() {
   const handleDeletePackage = async (packageId) => {
     try {
       if (!packageId) {
-        setSuccessMessage("Erro: ID do pacote não fornecido");
+        toast({
+          title: "Erro",
+          description: "ID do pacote não fornecido",
+          variant: "destructive"
+        });
         setShowDeleteDialog(false);
         return;
       }
@@ -454,19 +490,31 @@ export default function ClientPackages() {
       const pkgToDelete = clientPkgs.find(p => p.id === packageId);
 
       if (!pkgToDelete) {
-        setSuccessMessage("Erro: Pacote não encontrado");
+        toast({
+          title: "Erro",
+          description: "Pacote não encontrado",
+          variant: "destructive"
+        });
         setShowDeleteDialog(false);
         return;
       }
 
       if (pkgToDelete.status === "finalizado" || pkgToDelete.status === "expirado") {
-        setSuccessMessage("Erro: Não é possível excluir um pacote finalizado ou expirado");
+        toast({
+          title: "Erro",
+          description: "Não é possível excluir um pacote finalizado ou expirado",
+          variant: "destructive"
+        });
         setShowDeleteDialog(false);
         return;
       }
 
       if (pkgToDelete.sessions_used > 0) {
-        setSuccessMessage("Erro: Não é possível excluir um pacote que já teve sessões utilizadas");
+        toast({
+          title: "Erro",
+          description: "Não é possível excluir um pacote que já teve sessões utilizadas",
+          variant: "destructive"
+        });
         setShowDeleteDialog(false);
         return;
       }
@@ -478,7 +526,11 @@ export default function ClientPackages() {
         );
 
         if (relatedSale && relatedSale.status === "pago") {
-          setSuccessMessage("Erro: Não é possível excluir um pacote que já foi pago");
+          toast({
+            title: "Erro",
+            description: "Não é possível excluir um pacote que já foi pago",
+            variant: "destructive"
+          });
           setShowDeleteDialog(false);
           return;
         }
@@ -499,12 +551,20 @@ export default function ClientPackages() {
 
       await ClientPackage.delete(packageId);
 
-      setSuccessMessage("Pacote do cliente removido com sucesso");
+      toast({
+        title: "Sucesso",
+        description: "Pacote do cliente removido com sucesso",
+        variant: "success"
+      });
       setShowDeleteDialog(false);
       loadData();
     } catch (error) {
       console.error("Erro ao excluir pacote:", error);
-      setSuccessMessage("Erro ao excluir o pacote: " + (error.message || "Erro desconhecido"));
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao excluir o pacote. Tente novamente.",
+        variant: "destructive"
+      });
       setShowDeleteDialog(false);
     }
   };
@@ -662,7 +722,11 @@ export default function ClientPackages() {
   const handleCreatePackage = async () => {
     try {
       if (packageForm.name === "" || packageForm.services.length === 0) {
-        setSuccessMessage("Preencha todos os campos obrigatórios");
+        toast({
+          title: "Erro",
+          description: "Preencha todos os campos obrigatórios",
+          variant: "destructive"
+        });
         return;
       }
 
@@ -690,12 +754,20 @@ export default function ClientPackages() {
         services: []
       });
 
-      setSuccessMessage("Pacote criado com sucesso!");
+      toast({
+        title: "Sucesso",
+        description: "Pacote criado com sucesso!",
+        variant: "success"
+      });
 
       await loadData();
     } catch (error) {
       console.error("Erro ao criar pacote:", error);
-      setSuccessMessage("Erro ao criar pacote. Tente novamente.");
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao criar pacote. Tente novamente.",
+        variant: "destructive"
+      });
     }
   };
 
@@ -748,7 +820,11 @@ export default function ClientPackages() {
       setShowNewPackageDialog(true);
     } catch (error) {
       console.error("Erro ao carregar dados para edição:", error);
-      setSuccessMessage("Erro ao carregar dados do pacote para edição");
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao carregar dados do pacote para edição",
+        variant: "destructive"
+      });
     }
   };
 
@@ -773,66 +849,6 @@ export default function ClientPackages() {
           </Button>
         </div>
       </div>
-
-      {successMessage && (
-        <div className={`${successMessage.startsWith("Erro") 
-          ? "bg-red-100 border border-red-400 text-red-700" 
-          : "bg-green-100 border border-green-400 text-green-700"} 
-          px-4 py-3 rounded relative`}>
-          {successMessage}
-        </div>
-      )}
-
-      {hasUnfinishedSales && (
-        <div className="bg-yellow-100 border border-yellow-400 text-yellow-800 px-4 py-3 rounded relative">
-          <h3 className="font-medium mb-2">Vendas de pacotes não finalizadas</h3>
-          <div className="space-y-2">
-            {unfinishedSales.map(sale => {
-              const clientPackage = clientPackages.find(pkg => pkg.id === sale.client_package_id);
-              return (
-                <div key={sale.id} className="flex justify-between items-center">
-                  <div>
-                    <p>Cliente: {getClientName(sale.client_id)}</p>
-                    <p className="text-sm text-yellow-700">
-                      Pacote: {sale.items[0]?.name || "Pacote"} - 
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(sale.total_amount)}
-                    </p>
-                    <p className="text-xs text-yellow-600">
-                      Iniciado em: {format(new Date(sale.date_created), "dd/MM/yyyy HH:mm", { locale: ptBR })}
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button 
-                      onClick={() => handleContinueSale(sale)}
-                      className="bg-yellow-500 hover:bg-yellow-600 text-white"
-                    >
-                      Continuar venda
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="border-red-500 text-red-500 hover:bg-red-50"
-                      onClick={async () => {
-                        if (confirm("Deseja cancelar esta venda não finalizada?")) {
-                          try {
-                            await UnfinishedSale.update(sale.id, { status: 'cancelada' });
-                            setSuccessMessage("Venda não finalizada cancelada com sucesso");
-                            checkUnfinishedSales();
-                          } catch (error) {
-                            console.error("Erro ao cancelar venda:", error);
-                            setSuccessMessage("Erro ao cancelar venda. Tente novamente.");
-                          }
-                        }
-                      }}
-                    >
-                      Cancelar
-                    </Button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
       <Card>
         <CardContent className="p-6">

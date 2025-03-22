@@ -5,7 +5,7 @@ import { createEnhancedEntity } from './enhancedEntities';
 // Cria versões aprimoradas das entidades mais utilizadas
 export const Client = createEnhancedEntity('clients', base44.entities.Client);
 export const Appointment = createEnhancedEntity('appointments', base44.entities.Appointment);
-export const Sale = createEnhancedEntity('sales', base44.entities.Sale);
+export const Sale = createEnhancedEntity('sales', null); // Removendo dependência do Base44
 export const FinancialTransaction = createEnhancedEntity('financial_transactions', base44.entities.FinancialTransaction);
 export const CompanySettings = createEnhancedEntity('company_settings', base44.entities.CompanySettings);
 export const SlideShowImage = createEnhancedEntity('slideshow_images', base44.entities.SlideShowImage);
@@ -24,7 +24,7 @@ export const ClientSubscription = createEnhancedEntity('client_subscriptions', b
 export const GiftCard = createEnhancedEntity('gift_cards', base44.entities.GiftCard);
 export const ClientPackageSession = createEnhancedEntity('client_package_sessions', base44.entities.ClientPackageSession);
 export const Receipt = createEnhancedEntity('receipts', base44.entities.Receipt);
-export const UnfinishedSale = createEnhancedEntity('unfinished_sales', base44.entities.UnfinishedSale);
+export const UnfinishedSale = createEnhancedEntity('unfinished_sales', null); // Removendo dependência do Base44
 
 // Exporta as entidades originais para as demais (que serão migradas gradualmente)
 export const ClientAuth = base44.entities.ClientAuth;

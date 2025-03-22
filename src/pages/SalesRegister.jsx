@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { toast } from "@/components/ui/toast";
 import {
   Search,
   ShoppingBag,
@@ -65,8 +66,6 @@ export default function SalesRegister() {
   const [finalDiscount, setFinalDiscount] = useState(0);
   const [finalDiscountType, setFinalDiscountType] = useState("percentage");
   
-  const [successMessage, setSuccessMessage] = useState(null);
-  const [errorMessage, setErrorMessage] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [retryCount, setRetryCount] = useState(0);
   
@@ -334,22 +333,38 @@ export default function SalesRegister() {
   const handleFinishSale = () => {
     // Validações
     if (!selectedClient) {
-      alert("Selecione um cliente para continuar.");
+      toast({
+        title: "Erro",
+        description: "Selecione um cliente para continuar",
+        variant: "destructive"
+      });
       return;
     }
     
     if (cartItems.length === 0) {
-      alert("Adicione pelo menos um item ao carrinho.");
+      toast({
+        title: "Erro",
+        description: "Adicione pelo menos um item ao carrinho",
+        variant: "destructive"
+      });
       return;
     }
     
     if (cartItems.some(item => item.type === "serviço" && !item.employee_id)) {
-      alert("Selecione um profissional para cada serviço.");
+      toast({
+        title: "Erro",
+        description: "Selecione um profissional para cada serviço",
+        variant: "destructive"
+      });
       return;
     }
     
     if (!salesEmployee) {
-      alert("Selecione um vendedor para continuar.");
+      toast({
+        title: "Erro",
+        description: "Selecione um vendedor para continuar",
+        variant: "destructive"
+      });
       return;
     }
     
@@ -357,12 +372,20 @@ export default function SalesRegister() {
     const totalPaid = paymentMethods.reduce((sum, method) => sum + method.amount, 0);
     
     if (Math.abs(totalPaid - totalCart) > 0.01) {
-      alert(`O valor total pago (${formatCurrency(totalPaid)}) não corresponde ao valor total da venda (${formatCurrency(totalCart)}).`);
+      toast({
+        title: "Erro",
+        description: `O valor total pago (${formatCurrency(totalPaid)}) não corresponde ao valor total da venda (${formatCurrency(totalCart)})`,
+        variant: "destructive"
+      });
       return;
     }
     
     if (paymentMethods.some(method => !method.methodId)) {
-      alert("Selecione um método de pagamento válido para cada forma de pagamento.");
+      toast({
+        title: "Erro",
+        description: "Selecione um método de pagamento válido para cada forma de pagamento",
+        variant: "destructive"
+      });
       return;
     }
     
@@ -475,7 +498,11 @@ export default function SalesRegister() {
         }
       }
       
-      alert("Venda finalizada com sucesso!");
+      toast({
+        title: "Sucesso",
+        description: "Venda finalizada com sucesso",
+        variant: "success"
+      });
       setShowConfirmDialog(false);
       setCartItems([]);
       setSelectedClient(null);
@@ -487,7 +514,11 @@ export default function SalesRegister() {
       navigate(createPageUrl('Dashboard'));
     } catch (error) {
       console.error("Erro ao confirmar venda:", error);
-      alert("Erro ao finalizar a venda. Por favor, tente novamente.");
+      toast({
+        title: "Erro",
+        description: "Erro ao finalizar a venda",
+        variant: "destructive"
+      });
     } finally {
       setIsLoading(false);
     }
@@ -500,8 +531,6 @@ export default function SalesRegister() {
   const loadDataWithRetry = async (maxRetries = 3) => {
     try {
       setIsLoading(true);
-      setErrorMessage(null);
-      
       // Usa Promise.allSettled para permitir que as chamadas sejam feitas em paralelo
       // e não falhar completamente se apenas algumas APIs falharem
       const results = await Promise.allSettled([
@@ -563,7 +592,11 @@ export default function SalesRegister() {
       // Verifica se há erros graves que precisam ser notificados ao usuário
       const failedRequests = results.filter(r => r.status === 'rejected').length;
       if (failedRequests > 0) {
-        setErrorMessage(`Alguns dados não puderam ser carregados. Você pode continuar, mas algumas opções podem estar limitadas.`);
+        toast({
+          title: "Erro",
+          description: "Alguns dados não puderam ser carregados",
+          variant: "destructive"
+        });
       }
       
       // Inicialize dados simulados para casos extremos onde muitas chamadas falharam
@@ -573,7 +606,11 @@ export default function SalesRegister() {
       
     } catch (error) {
       console.error("Erro final ao carregar dados:", error);
-      setErrorMessage("Houve um problema ao carregar os dados. Alguns recursos podem estar limitados.");
+      toast({
+        title: "Erro",
+        description: "Houve um problema ao carregar os dados",
+        variant: "destructive"
+      });
       loadSimulatedData();
     } finally {
       setIsLoading(false);
@@ -706,77 +743,150 @@ export default function SalesRegister() {
     }
   };
 
-  // Inicialização - com tratamento de erros e retry
+  // Função para carregar dados da URL
   useEffect(() => {
-    const initializeApp = async () => {
+    const loadUrlData = async () => {
       try {
-        await checkCashStatus();
-        await loadDataWithRetry(3);
-        await initializeSale();
-      } catch (error) {
-        console.error("Erro na inicialização do app:", error);
-        setErrorMessage("Ocorreu um erro ao inicializar a aplicação. Alguns recursos podem estar limitados.");
-      }
-    };
-    
-    initializeApp();
-  }, []);
+        const params = new URLSearchParams(window.location.search);
+        const clientId = params.get('client_id');
+        const type = params.get('type');
+        const amount = params.get('amount');
+        const clientPackageId = params.get('client_package_id');
 
-  const initializeSale = async () => {
-    try {
-      const urlParams = new URLSearchParams(window.location.search);
-      const saleType = urlParams.get('type');
-      
-      if (saleType) {
-        setSaleType(saleType);
-      }
-      
-      const clientId = urlParams.get('client_id');
-      const packageId = urlParams.get('package_id');
-      const clientPackageId = urlParams.get('client_package_id');
-      const amount = urlParams.get('amount');
-      const unfinishedSaleIdParam = urlParams.get('unfinished_sale_id');
-      
-      if (unfinishedSaleIdParam) {
-        setUnfinishedSaleId(unfinishedSaleIdParam);
-      }
-      
-      if (clientId) {
-        try {
-          const clientData = await Client.get(clientId);
-          if (clientData) {
-            setSelectedClient(clientData);
-          }
-        } catch (error) {
-          console.error("Erro ao buscar cliente:", error);
-          // Em caso de erro, continua sem o cliente selecionado
+        if (type) {
+          setSaleType(type);
         }
-      }
-      
-      if (packageId && clientId && amount) {
-        try {
-          const packageData = await Package.get(packageId);
+
+        if (clientId) {
+          const client = await Client.get(clientId);
+          if (client) {
+            setSelectedClient(client);
+            setShowClientSearch(false);
+          }
+        }
+
+        if (amount && clientPackageId) {
+          const packageData = await ClientPackage.get(clientPackageId);
           if (packageData) {
-            setCartItems([{
-              item_id: packageId,
-              client_package_id: clientPackageId,
+            const cartItem = {
+              item_id: packageData.id,
               type: 'pacote',
-              name: packageData.name,
+              name: packageData.package_snapshot.name,
               quantity: 1,
               price: parseFloat(amount),
               discount: 0
+            };
+            setCartItems([cartItem]);
+
+            // Atualiza o método de pagamento com o valor do pacote
+            setPaymentMethods([{
+              methodId: "",
+              amount: parseFloat(amount),
+              installments: 1
             }]);
-            setPaymentMethods([{ methodId: "", amount: parseFloat(amount), installments: 1 }]);
           }
-        } catch (error) {
-          console.error("Erro ao carregar pacote:", error);
-          // Continua sem adicionar o item ao carrinho
         }
+      } catch (error) {
+        console.error('Erro ao carregar dados da URL:', error);
+        toast({
+          title: "Erro",
+          description: "Não foi possível carregar os dados da venda",
+          variant: "destructive"
+        });
       }
+    };
+
+    loadUrlData();
+  }, []);
+
+  // Função para verificar se o caixa está aberto
+  const checkCashRegister = async () => {
+    try {
+      const today = format(new Date(), "yyyy-MM-dd");
+      const transactions = await FinancialTransaction.list();
+      const cashOpening = transactions.find(t => 
+        t.category === "abertura_caixa" && 
+        t.payment_date.split('T')[0] === today
+      );
+
+      if (!cashOpening) {
+        toast({
+          title: "Aviso",
+          description: "O caixa precisa ser aberto antes de realizar vendas",
+          variant: "warning"
+        });
+        navigate(createPageUrl('CashRegister'));
+        return false;
+      }
+
+      setCashIsOpen(true);
+      return true;
     } catch (error) {
-      console.error("Erro ao inicializar venda:", error);
+      console.error('Erro ao verificar caixa:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao verificar status do caixa",
+        variant: "destructive"
+      });
+      return false;
     }
   };
+
+  // Função para carregar dados iniciais
+  const loadData = async () => {
+    try {
+      setIsLoading(true);
+      
+      const [
+        clientsData,
+        productsData,
+        servicesData,
+        packagesData,
+        giftCardsData,
+        subscriptionPlansData,
+        employeesData,
+        paymentMethodsData
+      ] = await Promise.all([
+        Client.list(),
+        Product.list(),
+        Service.list(),
+        Package.list(),
+        GiftCard.list(),
+        SubscriptionPlan.list(),
+        Employee.list(),
+        PaymentMethod.list()
+      ]);
+
+      setClients(clientsData);
+      setProducts(productsData);
+      setServices(servicesData);
+      setPackages(packagesData);
+      setGiftCards(giftCardsData);
+      setSubscriptionPlans(subscriptionPlansData);
+      setEmployees(employeesData);
+      setAvailablePaymentMethods(paymentMethodsData);
+
+      await checkCashRegister();
+    } catch (error) {
+      console.error('Erro ao carregar dados:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível carregar os dados necessários",
+        variant: "destructive"
+      });
+
+      if (retryCount < 3) {
+        setRetryCount(prev => prev + 1);
+        setTimeout(loadData, 2000);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
 
   // Renderização condicional para caixa fechado
   if (!cashIsOpen) {
@@ -807,60 +917,6 @@ export default function SalesRegister() {
 
   return (
     <div className="space-y-6">
-      {successMessage && (
-        <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded relative mb-4">
-          <span className="block sm:inline">{successMessage}</span>
-          <button 
-            className="absolute top-0 bottom-0 right-0 px-4 py-3"
-            onClick={() => setSuccessMessage(null)}
-          >
-            <span className="text-green-500 hover:text-green-800">×</span>
-          </button>
-        </div>
-      )}
-      
-      {errorMessage && (
-        <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded relative mb-4">
-          <div className="flex items-start">
-            <AlertTriangle className="w-5 h-5 mr-2 mt-0.5 text-amber-500" />
-            <span className="block sm:inline">{errorMessage}</span>
-          </div>
-          <div className="mt-2">
-            <Button 
-              size="sm"
-              variant="outline"
-              className="mr-2"
-              onClick={() => {
-                setErrorMessage(null);
-                setRetryCount(retryCount + 1);
-                loadDataWithRetry(3);
-              }}
-            >
-              <RefreshCw className="w-4 h-4 mr-1" />
-              Tentar Novamente
-            </Button>
-            <Button 
-              size="sm"
-              variant="ghost"
-              onClick={() => setErrorMessage(null)}
-            >
-              Ignorar
-            </Button>
-          </div>
-        </div>
-      )}
-      
-      {isLoading && (
-        <div className="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded relative mb-4">
-          <div className="flex items-center">
-            <div className="animate-spin mr-2">
-              <RefreshCw className="w-5 h-5 text-blue-500" />
-            </div>
-            <span>Carregando dados necessários para a venda...</span>
-          </div>
-        </div>
-      )}
-      
       <div className="flex justify-between items-center">
         <h2 className="text-3xl font-bold text-gray-800">Registrar Venda</h2>
       </div>

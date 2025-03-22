@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Package, Service } from '@/firebase/entities';
-import { ClientPackage } from '@/api/entities';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PlusCircle, Edit, Trash2, Package as PackageIcon } from "lucide-react";
@@ -67,7 +66,7 @@ export default function Packages() {
       console.error("Erro ao carregar dados:", error);
       setAlert({
         type: "error",
-        message: "Não foi possível carregar os dados"
+        message: error.message || "Não foi possível carregar os dados"
       });
     }
   };
@@ -229,31 +228,15 @@ export default function Packages() {
         }))
       };
 
-      if (isEditing) {
-        // Verifica se o pacote está em uso antes de atualizar
-        const clientPackages = await ClientPackage.list();
-        const packagesInUse = clientPackages.filter(cp => cp.package_id === currentPackage.id);
-        
-        if (packagesInUse.length > 0) {
-          // Se o pacote estiver em uso, cria uma nova versão
-          const today = new Date();
-          const versionSuffix = ` (${today.getDate()}/${today.getMonth() + 1}/${today.getFullYear()})`;
-          finalPackage.name = finalPackage.name + versionSuffix;
-          
-          await Package.create(finalPackage);
-          setAlert({
-            type: 'info',
-            message: 'Este pacote já foi vendido para clientes. Uma nova versão foi criada.'
-          });
-        } else {
-          // Se o pacote não estiver em uso, atualiza normalmente
-          await Package.update(currentPackage.id, finalPackage);
-          setAlert({
-            type: "success",
-            message: "Pacote atualizado com sucesso"
-          });
-        }
+      if (isEditing && currentPackage?.id) {
+        // Atualiza o pacote diretamente no Firebase
+        await Package.update(currentPackage.id, finalPackage);
+        setAlert({
+          type: "success",
+          message: "Pacote atualizado com sucesso"
+        });
       } else {
+        // Cria um novo pacote no Firebase
         await Package.create(finalPackage);
         setAlert({
           type: "success",
@@ -267,27 +250,16 @@ export default function Packages() {
       console.error("Erro ao salvar pacote:", error);
       setAlert({
         type: "error",
-        message: "Não foi possível salvar o pacote"
+        message: error.message || "Não foi possível salvar o pacote"
       });
     }
   };
 
   const handleDeletePackage = async () => {
     try {
-      if (!currentPackage) return;
+      if (!currentPackage?.id) return;
       
-      const clientPackages = await ClientPackage.list();
-      const packagesInUse = clientPackages.filter(cp => cp.package_id === currentPackage.id);
-      
-      if (packagesInUse.length > 0) {
-        setAlert({
-          type: "error",
-          message: "Este pacote não pode ser excluído pois está sendo utilizado por clientes"
-        });
-        setShowDeleteConfirm(false);
-        return;
-      }
-      
+      // Remove o pacote diretamente do Firebase
       await Package.delete(currentPackage.id);
       
       setAlert({
@@ -301,7 +273,7 @@ export default function Packages() {
       console.error("Erro ao remover pacote:", error);
       setAlert({
         type: "error",
-        message: "Não foi possível remover o pacote. Verifique se ele não está sendo usado."
+        message: error.message || "Não foi possível remover o pacote"
       });
       setShowDeleteConfirm(false);
     }
