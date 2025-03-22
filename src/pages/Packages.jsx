@@ -100,38 +100,17 @@ export default function Packages() {
   };
 
   const handleEditPackage = async (packageToEdit) => {
-    try {
-      const clientPackages = await ClientPackage.list();
-      const packagesInUse = clientPackages.filter(cp => cp.package_id === packageToEdit.id);
-      
-      if (packagesInUse.length > 0) {
-        const newPackageData = { ...packageToEdit };
-        delete newPackageData.id;
-        
-        const today = new Date();
-        const versionSuffix = ` (${today.getDate()}/${today.getMonth() + 1}/${today.getFullYear()})`;
-        newPackageData.name = newPackageData.name + versionSuffix;
-        
-        await Package.create(newPackageData);
-        
-        setAlert({
-          type: 'info',
-          message: 'Este pacote já foi vendido para clientes. Uma nova versão foi criada para edição.'
-        });
-        
-        loadData();
-        return;
-      }
-      
-      setPackageForm(packageToEdit);
-      setShowDialog(true);
-    } catch (error) {
-      console.error('Erro ao verificar uso do pacote:', error);
-      setAlert({
-        type: 'error',
-        message: 'Erro ao verificar o uso do pacote. Tente novamente.'
-      });
-    }
+    setPackageForm({
+      name: packageToEdit.name,
+      description: packageToEdit.description || "",
+      validity_days: packageToEdit.validity_days,
+      total_price: packageToEdit.total_price,
+      discount: packageToEdit.discount || 0,
+      services: packageToEdit.services || []
+    });
+    setCurrentPackage(packageToEdit);
+    setIsEditing(true);
+    setShowDialog(true);
   };
 
   const handleAddService = () => {
@@ -223,11 +202,29 @@ export default function Packages() {
       };
 
       if (isEditing) {
-        await Package.update(currentPackage.id, finalPackage);
-        setAlert({
-          type: "success",
-          message: "Pacote atualizado com sucesso"
-        });
+        // Verifica se o pacote está em uso antes de atualizar
+        const clientPackages = await ClientPackage.list();
+        const packagesInUse = clientPackages.filter(cp => cp.package_id === currentPackage.id);
+        
+        if (packagesInUse.length > 0) {
+          // Se o pacote estiver em uso, cria uma nova versão
+          const today = new Date();
+          const versionSuffix = ` (${today.getDate()}/${today.getMonth() + 1}/${today.getFullYear()})`;
+          finalPackage.name = finalPackage.name + versionSuffix;
+          
+          await Package.create(finalPackage);
+          setAlert({
+            type: 'info',
+            message: 'Este pacote já foi vendido para clientes. Uma nova versão foi criada.'
+          });
+        } else {
+          // Se o pacote não estiver em uso, atualiza normalmente
+          await Package.update(currentPackage.id, finalPackage);
+          setAlert({
+            type: "success",
+            message: "Pacote atualizado com sucesso"
+          });
+        }
       } else {
         await Package.create(finalPackage);
         setAlert({
