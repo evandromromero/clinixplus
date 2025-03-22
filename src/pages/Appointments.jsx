@@ -28,13 +28,17 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { Appointment, Client, Employee } from "@/firebase/entities";
-import { Service } from "@/api/entities";
-import { Package } from "@/api/entities";
-import { ClientPackage } from "@/api/entities";
-import { FinancialTransaction } from "@/api/entities";
+import { 
+  Appointment, 
+  Client, 
+  Employee, 
+  Service, 
+  Package, 
+  ClientPackage, 
+  FinancialTransaction 
+} from "@/firebase/entities";
 import { Calendar } from "@/components/ui/calendar"; 
 import {
   Tabs,
@@ -91,6 +95,13 @@ export default function Appointments() {
     description: '',
     confirmText: ''
   });
+
+  const navigate = useNavigate();
+
+  const handleViewClientDetails = (clientId) => {
+    navigate(`/client-details?id=${clientId}`);
+    setShowAppointmentDetails(false);
+  };
 
   useEffect(() => {
     loadData();
@@ -727,7 +738,7 @@ export default function Appointments() {
                                         {service?.name}
                                       </p>
                                       <p className="text-xs text-gray-500">
-                                        {format(new Date(app.date), 'HH:mm')}
+                                        {format(new Date(app.date), "HH:mm")}
                                       </p>
                                     </div>
                                   </div>
@@ -1102,12 +1113,15 @@ export default function Appointments() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Link to={createPageUrl(`ClientDetails?id=${selectedAppointmentDetails.client.id}`)}>
-                      <Button variant="outline" size="sm" className="gap-1">
-                        <User className="h-4 w-4" />
-                        Ver Ficha Completa
-                      </Button>
-                    </Link>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="gap-1"
+                      onClick={() => handleViewClientDetails(selectedAppointmentDetails.client.id)}
+                    >
+                      <User className="h-4 w-4" />
+                      Ver Ficha Completa
+                    </Button>
                     <Badge variant={
                       selectedAppointmentDetails.appointment.status === 'concluído' ? 'success' :
                       selectedAppointmentDetails.appointment.status === 'cancelado' ? 'destructive' :
@@ -1336,7 +1350,9 @@ export default function Appointments() {
                             <p>{selectedAppointmentDetails.appointment.notes}</p>
                           </div>
                         ) : (
-                          <p className="text-center text-gray-500 py-4">Nenhuma observação para este agendamento</p>
+                          <p className="text-center text-gray-500 py-4">
+                            Nenhuma observação para este agendamento
+                          </p>
                         )}
                       </CardContent>
                     </Card>
