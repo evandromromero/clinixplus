@@ -48,6 +48,43 @@ npm run build
    - Respeitado o estilo de escrita do projeto
    - Conservada a estrutura de dados atual
 
+#### Histórico de Sessões em Pacotes
+1. **Estrutura do Histórico**:
+   ```javascript
+   {
+     date: "Data do agendamento",
+     employee_id: "ID do profissional",
+     employee_name: "Nome do profissional",
+     appointment_id: "ID do agendamento",
+     service_id: "ID do serviço",
+     service_name: "Nome do serviço",
+     status: "concluido|agendado|cancelado",
+     notes: "Observações"
+   }
+   ```
+
+2. **Padronização de Status**:
+   - Banco de dados: 'concluido', 'agendado', 'cancelado' (sem acentos)
+   - Interface: 'Concluído', 'Agendado', 'Cancelado' (com acentos)
+   - Cores: Verde (concluído), Azul (agendado), Vermelho (cancelado)
+
+3. **Fluxo de Atualização**:
+   - Ao concluir agendamento: status atualizado para 'concluido'
+   - Sessão adicionada ao histórico do pacote
+   - Contador de sessões incrementado
+   - Status do pacote atualizado se atingir total de sessões
+
+4. **Arquivos Modificados**:
+   - `Appointments.jsx`: Atualização de status e histórico
+   - `ClientPackages.jsx`: Exibição do histórico
+   - Integração com Firebase para persistência
+
+5. **Melhorias de UX**:
+   - Formatação de data/hora no padrão brasileiro
+   - Exibição do nome do profissional
+   - Badges coloridos para status
+   - Informações detalhadas por sessão
+
 ### Integração com Firebase (Planejamento)
 Para resolver problemas de limite de taxa (429: Rate limit exceeded) do Base44, estamos considerando uma solução híbrida com Firebase. A implementação mais viável seria:
 

@@ -7,7 +7,8 @@ import {
   ClientPackage, 
   Service, 
   Sale, 
-  UnfinishedSale 
+  UnfinishedSale,
+  Employee
 } from "@/firebase/entities";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,6 +48,7 @@ export default function ClientPackages() {
   const [packages, setPackages] = useState([]);
   const [clients, setClients] = useState([]);
   const [services, setServices] = useState([]);
+  const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedClient, setSelectedClient] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("todos");
@@ -285,17 +287,19 @@ export default function ClientPackages() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [clientPackagesData, packagesData, clientsData, servicesData] = await Promise.all([
+      const [clientPackagesData, packagesData, clientsData, servicesData, employeesData] = await Promise.all([
         ClientPackage.list(),
         Package.list(),
         Client.list(),
-        Service.list()
+        Service.list(),
+        Employee.list()
       ]);
 
       setClientPackages(clientPackagesData);
       setPackages(packagesData);
       setClients(clientsData);
       setServices(servicesData);
+      setEmployees(employeesData);
     } catch (error) {
       console.error("Erro ao carregar dados:", error);
       toast({
@@ -407,6 +411,11 @@ export default function ClientPackages() {
   const getServiceName = (serviceId) => {
     const service = services.find(s => s.id === serviceId);
     return service ? service.name : "Serviço não encontrado";
+  };
+
+  const getEmployeeName = (employeeId) => {
+    const employee = employees.find(e => e.id === employeeId);
+    return employee ? employee.name : "Profissional não encontrado";
   };
 
   const getStatusBadgeStyle = (status) => {
@@ -1220,21 +1229,27 @@ export default function ClientPackages() {
                       <div key={index} className="p-3 border rounded-lg">
                         <div className="flex justify-between items-center">
                           <div>
-                            <p className="font-medium">{session.service_name || "Sessão " + (index + 1)}</p>
+                            <p className="font-medium">{session.service_name || getServiceName(session.service_id)}</p>
                             <p className="text-sm text-gray-500">
                               {format(new Date(session.date), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                            </p>
+                            <p className="text-sm text-gray-500">
+                              Profissional: {getEmployeeName(session.employee_id)}
                             </p>
                           </div>
                           <Badge 
                             variant="outline" 
                             className={
-                              session.status === 'realizada' ? 'bg-green-50 text-green-700' :
-                              session.status === 'agendada' ? 'bg-blue-50 text-blue-700' :
-                              session.status === 'cancelada' ? 'bg-red-50 text-red-700' :
+                              session.status === 'concluido' ? 'bg-green-50 text-green-700' :
+                              session.status === 'agendado' ? 'bg-blue-50 text-blue-700' :
+                              session.status === 'cancelado' ? 'bg-red-50 text-red-700' :
                               'bg-gray-50 text-gray-700'
                             }
                           >
-                            {session.status ? session.status.charAt(0).toUpperCase() + session.status.slice(1) : 'Agendada'}
+                            {session.status === 'concluido' ? 'Concluído' :
+                             session.status === 'agendado' ? 'Agendado' :
+                             session.status === 'cancelado' ? 'Cancelado' :
+                             session.status}
                           </Badge>
                         </div>
                       </div>

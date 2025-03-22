@@ -174,6 +174,7 @@ export default function Appointments() {
         const sessionHistoryEntry = {
           date: appointmentData.date,
           employee_id: appointmentData.employee_id,
+          employee_name: employees.find(e => e.id === appointmentData.employee_id)?.name || "",
           appointment_id: createdAppointment.id,
           service_id: appointmentData.service_id,
           service_name: services.find(s => s.id === appointmentData.service_id)?.name || "",
@@ -204,7 +205,7 @@ export default function Appointments() {
           }
           
           // Se o status for concluído, incrementa as sessões usadas
-          const sessionsToAdd = appointmentData.status === 'concluído' ? 1 : 0;
+          const sessionsToAdd = appointmentData.status === 'concluido' ? 1 : 0;
           
           await ClientPackage.update(selectedClientPackage.id, {
             sessions_used: (currentPackage.sessions_used || 0) + sessionsToAdd,
@@ -412,7 +413,7 @@ export default function Appointments() {
         status: newStatus
       });
       
-      if (newStatus === 'concluído') {
+      if (newStatus === 'concluido') {
         const appointment = appointments.find(app => app.id === appointmentId);
         const clientPackages = await ClientPackage.filter({ 
           client_id: appointment.client_id,
@@ -426,9 +427,11 @@ export default function Appointments() {
 
         if (relevantPackage) {
           const serviceData = services.find(s => s.id === appointment.service_id);
+          const employeeData = employees.find(e => e.id === appointment.employee_id);
           const sessionHistoryEntry = {
             date: appointment.date,
             employee_id: appointment.employee_id,
+            employee_name: employeeData ? employeeData.name : "",
             appointment_id: appointmentId,
             service_id: appointment.service_id,
             service_name: serviceData ? serviceData.name : "",
@@ -457,7 +460,7 @@ export default function Appointments() {
           }
           
           // Se o status for concluído, incrementa as sessões usadas
-          const sessionsToAdd = newStatus === 'concluído' ? 1 : 0;
+          const sessionsToAdd = newStatus === 'concluido' ? 1 : 0;
           
           await ClientPackage.update(relevantPackage.id, {
             sessions_used: (currentPackage.sessions_used || 0) + sessionsToAdd,
@@ -555,30 +558,91 @@ export default function Appointments() {
 
   const handleConfirmAction = async () => {
     try {
+      const appointment = appointments.find(app => app.id === confirmationDialog.appointmentId);
+      if (!appointment) {
+        console.error("Agendamento não encontrado");
+        return;
+      }
+
       switch (confirmationDialog.type) {
         case 'cancel':
           await Appointment.update(confirmationDialog.appointmentId, { status: 'cancelado' });
-          console.log("Agendamento cancelado com sucesso");
-          await loadData();
+          await updatePackageSession(appointment, 'cancelado');
           break;
         case 'complete':
-          await Appointment.update(confirmationDialog.appointmentId, { status: 'concluído' });
-          console.log("Agendamento concluído com sucesso");
-          await loadData();
+          await Appointment.update(confirmationDialog.appointmentId, { status: 'concluido' });
+          await updatePackageSession(appointment, 'concluido');
           break;
         case 'delete':
           await handleDeleteAppointment(confirmationDialog.appointmentId);
           break;
-        default:
-          break;
       }
-      
+
       if (confirmationDialog.type !== 'delete') {
         setConfirmationDialog({ isOpen: false, type: null, appointmentId: null });
       }
+      await loadData();
     } catch (error) {
       console.error("Erro ao executar ação:", error);
       setConfirmationDialog({ isOpen: false, type: null, appointmentId: null });
+    }
+  };
+
+  const updatePackageSession = async (appointment, newStatus) => {
+    try {
+      const clientPackages = await ClientPackage.filter({ 
+        client_id: appointment.client_id,
+        status: 'ativo'
+      });
+      
+      const relevantPackage = clientPackages.find(pkg => {
+        const packageData = packages.find(p => p.id === pkg.package_id);
+        return packageData?.services.some(s => s.service_id === appointment.service_id);
+      });
+
+      if (relevantPackage) {
+        const serviceData = services.find(s => s.id === appointment.service_id);
+        const employeeData = employees.find(e => e.id === appointment.employee_id);
+        const currentPackage = await ClientPackage.get(relevantPackage.id);
+        
+        const currentSessionHistory = Array.isArray(currentPackage.session_history) 
+          ? currentPackage.session_history 
+          : [];
+        
+        const existingSessionIndex = currentSessionHistory.findIndex(
+          s => s.appointment_id === appointment.id
+        );
+
+        const sessionHistoryEntry = {
+          date: appointment.date,
+          employee_id: appointment.employee_id,
+          employee_name: employeeData ? employeeData.name : "",
+          appointment_id: appointment.id,
+          service_id: appointment.service_id,
+          service_name: serviceData ? serviceData.name : "",
+          status: newStatus,
+          notes: appointment.notes || ""
+        };
+
+        let updatedSessionHistory;
+        if (existingSessionIndex >= 0) {
+          updatedSessionHistory = [...currentSessionHistory];
+          updatedSessionHistory[existingSessionIndex] = sessionHistoryEntry;
+        } else {
+          updatedSessionHistory = [...currentSessionHistory, sessionHistoryEntry];
+        }
+        
+        const sessionsToAdd = newStatus === 'concluido' ? 1 : 0;
+        const newSessionsUsed = (currentPackage.sessions_used || 0) + sessionsToAdd;
+        
+        await ClientPackage.update(relevantPackage.id, {
+          sessions_used: newSessionsUsed,
+          session_history: updatedSessionHistory,
+          status: newSessionsUsed >= currentPackage.total_sessions ? 'finalizado' : 'ativo'
+        });
+      }
+    } catch (error) {
+      console.error("Erro ao atualizar sessão do pacote:", error);
     }
   };
 
@@ -1164,7 +1228,7 @@ export default function Appointments() {
                       Ver Ficha Completa
                     </Button>
                     <Badge variant={
-                      selectedAppointmentDetails.appointment.status === 'concluído' ? 'success' :
+                      selectedAppointmentDetails.appointment.status === 'concluido' ? 'success' :
                       selectedAppointmentDetails.appointment.status === 'cancelado' ? 'destructive' :
                       selectedAppointmentDetails.appointment.status === 'agendado' ? 'default' :
                       'outline'
@@ -1225,7 +1289,7 @@ export default function Appointments() {
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-4">
                                 <div className={`w-3 h-3 rounded-full ${
-                                  app.status === 'concluído' ? 'bg-green-500' :
+                                  app.status === 'concluido' ? 'bg-green-500' :
                                   app.status === 'cancelado' ? 'bg-red-500' :
                                   'bg-blue-500'
                                 }`} />
@@ -1241,7 +1305,7 @@ export default function Appointments() {
                               </div>
                               <div className="flex items-center gap-2">
                                 <Badge variant={
-                                  app.status === 'concluído' ? 'success' :
+                                  app.status === 'concluido' ? 'success' :
                                   app.status === 'cancelado' ? 'destructive' :
                                   'default'
                                 }>
