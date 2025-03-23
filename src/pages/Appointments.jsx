@@ -61,7 +61,8 @@ export default function Appointments() {
     service_id: "",
     date: new Date(),
     status: "agendado",
-    notes: ""
+    notes: "",
+    original_appointment_id: null
   });
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResults, setSearchResults] = useState([]);
@@ -165,53 +166,80 @@ export default function Appointments() {
     try {
       const appointmentData = {
         ...newAppointment,
-        date: format(newAppointment.date, "yyyy-MM-dd'T'HH:mm:ss")
+        date: format(newAppointment.date, "yyyy-MM-dd'T'HH:mm:ss"),
+        status: newAppointment.original_appointment_id ? 'agendado' : newAppointment.status || 'agendado'
       };
       
       const createdAppointment = await Appointment.create(appointmentData);
 
-      if (selectedClientPackage) {
-        const sessionHistoryEntry = {
-          date: appointmentData.date,
-          employee_id: appointmentData.employee_id,
-          employee_name: employees.find(e => e.id === appointmentData.employee_id)?.name || "",
-          appointment_id: createdAppointment.id,
-          service_id: appointmentData.service_id,
-          service_name: services.find(s => s.id === appointmentData.service_id)?.name || "",
-          status: appointmentData.status,
-          notes: appointmentData.notes || ""
-        };
+      // Se for um reagendamento, atualiza o agendamento original
+      if (newAppointment.original_appointment_id) {
+        await Appointment.update(newAppointment.original_appointment_id, {
+          rescheduled: true,
+          rescheduled_to: createdAppointment.id
+        });
+      }
 
+      if (selectedClientPackage) {
         try {
           const currentPackage = await ClientPackage.get(selectedClientPackage.id);
           
-          const currentSessionHistory = Array.isArray(currentPackage.session_history) 
-            ? currentPackage.session_history 
-            : [];
-          
-          // Encontra e atualiza a sessão existente ou adiciona uma nova
-          const existingSessionIndex = currentSessionHistory.findIndex(
-            s => s.appointment_id === createdAppointment.id
-          );
-
-          let updatedSessionHistory;
-          if (existingSessionIndex >= 0) {
-            // Atualiza a sessão existente
-            updatedSessionHistory = [...currentSessionHistory];
-            updatedSessionHistory[existingSessionIndex] = sessionHistoryEntry;
-          } else {
-            // Adiciona nova sessão
-            updatedSessionHistory = [...currentSessionHistory, sessionHistoryEntry];
+          if (!currentPackage) {
+            throw new Error("Pacote não encontrado");
           }
+
+          console.log("Pacote atual:", currentPackage);
+
+          const sessionHistoryEntry = {
+            date: appointmentData.date,
+            employee_id: appointmentData.employee_id,
+            employee_name: employees.find(e => e.id === appointmentData.employee_id)?.name || "",
+            appointment_id: createdAppointment.id,
+            service_id: appointmentData.service_id,
+            service_name: services.find(s => s.id === appointmentData.service_id)?.name || "",
+            status: appointmentData.status || "agendado",
+            notes: appointmentData.notes || ""
+          };
+
+          // Garantir que todos os campos necessários existam com valores válidos
+          const updatedPackage = {
+            sessions_used: parseInt(currentPackage.sessions_used || 0),
+            total_sessions: parseInt(currentPackage.total_sessions || 0),
+            package_id: currentPackage.package_id,
+            client_id: currentPackage.client_id,
+            status: currentPackage.status || 'ativo',
+            session_history: []
+          };
+
+          // Garantir que o histórico de sessões seja um array válido
+          if (Array.isArray(currentPackage.session_history)) {
+            updatedPackage.session_history = [...currentPackage.session_history];
+          }
+
+          // Adicionar a nova sessão ao histórico
+          updatedPackage.session_history.push(sessionHistoryEntry);
           
           // Se o status for concluído, incrementa as sessões usadas
-          const sessionsToAdd = appointmentData.status === 'concluido' ? 1 : 0;
+          if (appointmentData.status === 'concluido') {
+            updatedPackage.sessions_used += 1;
+          }
           
-          await ClientPackage.update(selectedClientPackage.id, {
-            sessions_used: (currentPackage.sessions_used || 0) + sessionsToAdd,
-            session_history: updatedSessionHistory,
-            status: (currentPackage.sessions_used || 0) + sessionsToAdd >= currentPackage.total_sessions ? 'finalizado' : 'ativo'
-          });
+          // Atualiza o status do pacote se necessário
+          if (updatedPackage.sessions_used >= updatedPackage.total_sessions) {
+            updatedPackage.status = 'finalizado';
+          }
+
+          // Adicionar datas apenas se existirem no pacote atual
+          if (currentPackage.purchase_date) {
+            updatedPackage.purchase_date = currentPackage.purchase_date;
+          }
+          if (currentPackage.expiration_date) {
+            updatedPackage.expiration_date = currentPackage.expiration_date;
+          }
+
+          console.log("Dados do pacote a serem atualizados:", updatedPackage);
+          
+          await ClientPackage.update(selectedClientPackage.id, updatedPackage);
         } catch (error) {
           console.error("Erro ao atualizar pacote do cliente:", error);
         }
@@ -223,13 +251,14 @@ export default function Appointments() {
         service_id: "",
         date: newAppointment.date,
         status: "agendado",
-        notes: ""
+        notes: "",
+        original_appointment_id: null
       });
 
       setSelectedClientPackage(null);
       setSelectedPackageId("");
       setSearchTerm("");
-      loadData();
+      await loadData();
       
       console.log("Agendamento criado com sucesso");
       
@@ -451,11 +480,9 @@ export default function Appointments() {
 
           let updatedSessionHistory;
           if (existingSessionIndex >= 0) {
-            // Atualiza a sessão existente
             updatedSessionHistory = [...currentSessionHistory];
             updatedSessionHistory[existingSessionIndex] = sessionHistoryEntry;
           } else {
-            // Adiciona nova sessão
             updatedSessionHistory = [...currentSessionHistory, sessionHistoryEntry];
           }
           
@@ -1351,9 +1378,11 @@ export default function Appointments() {
                                       setShowNewAppointmentDialog(true);
                                       setNewAppointment({
                                         client_id: selectedAppointmentDetails.client.id,
-                                        service_id: app.service_id,
-                                        employee_id: app.employee_id,
-                                        date: new Date()
+                                        service_id: selectedAppointmentDetails.service.id,
+                                        employee_id: selectedAppointmentDetails.employee.id,
+                                        date: new Date(),
+                                        original_appointment_id: selectedAppointmentDetails.appointment.id,
+                                        status: 'agendado'
                                       });
                                     }}
                                   >
@@ -1513,7 +1542,10 @@ export default function Appointments() {
                           ...newAppointment,
                           client_id: selectedAppointmentDetails.client.id,
                           service_id: selectedAppointmentDetails.service.id,
-                          employee_id: selectedAppointmentDetails.employee.id
+                          employee_id: selectedAppointmentDetails.employee.id,
+                          date: new Date(),
+                          original_appointment_id: selectedAppointmentDetails.appointment.id,
+                          status: 'agendado'
                         });
                       }}
                     >

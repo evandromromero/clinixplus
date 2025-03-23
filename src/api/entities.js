@@ -1,4 +1,5 @@
 import { base44 } from './base44Client';
+import { Sale as FirebaseSale, UnfinishedSale as FirebaseUnfinishedSale } from '../firebase/entities';
 
 // Entidades do Base44
 export const Client = base44.entities.Client;
@@ -23,9 +24,9 @@ export const ClientPackageSession = base44.entities.ClientPackageSession;
 export const Receipt = base44.entities.Receipt;
 export const ClientAuth = base44.entities.ClientAuth;
 
-// Removendo referências ao Base44 para entidades que agora usam apenas Firebase
-export const Sale = null;
-export const UnfinishedSale = null;
+// Usando as versões do Firebase para vendas
+export const Sale = FirebaseSale;
+export const UnfinishedSale = FirebaseUnfinishedSale;
 
 // Auth e autenticação
 export const User = base44.auth;

@@ -48,8 +48,12 @@ const FIREBASE_ONLY_ENTITIES = [
   'testimonials',
   'client_packages',
   'packages',
-  'unfinished_sales',  // Adicionando vendas não finalizadas para usar apenas o Firebase
-  'sales'  // Adicionando vendas para usar apenas o Firebase
+  'unfinished_sales',  
+  'sales', 
+  'gift_cards', 
+  'clients',
+  'suppliers',  // Adicionando suppliers para usar apenas o Firebase
+  'subscription_plans'  // Adicionando subscription_plans para usar apenas o Firebase
 ];
 
 /**

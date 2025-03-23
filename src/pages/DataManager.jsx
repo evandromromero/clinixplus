@@ -18,30 +18,32 @@ import {
 import { Database, Upload, Trash2, AlertTriangle, RefreshCw, Info, Clock } from 'lucide-react';
 import RateLimitHandler from '../components/RateLimitHandler';
 
-// Importar todas as entidades
-import { Client } from '@/api/entities';
-import { Employee } from '@/api/entities';
-import { Service } from '@/api/entities';
-import { Product } from '@/api/entities';
-import { Package } from '@/api/entities';
-import { Sale } from '@/api/entities';
-import { Supplier } from '@/api/entities';
-import { ClientPackage } from '@/api/entities';
-import { SubscriptionPlan } from '@/api/entities';
-import { ClientSubscription } from '@/api/entities';
-import { Role } from '@/api/entities';
-import { PaymentMethod } from '@/api/entities';
-import { GiftCard } from '@/api/entities';
-import { CompanySettings } from '@/api/entities';
-import { Testimonial } from '@/api/entities';
-import { SlideShowImage } from '@/api/entities';
-import { Appointment } from '@/api/entities';
-import { FinancialTransaction } from '@/api/entities';
-import { Inventory } from '@/api/entities';
-import { ClientPackageSession } from '@/api/entities';
-import { Receipt } from '@/api/entities';
-import { UnfinishedSale } from '@/api/entities';
-import { ClientAuth } from '@/api/entities';
+// Importar todas as entidades do Firebase ao invés do Base44
+import { 
+  Client,
+  Employee,
+  Service,
+  Product,
+  Package,
+  Sale,
+  Supplier,
+  ClientPackage,
+  SubscriptionPlan,
+  ClientSubscription,
+  Role,
+  PaymentMethod,
+  GiftCard,
+  CompanySettings,
+  Testimonial,
+  SlideShowImage,
+  Appointment,
+  FinancialTransaction,
+  Inventory,
+  ClientPackageSession,
+  Receipt,
+  UnfinishedSale,
+  ClientAuth
+} from '@/firebase/entities';
 
 export default function DataManager() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
