@@ -31,6 +31,7 @@ export function createPageUrl(pageName, params) {
     PaymentMethods: '/payment-methods',
     DataManager: '/data-manager',
     'contract-templates': '/contract-templates',
+    AnamneseTemplates: '/anamnese-templates',
     Public: '/'
   };
 
@@ -50,7 +51,6 @@ export function createPageUrl(pageName, params) {
     const queryString = Object.entries(params)
       .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
       .join('&');
-    
     return `${route}?${queryString}`;
   }
   

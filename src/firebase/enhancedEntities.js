@@ -270,48 +270,55 @@ export function createEnhancedEntity(entityName, baseEntity) {
     
     /**
      * Lista todos os documentos
+     * @param {Boolean} forceRefresh - Se true, força uma atualização do cache
      * @returns {Promise<Array>} Lista de documentos
      */
-    async list() {
+    async list(forceRefresh = false) {
       try {
-        // Verificar se devemos forçar atualização a partir da Base44
-        const forceRefresh = localStorage.getItem(`force_refresh_${entityName}`);
-        if (forceRefresh === 'true' && !isFirebaseOnlyEntity(entityName)) {
-          console.log(`[EnhancedEntity] Forçando atualização de ${entityName} a partir da Base44`);
-          localStorage.removeItem(`force_refresh_${entityName}`);
-          
-          // Busca da Base44 e atualiza o Firebase
-          console.log(`[Base44] Buscando documentos de ${entityName}...`);
-          const items = await baseEntity.list();
-          
-          // Limpa e recria a coleção no Firebase
-          if (useFirebaseCache && items && items.length > 0) {
-            try {
-              // Primeiro obtém todos os documentos existentes para excluí-los
-              const querySnapshot = await getDocs(collection(db, entityName));
-              
-              // Exclui todos os documentos existentes
-              const batch = writeBatch(db);
-              querySnapshot.docs.forEach(doc => {
-                batch.delete(doc.ref);
-              });
-              
-              // Adiciona os novos documentos
-              items.forEach(item => {
-                if (item && item.id) {
-                  const docRef = doc(db, entityName, item.id);
-                  batch.set(docRef, item);
-                }
-              });
-              
-              await batch.commit();
-              console.log(`[Firebase] Coleção ${entityName} recriada com ${items.length} documentos`);
-            } catch (firebaseError) {
-              handleFirebaseError(firebaseError, entityName, 'recriar coleção');
-            }
+        // Se a entidade é Firebase-only, busca diretamente do Firebase
+        if (isFirebaseOnlyEntity(entityName)) {
+          try {
+            const querySnapshot = await getDocs(collection(db, entityName));
+            const items = querySnapshot.docs.map(doc => doc.data());
+            console.log(`[Firebase] ${items.length} documentos de ${entityName} obtidos (Firebase-only)`);
+            return items;
+          } catch (firebaseError) {
+            handleFirebaseError(firebaseError, entityName, 'buscar documentos');
+            console.log(`[Firebase] Erro ao buscar ${entityName} (Firebase-only), retornando array vazio`);
+            return [];
           }
-          
-          return items;
+        }
+
+        // Se forçar atualização, limpa o cache e busca tudo novamente
+        if (forceRefresh && useFirebaseCache) {
+          try {
+            // Busca todos os documentos do Base44
+            const items = await baseEntity.list();
+            
+            // Recria a coleção no Firebase
+            const batch = writeBatch(db);
+            
+            // Primeiro deleta todos os documentos existentes
+            const querySnapshot = await getDocs(collection(db, entityName));
+            querySnapshot.docs.forEach(doc => {
+              batch.delete(doc.ref);
+            });
+            
+            // Depois adiciona os novos
+            items.forEach(item => {
+              if (item && item.id) {
+                const docRef = doc(db, entityName, item.id);
+                batch.set(docRef, item);
+              }
+            });
+            
+            await batch.commit();
+            console.log(`[Firebase] Coleção ${entityName} recriada com ${items.length} documentos`);
+            return items;
+          } catch (error) {
+            handleFirebaseError(error, entityName, 'recriar coleção');
+            // Se ocorrer erro, continua com o fluxo normal
+          }
         }
         
         // Tenta buscar do Firebase primeiro se estiver habilitado
@@ -323,25 +330,10 @@ export function createEnhancedEntity(entityName, baseEntity) {
               const items = querySnapshot.docs.map(doc => doc.data());
               console.log(`[Firebase] ${items.length} documentos de ${entityName} obtidos do cache`);
               return items;
-            } else if (isFirebaseOnlyEntity(entityName)) {
-              // Se a entidade é Firebase-only e não há dados, retorna array vazio
-              console.log(`[Firebase] Nenhum documento encontrado para ${entityName} (Firebase-only)`);
-              return [];
             }
           } catch (firebaseError) {
             handleFirebaseError(firebaseError, entityName, 'buscar documentos');
-            if (isFirebaseOnlyEntity(entityName)) {
-              // Se ocorrer erro e a entidade é Firebase-only, retorna array vazio
-              console.log(`[Firebase] Erro ao buscar ${entityName} (Firebase-only), retornando array vazio`);
-              return [];
-            }
           }
-        }
-        
-        // Se a entidade é Firebase-only, não tenta buscar do Base44
-        if (isFirebaseOnlyEntity(entityName)) {
-          console.log(`[Firebase] ${entityName} é Firebase-only, não buscando do Base44`);
-          return [];
         }
         
         // Se não encontrar no Firebase ou ocorrer erro, busca do Base44
@@ -370,13 +362,6 @@ export function createEnhancedEntity(entityName, baseEntity) {
         return items;
       } catch (error) {
         console.error(`Erro ao listar documentos de ${entityName}:`, error);
-        
-        // Se a entidade é Firebase-only, retorna array vazio em caso de erro
-        if (isFirebaseOnlyEntity(entityName)) {
-          console.log(`[Firebase] Erro ao buscar ${entityName} (Firebase-only), retornando array vazio`);
-          return [];
-        }
-        
         throw error;
       }
     },

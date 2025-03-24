@@ -31,6 +31,7 @@ import AccountsReceivable from './pages/AccountsReceivable';
 import PaymentMethods from './pages/PaymentMethods';
 import DataManager from './pages/DataManager';
 import ContractTemplates from './pages/ContractTemplates';
+import AnamneseTemplates from './pages/AnamneseTemplates';
 
 export default function AppRoutes() {
   return (
@@ -66,6 +67,7 @@ export default function AppRoutes() {
         <Route path="/payment-methods" element={<PaymentMethods />} />
         <Route path="/data-manager" element={<DataManager />} />
         <Route path="/contract-templates" element={<ContractTemplates />} />
+        <Route path="/anamnese-templates" element={<AnamneseTemplates />} />
       </Route>
       
       {/* Rota do portal do cliente */}

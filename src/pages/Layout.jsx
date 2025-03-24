@@ -64,7 +64,8 @@ export default function Layout() {
         { name: "Cargos", url: "Roles" },
         { name: "Produtos", url: "Products" },
         { name: "Formas de Pagamento", url: "PaymentMethods" },
-        { name: "Modelos de Contrato", url: "contract-templates" }
+        { name: "Modelos de Contrato", url: "contract-templates" },
+        { name: "Modelos de Anamnese", url: "AnamneseTemplates" }
       ]
     },
     { name: "Estoque", icon: <Package className="w-5 h-5" />, url: "Inventory" },

@@ -8,6 +8,7 @@ import { collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where, orde
 const baseClient = createEnhancedEntity('clients', base44.entities.Client);
 const baseContract = createEnhancedEntity('contracts', null);
 const baseContractTemplate = createEnhancedEntity('contract_templates', null);
+const baseAnamneseTemplate = createEnhancedEntity('anamnese_templates', null);
 
 // Estender o objeto Client com os métodos de foto
 export const Client = {
@@ -234,6 +235,87 @@ export const ContractTemplate = {
   }
 };
 
+// Estender o objeto AnamneseTemplate
+export const AnamneseTemplate = {
+  ...baseAnamneseTemplate,
+  collection: 'anamnese_templates',
+
+  async create(data) {
+    try {
+      // Gerar um ID único se não fornecido
+      const id = data.id || doc(collection(db, 'anamnese_templates')).id;
+      
+      // Adicionar metadados
+      const now = new Date().toISOString();
+      const templateData = {
+        ...data,
+        id,
+        created_at: now,
+        updated_at: now
+      };
+
+      // Salvar no Firestore
+      await setDoc(doc(db, 'anamnese_templates', id), templateData);
+      return templateData;
+    } catch (error) {
+      console.error('Error creating anamnese template:', error);
+      throw error;
+    }
+  },
+
+  async list() {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'anamnese_templates'));
+      return querySnapshot.docs.map(doc => doc.data());
+    } catch (error) {
+      console.error('Error listing anamnese templates:', error);
+      return [];
+    }
+  },
+
+  async get(id) {
+    try {
+      const docRef = doc(db, 'anamnese_templates', id);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        return docSnap.data();
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting anamnese template:', error);
+      throw error;
+    }
+  },
+
+  async update(id, data) {
+    try {
+      const docRef = doc(db, 'anamnese_templates', id);
+      const now = new Date().toISOString();
+      
+      const updateData = {
+        ...data,
+        updated_at: now
+      };
+
+      await setDoc(docRef, updateData, { merge: true });
+      return { id, ...updateData };
+    } catch (error) {
+      console.error('Error updating anamnese template:', error);
+      throw error;
+    }
+  },
+
+  async delete(id) {
+    try {
+      await deleteDoc(doc(db, 'anamnese_templates', id));
+    } catch (error) {
+      console.error('Error deleting anamnese template:', error);
+      throw error;
+    }
+  }
+};
+
 // Estender o objeto Contract
 export const Contract = {
   ...baseContract,
@@ -428,5 +510,6 @@ export const FIREBASE_ONLY_ENTITIES = [
   'inventory_movements',
   'products',
   'anamnesis',
+  'anamnese_templates',
   'client_packages'
 ];
