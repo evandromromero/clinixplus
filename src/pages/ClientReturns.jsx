@@ -8,9 +8,7 @@ import {
   isBefore 
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Client } from "@/api/entities";
-import { Appointment } from "@/api/entities";
-import { Service } from "@/api/entities";
+import { Client, Appointment, Service } from "@/firebase/entities";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
