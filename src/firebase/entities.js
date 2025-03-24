@@ -166,10 +166,28 @@ export class Contract {
     }
   }
 
-  static async sendByEmail(contractData) {
+  static async sendByEmail(contractData, email, pdfFileName) {
     try {
-      // Aqui implementaremos o envio por email quando tivermos o serviço configurado
-      console.log('Sending contract by email:', contractData);
+      // Aqui você implementará a lógica de envio de email com o seu serviço de email
+      // Por exemplo, usando SendGrid, Nodemailer, etc.
+      console.log('Sending contract by email:', {
+        to: email,
+        subject: 'Contrato de Prestação de Serviços',
+        attachments: [pdfFileName]
+      });
+      
+      // Salvar o registro de envio no Firebase
+      const emailLog = {
+        contract_id: contractData.id,
+        sent_to: email,
+        sent_at: new Date().toISOString(),
+        type: 'email'
+      };
+      
+      const collectionRef = collection(db, 'contract_shares');
+      const docRef = doc(collectionRef);
+      await setDoc(docRef, emailLog);
+
       return true;
     } catch (error) {
       console.error('Error sending contract by email:', error);

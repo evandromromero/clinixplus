@@ -3,12 +3,11 @@ import { Client, Appointment, Sale, ClientPackage, Package, Service, Contract, C
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { Link } from "react-router-dom";
+import { createPageUrl } from "@/utils";
 import {
   User,
   Phone,
-  Mail,
   MapPin,
   Calendar,
   Package as PackageIcon,
@@ -16,15 +15,20 @@ import {
   Camera,
   Pencil,
   Plus,
-  FileText
+  FileText,
+  Share,
+  Printer,
+  FileDown,
+  MessageCircle,
+  Mail
 } from "lucide-react";
-import { Link } from "react-router-dom";
-import { createPageUrl } from "@/utils";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import html2pdf from 'html2pdf.js';
 import DependentList from '@/components/clients/DependentList'; 
 import DependentForm from '@/components/clients/DependentForm'; 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import RateLimitHandler from '@/components/RateLimitHandler';
-import { Mail as MailIcon } from "lucide-react";
 
 export default function ClientDetails() {
   const [client, setClient] = useState(null);
@@ -41,6 +45,7 @@ export default function ClientDetails() {
   const [contractData, setContractData] = useState(null);
   const [templates, setTemplates] = useState([]);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
+  const [showShareDialog, setShowShareDialog] = useState(false);
   const urlParams = new URLSearchParams(window.location.search);
   const clientId = urlParams.get('id');
 
@@ -192,11 +197,46 @@ export default function ClientDetails() {
     }
   };
 
+  const generatePDF = async () => {
+    const element = document.getElementById('contract-content');
+    const opt = {
+      margin: 1,
+      filename: `contrato_${client?.name?.replace(/\s+/g, '_')}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2 },
+      jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+    };
+    
+    try {
+      const pdf = await html2pdf().set(opt).from(element).save();
+      return opt.filename;
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      throw error;
+    }
+  };
+
+  const handlePrint = () => {
+    window.print();
+  };
+
   const sendContractByEmail = async () => {
     try {
-      await Contract.sendByEmail(contractData);
+      const pdfFileName = await generatePDF();
+      await Contract.sendByEmail(contractData, client.email, pdfFileName);
     } catch (error) {
-      console.error(error);
+      console.error('Error sending contract by email:', error);
+    }
+  };
+
+  const shareByWhatsApp = async () => {
+    try {
+      const pdfFileName = await generatePDF();
+      const message = `Olá ${client?.name}, segue o contrato conforme combinado.`;
+      const whatsappUrl = `https://wa.me/${client?.phone?.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
+      window.open(whatsappUrl, '_blank');
+    } catch (error) {
+      console.error('Error sharing via WhatsApp:', error);
     }
   };
 
@@ -685,21 +725,36 @@ export default function ClientDetails() {
                   Gerar Contrato
                 </button>
                 {contractData && (
-                  <button
-                    onClick={() => sendContractByEmail()}
-                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#3475B8] border border-[#3475B8] rounded-md hover:bg-[#3475B8] hover:text-white transition-colors"
-                  >
-                    <MailIcon className="w-4 h-4" />
-                    Enviar por Email
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setShowShareDialog(true)}
+                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#3475B8] border border-[#3475B8] rounded-md hover:bg-[#3475B8] hover:text-white transition-colors"
+                    >
+                      <Share className="w-4 h-4" />
+                      Compartilhar
+                    </button>
+                    <button
+                      onClick={handlePrint}
+                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#3475B8] border border-[#3475B8] rounded-md hover:bg-[#3475B8] hover:text-white transition-colors"
+                    >
+                      <Printer className="w-4 h-4" />
+                      Imprimir
+                    </button>
+                    <button
+                      onClick={() => generatePDF()}
+                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#3475B8] border border-[#3475B8] rounded-md hover:bg-[#3475B8] hover:text-white transition-colors"
+                    >
+                      <FileDown className="w-4 h-4" />
+                      Baixar PDF
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
 
             {contractData ? (
-              <div className="bg-white p-6 rounded-lg shadow-sm">
+              <div id="contract-content" className="bg-white p-6 rounded-lg shadow-sm">
                 <div className="prose max-w-none">
-                  {/* Preview do contrato */}
                   <h2 className="text-center text-xl font-bold mb-6">CONTRATO DE PRESTAÇÃO DE SERVIÇOS</h2>
                   <p className="mb-4">
                     <strong>CONTRATANTE:</strong> {client?.name}
@@ -724,6 +779,31 @@ export default function ClientDetails() {
               </div>
             )}
           </div>
+
+          {/* Dialog de compartilhamento */}
+          <Dialog open={showShareDialog} onOpenChange={setShowShareDialog}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Compartilhar Contrato</DialogTitle>
+              </DialogHeader>
+              <div className="grid grid-cols-2 gap-4 py-4">
+                <button
+                  onClick={sendContractByEmail}
+                  className="flex flex-col items-center gap-2 p-4 border rounded-lg hover:bg-gray-50"
+                >
+                  <Mail className="w-8 h-8 text-[#3475B8]" />
+                  <span className="text-sm font-medium">Email</span>
+                </button>
+                <button
+                  onClick={shareByWhatsApp}
+                  className="flex flex-col items-center gap-2 p-4 border rounded-lg hover:bg-gray-50"
+                >
+                  <MessageCircle className="w-8 h-8 text-[#25D366]" />
+                  <span className="text-sm font-medium">WhatsApp</span>
+                </button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
         <TabsContent value="fotos">
