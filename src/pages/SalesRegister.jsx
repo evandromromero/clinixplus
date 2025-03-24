@@ -392,24 +392,65 @@ export default function SalesRegister() {
     try {
       setIsLoading(true);
       
+      // Validações
+      if (!selectedClient?.id) {
+        toast({
+          title: "Erro",
+          description: "Selecione um cliente para a venda",
+          variant: "destructive"
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      if (!salesEmployee) {
+        toast({
+          title: "Erro",
+          description: "Selecione um vendedor para a venda",
+          variant: "destructive"
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      if (!cartItems.length) {
+        toast({
+          title: "Erro",
+          description: "Adicione pelo menos um item ao carrinho",
+          variant: "destructive"
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      // Validar itens do carrinho
+      const validCartItems = cartItems.map(item => ({
+        id: item.id || "",
+        name: item.name || "",
+        type: item.type || saleType,
+        price: parseFloat(item.price) || 0,
+        quantity: parseInt(item.quantity) || 1,
+        unit_price: parseFloat(item.unit_price) || parseFloat(item.price) || 0
+      }));
+      
       // Criar objeto de venda
       const saleData = {
         client_id: selectedClient.id,
         employee_id: salesEmployee,
-        type: saleType,
-        items: cartItems,
+        type: saleType || "produto",
+        items: validCartItems,
         total_amount: calculateCartTotal(),
-        final_discount: finalDiscount,
-        final_discount_type: finalDiscountType,
+        final_discount: parseFloat(finalDiscount) || 0,
+        final_discount_type: finalDiscountType || "percentage",
         payment_methods: paymentMethods.map(pm => ({
-          method_id: pm.methodId,
-          amount: pm.amount,
-          installments: pm.installments
+          method_id: pm.methodId || "",
+          amount: parseFloat(pm.amount) || 0,
+          installments: parseInt(pm.installments) || 1
         })),
-        installments: paymentMethods.reduce((total, pm) => total + (pm.installments > 1 ? pm.installments : 0), 0),
-        status: 'finalizada',
+        installments: paymentMethods.reduce((total, pm) => total + (pm.installments > 1 ? parseInt(pm.installments) : 0), 0),
+        status: "finalizada",
         date: new Date().toISOString(),
-        notes: ''
+        notes: ""
       };
       
       // Salvar a venda no banco de dados
@@ -417,100 +458,50 @@ export default function SalesRegister() {
       
       // Criar transações financeiras para cada método de pagamento
       for (const payment of paymentMethods) {
+        if (!payment.methodId || !payment.amount) continue;
+        
         const paymentMethod = availablePaymentMethods.find(m => m.id === payment.methodId);
-        const isPaid = !paymentMethod?.name?.toLowerCase().includes('crédito');
+        const isPaid = !paymentMethod?.name?.toLowerCase().includes("crédito");
         
         // Criar transação financeira
         await FinancialTransaction.create({
-          type: 'receita',
-          category: 'venda',
+          type: "receita",
+          category: "venda",
           description: `Venda #${createdSale.id} - ${saleType}`,
-          amount: payment.amount,
+          amount: parseFloat(payment.amount) || 0,
           payment_method: payment.methodId,
-          status: isPaid ? 'pago' : 'pendente',
+          status: isPaid ? "pago" : "pendente",
           due_date: new Date().toISOString(),
           payment_date: isPaid ? new Date().toISOString() : null,
-          client_id: selectedClient.id,
           sale_id: createdSale.id,
-          installments: payment.installments > 1 ? payment.installments : null,
-          installment_number: payment.installments > 1 ? 1 : null
+          client_id: selectedClient.id,
+          employee_id: salesEmployee,
+          notes: ""
         });
-        
-        // Se for parcelado, criar as parcelas adicionais
-        if (payment.installments > 1) {
-          const installmentValue = payment.amount / payment.installments;
-          
-          for (let i = 1; i < payment.installments; i++) {
-            const dueDate = new Date();
-            dueDate.setMonth(dueDate.getMonth() + i);
-            
-            await FinancialTransaction.create({
-              type: 'receita',
-              category: 'venda',
-              description: `Venda #${createdSale.id} - ${saleType} (Parcela ${i + 1}/${payment.installments})`,
-              amount: installmentValue,
-              payment_method: payment.methodId,
-              status: 'pendente',
-              due_date: dueDate.toISOString(),
-              client_id: selectedClient.id,
-              sale_id: createdSale.id,
-              installments: payment.installments,
-              installment_number: i + 1
-            });
-          }
-        }
       }
       
-      // Atualizar inventário para produtos vendidos
-      for (const item of cartItems) {
-        if (item.type === 'produto') {
-          try {
-            // Buscar produto
-            const product = await Product.get(item.item_id);
-            if (product && product.track_inventory) {
-              // Criar movimento de inventário
-              await Inventory.create({
-                product_id: item.item_id,
-                type: 'saída',
-                quantity: item.quantity,
-                date: new Date().toISOString(),
-                notes: `Venda #${createdSale.id}`
-              });
-            }
-          } catch (error) {
-            console.error("Erro ao atualizar inventário:", error);
-          }
-        }
-      }
-      
-      // Limpar venda não finalizada se existir
-      if (unfinishedSaleId) {
-        try {
-          await UnfinishedSale.delete(unfinishedSaleId);
-        } catch (error) {
-          console.error("Erro ao excluir venda não finalizada:", error);
-        }
-      }
-      
-      toast({
-        title: "Sucesso",
-        description: "Venda finalizada com sucesso",
-        variant: "success"
-      });
-      setShowConfirmDialog(false);
+      // Limpar o carrinho e fechar o diálogo
       setCartItems([]);
       setSelectedClient(null);
       setSalesEmployee("");
       setPaymentMethods([{ methodId: "", amount: 0, installments: 1 }]);
       setFinalDiscount(0);
       setFinalDiscountType("percentage");
+      setShowConfirmDialog(false);
       
-      navigate(createPageUrl('Dashboard'));
+      toast({
+        title: "Sucesso",
+        description: "Venda registrada com sucesso!",
+        variant: "success"
+      });
+      
+      // Redirecionar para a página de detalhes da venda
+      navigate(createPageUrl("sales", createdSale.id));
     } catch (error) {
       console.error("Erro ao confirmar venda:", error);
       toast({
         title: "Erro",
-        description: "Erro ao finalizar a venda",
+        description: "Erro ao registrar a venda. Tente novamente.",
         variant: "destructive"
       });
     } finally {

@@ -97,42 +97,32 @@ export default function CashRegister() {
 
   useEffect(() => {
     const loadInitialData = async () => {
-      console.log("[CashRegister] Iniciando carregamento de dados...");
-      
       try {
-        await loadUserData();
-        await loadClients();
-        await loadAuthorizedEmployees();
-        
-        // Primeiro carregar os registros de caixa
-        await loadCashRegistersWithRetry();
-        
-        // Depois carregar as transações e verificar o status
-        await loadTransactionsWithRetry();
+        await loadCashRegisters();
+        await loadTransactions();
         await checkCashStatus();
-        
-        console.log("[CashRegister] Carregamento inicial concluído");
       } catch (error) {
-        console.error("[CashRegister] Erro no carregamento inicial:", error);
+        console.error("[CashRegister] Erro ao carregar dados iniciais:", error);
       }
     };
-    
+
     loadInitialData();
     
-    // Atualizar a cada 30 segundos
+    // Configurar atualização automática a cada 60 segundos
     const updateInterval = setInterval(async () => {
       try {
-        await loadTransactionsWithRetry();
+        await loadTransactions();
         await checkCashStatus();
       } catch (error) {
         console.error("[CashRegister] Erro na atualização automática:", error);
       }
-    }, 30000);
+    }, 60000);
     
-    return () => clearInterval(updateInterval);
+    return () => {
+      clearInterval(updateInterval);
+    };
   }, []);
 
-  // Monitorar mudanças no status do caixa e nos valores
   useEffect(() => {
     console.log("[CashRegister] Status do caixa alterado:", cashIsOpen ? "Aberto" : "Fechado");
     console.log("[CashRegister] Valor inicial:", initialAmount);
@@ -140,9 +130,15 @@ export default function CashRegister() {
     
     // Forçar atualização dos dados quando o status mudar
     if (cashIsOpen) {
-      loadTransactionsWithRetry();
+      loadTransactions();
     }
   }, [cashIsOpen, initialAmount, dailyBalance]);
+
+  useEffect(() => {
+    if (transactions && Array.isArray(transactions) && transactions.length > 0) {
+      processTransactions(transactions);
+    }
+  }, [transactions]);
 
   const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -265,6 +261,8 @@ export default function CashRegister() {
       }
       
       if (todayTransactions && Array.isArray(todayTransactions)) {
+        // Atualizar o estado das transações antes de processá-las
+        setTransactions(todayTransactions);
         processTransactions(todayTransactions);
         return todayTransactions;
       }
@@ -525,144 +523,100 @@ export default function CashRegister() {
 
   const handleOpenCash = async (employeeName, initialAmountValue) => {
     try {
-      setIsLoading(true);
-      
-      const initialAmountNumber = parseFloat(initialAmountValue);
-      
-      if (isNaN(initialAmountNumber)) {
-        toast({
-          title: "Erro",
-          description: "Valor inicial inválido. Por favor, tente novamente.",
-          variant: "destructive"
-        });
-        setIsLoading(false);
-        return;
-      }
-      
-      console.log("[CashRegister] Abrindo caixa com valor:", initialAmountNumber);
-      
       const today = format(new Date(), "yyyy-MM-dd");
-      const existingOpening = await FinancialTransaction.filter({
-        category: "abertura_caixa",
-        payment_date: today
-      }, true);
+      console.log("[CashRegister] Abrindo caixa para a data:", today);
       
-      if (existingOpening && existingOpening.length > 0) {
-        console.log("[CashRegister] Caixa já aberto hoje:", existingOpening[0]);
-        toast({
-          title: "Aviso",
-          description: "O caixa já foi aberto hoje. Não é possível abrir novamente.",
-          variant: "warning"
-        });
+      // Verificar se o caixa já está aberto
+      if (cashIsOpen) {
+        alert("O caixa já está aberto!");
         setShowOpenCashDialog(false);
-        setCashIsOpen(true);
-        setIsLoading(false);
         return;
       }
-
-      // Fechar o diálogo antes de prosseguir
-      setShowOpenCashDialog(false);
-
+      
+      // Criar transação de abertura
       const openingTransaction = {
         type: "receita",
         category: "abertura_caixa",
         description: "Abertura de Caixa",
-        amount: initialAmountNumber,
+        amount: parseFloat(initialAmountValue) || 0,
         payment_method: "dinheiro",
-        status: "pago",
         payment_date: today,
-        due_date: today,
-        initial_amount: initialAmountNumber,
-        opened_by: employeeName,
-        notes: `Abertura de caixa - Responsável: ${employeeName} - Valor inicial: R$ ${initialAmountNumber.toFixed(2)}`
+        status: "pago",
+        notes: openingNotes,
+        opened_by: employeeName
       };
-
-      console.log("[CashRegister] Criando transação de abertura:", openingTransaction);
-      const result = await FinancialTransaction.create(openingTransaction);
-      console.log("[CashRegister] Transação de abertura criada:", result);
+      
+      // Fechar o diálogo antes de prosseguir para evitar problemas de UI
+      setShowOpenCashDialog(false);
+      
+      // Criar a transação de abertura
+      await FinancialTransaction.create(openingTransaction);
       
       // Atualizar o estado do componente
-      setInitialAmount(initialAmountNumber);
+      setInitialAmount(parseFloat(initialAmountValue) || 0);
+      setOpeningNotes("");
       setCashIsOpen(true);
-      setDailyReceipts(0);
-      setDailyExpenses(0);
-      setDailyBalance(initialAmountNumber);
-      setExpectedCashAmount(initialAmountNumber);
-      
-      // Mostrar mensagem de sucesso usando toast
-      toast({
-        title: "Sucesso",
-        description: "Caixa aberto com sucesso!",
-        variant: "success"
-      });
       
       // Forçar atualização imediata dos dados
-      await Promise.all([
-        loadTransactionsWithRetry(),
-        checkCashStatus(),
-        loadClients(),
-        loadAuthorizedEmployees()
-      ]);
+      await loadTransactions();
+      await loadCashRegisters();
+      await checkCashStatus();
       
+      alert("Caixa aberto com sucesso!");
     } catch (error) {
       console.error("[CashRegister] Erro ao abrir o caixa:", error);
-      toast({
-        title: "Erro",
-        description: "Erro ao abrir o caixa. Tente novamente.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsLoading(false);
+      alert("Erro ao abrir o caixa. Tente novamente.");
     }
   };
 
   const handleCloseCash = async (employeeName) => {
     try {
-      if (!cashIsOpen) {
-        alert("O caixa não está aberto. Não é possível fechá-lo.");
-        setShowCloseCashDialog(false);
-        return;
-      }
-      
       const today = format(new Date(), "yyyy-MM-dd");
-      const existingClosing = cashRegisters.find(r => 
-        r.category === "fechamento_caixa" && 
-        r.payment_date === today
-      );
+      console.log("[CashRegister] Fechando caixa para a data:", today);
       
-      if (existingClosing) {
-        alert("O caixa já foi fechado hoje. Não é possível fechar novamente.");
-        setShowCloseCashDialog(false);
-        setCashIsOpen(false);
+      // Verificar se o caixa já está fechado
+      if (!cashIsOpen) {
+        alert("O caixa já está fechado!");
         return;
       }
       
+      // Dados para fechamento do caixa
+      const closeCashData = {
+        expected_cash: expectedCashAmount,
+        final_amount: finalAmount,
+        difference: finalAmount - expectedCashAmount,
+        notes: closingNotes
+      };
+      
+      // Criar transação de fechamento
       const closingTransaction = {
         type: "despesa",
         category: "fechamento_caixa",
-        description: "Fechamento de Caixa",
-        amount: finalAmount,
+        description: "Fechamento de caixa",
         payment_method: "dinheiro",
-        status: "pago",
         payment_date: today,
-        due_date: today,
+        amount: finalAmount,
         notes: closingNotes,
-        actual_cash: finalAmount,
         expected_cash: closeCashData.expected_cash,
         difference: finalAmount - closeCashData.expected_cash,
         closed_by: employeeName
       };
 
+      // Fechar o diálogo antes de prosseguir para evitar problemas de UI
+      setShowCloseCashDialog(false);
+      
+      // Criar a transação de fechamento
       await FinancialTransaction.create(closingTransaction);
       
-      await loadTransactions();
-      await loadCashRegisters();
-      await checkCashStatus();
-      
-      setShowCloseCashDialog(false);
+      // Atualizar o estado do componente
       setFinalAmount(0);
       setClosingNotes("");
       setCashIsOpen(false);
+      
+      // Forçar atualização imediata dos dados
+      await loadTransactions();
+      await loadCashRegisters();
+      await checkCashStatus();
       
       alert("Caixa fechado com sucesso!");
     } catch (error) {
@@ -674,49 +628,47 @@ export default function CashRegister() {
   const handleCreateTransaction = async (transactionData) => {
     try {
       if (!cashIsOpen) {
-        setErrorMessage("O caixa precisa estar aberto para registrar transações.");
+        alert("O caixa está fechado. Abra o caixa antes de registrar vendas.");
+        setShowNewTransactionDialog(false);
         return;
       }
-
-      const today = format(new Date(), "yyyy-MM-dd");
       
-      // Array para armazenar todas as transações a serem criadas
+      const today = format(new Date(), "yyyy-MM-dd");
+      console.log("[CashRegister] Criando transação para a data:", today);
+      
+      // Validar dados da transação
+      if (!transactionData.items || !Array.isArray(transactionData.items) || transactionData.items.length === 0) {
+        alert("Selecione pelo menos um item para a venda.");
+        return;
+      }
+      
+      // Criar transações para cada item
       const transactionsToCreate = [];
-
-      // Para cada item no carrinho, criar uma transação específica
+      
       for (const item of transactionData.items) {
-        const baseTransaction = {
-          type: "receita",
-          status: "pago",
-          payment_date: today,
-          due_date: today,
-          notes: transactionData.notes || "",
-          client_id: transactionData.client_id || null,
-          client_name: clients.find(c => c.id === transactionData.client_id)?.name || "",
-          payment_method: transactionData.payment_method,
-          seller_id: transactionData.seller_id || null,
-          seller_name: transactionData.seller_name || ""
-        };
-
-        // Adicionar campos específicos baseado no tipo do item
         const itemTransaction = {
-          ...baseTransaction,
-          amount: parseFloat(item.price),
+          type: "receita",
+          category: item.type,
           description: item.name,
-          item_id: item.id,
-          item_type: item.type, // "produto", "servico", "pacote", "gift_card", "assinatura"
-          category: item.type, // Usar o tipo do item como categoria
-          quantity: item.quantity || 1,
-          unit_price: parseFloat(item.price),
-          total_price: parseFloat(item.price) * (item.quantity || 1)
+          amount: parseFloat(item.price) || 0,
+          payment_method: transactionData.payment_method || "dinheiro",
+          payment_date: today,
+          status: "pago",
+          notes: transactionData.notes || "",
+          client_id: transactionData.client_id || "",
+          employee_id: transactionData.employee_id || "",
+          item_id: item.id || ""
         };
-
-        // Adicionar campos específicos para cada tipo
+        
+        // Adicionar campos específicos por tipo
         switch (item.type) {
+          case "produto":
+            itemTransaction.product_quantity = item.quantity;
+            itemTransaction.product_unit_price = item.unit_price;
+            break;
           case "servico":
-            itemTransaction.professional_id = item.professional_id;
-            itemTransaction.professional_name = item.professional_name;
-            itemTransaction.duration = item.duration;
+            itemTransaction.service_professional = item.professional;
+            itemTransaction.service_duration = item.duration;
             break;
           case "pacote":
             itemTransaction.package_sessions = item.sessions;
@@ -735,14 +687,15 @@ export default function CashRegister() {
         transactionsToCreate.push(itemTransaction);
       }
 
+      // Fechar o diálogo antes de criar as transações para evitar problemas de UI
+      setShowNewTransactionDialog(false);
+      
       // Criar todas as transações no Firebase
       await Promise.all(transactionsToCreate.map(transaction => 
         FinancialTransaction.create(transaction)
       ));
       
-      loadTransactions();
-      
-      setShowNewTransactionDialog(false);
+      // Resetar o estado do formulário
       setNewTransaction({
         type: "receita",
         category: "outros",
@@ -753,7 +706,10 @@ export default function CashRegister() {
         client_id: ""
       });
       
-      toast.success("Venda registrada com sucesso!");
+      // Forçar atualização imediata dos dados
+      await loadTransactions();
+      
+      alert("Venda registrada com sucesso!");
     } catch (error) {
       console.error("Erro ao criar transação:", error);
       setErrorMessage("Erro ao registrar a venda. Tente novamente.");
@@ -763,7 +719,7 @@ export default function CashRegister() {
   const getTodayTransactions = () => {
     const today = format(new Date(), "yyyy-MM-dd");
     return transactions.filter(t => {
-      const transactionDate = t.payment_date ? format(new Date(t.payment_date), "yyyy-MM-dd") : null;
+      const transactionDate = t.payment_date ? t.payment_date.split('T')[0] : null;
       return transactionDate === today && 
              t.category !== "abertura_caixa" && 
              t.category !== "fechamento_caixa";
@@ -777,34 +733,36 @@ export default function CashRegister() {
   };
 
   const getCashBalance = () => {
-    const today = format(new Date(), "yyyy-MM-dd");
-    const todayOpening = transactions.find(t => 
-      t.category === "abertura_caixa" && 
-      t.payment_date.split('T')[0] === today
-    ) || cashRegisters.find(r => 
-      r.category === "abertura_caixa" && 
-      r.payment_date === today
-    );
-    
-    const initialAmount = todayOpening ? 
-      (parseFloat(todayOpening.initial_amount) || parseFloat(todayOpening.amount) || 0) : 0;
-    
-    const cashTransactions = transactions.filter(t => 
-      t.payment_date === today && 
-      t.payment_method === "dinheiro" &&
-      t.category !== "abertura_caixa" &&
-      t.category !== "fechamento_caixa"
-    );
-    
-    const cashMovement = cashTransactions.reduce((total, t) => {
-      return total + (t.type === "receita" ? t.amount : -t.amount);
-    }, 0);
-    
-    console.log("Saldo em dinheiro:", initialAmount, "+", cashMovement, "=", initialAmount + cashMovement);
-    
-    return initialAmount + cashMovement;
+    // Usar o valor já calculado no processTransactions
+    return expectedCashAmount;
   };
 
+  const getIncomeByDate = (date) => {
+    const today = format(new Date(), "yyyy-MM-dd");
+    if (date === today) {
+      // Usar o valor já calculado no processTransactions
+      return dailyReceipts;
+    }
+    
+    // Para outras datas, manter o cálculo original
+    return getTransactionsByDate(date)
+      .filter(t => t.type === "receita")
+      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+  };
+
+  const getExpensesByDate = (date) => {
+    const today = format(new Date(), "yyyy-MM-dd");
+    if (date === today) {
+      // Usar o valor já calculado no processTransactions
+      return dailyExpenses;
+    }
+    
+    // Para outras datas, manter o cálculo original
+    return getTransactionsByDate(date)
+      .filter(t => t.type === "despesa")
+      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+  };
+  
   const getTransactionsByDate = (date) => {
     return transactions.filter(t => 
       t.payment_date === date &&
@@ -813,18 +771,6 @@ export default function CashRegister() {
     );
   };
 
-  const getIncomeByDate = (date) => {
-    return getTransactionsByDate(date)
-      .filter(t => t.type === "receita")
-      .reduce((sum, t) => sum + t.amount, 0);
-  };
-
-  const getExpensesByDate = (date) => {
-    return getTransactionsByDate(date)
-      .filter(t => t.type === "despesa")
-      .reduce((sum, t) => sum + t.amount, 0);
-  };
-  
   const getPaymentMethodTotal = (method, type, date = format(new Date(), "yyyy-MM-dd")) => {
     return getTransactionsByDate(date)
       .filter(t => t.payment_method === method && t.type === type)
@@ -1316,9 +1262,9 @@ export default function CashRegister() {
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-2">
-              <DollarSign className={`h-5 w-5 ${getCashBalance() >= 0 ? 'text-green-500' : 'text-red-500'}`} />
+              <DollarSign className={`h-5 w-5 ${expectedCashAmount >= 0 ? 'text-green-500' : 'text-red-500'}`} />
               <span className="text-2xl font-bold">
-                R$ {getCashBalance().toFixed(2)}
+                R$ {expectedCashAmount.toFixed(2)}
               </span>
             </div>
           </CardContent>
@@ -1332,7 +1278,7 @@ export default function CashRegister() {
             <div className="flex items-center gap-2">
               <ArrowUpRight className="h-5 w-5 text-green-500" />
               <span className="text-2xl font-bold text-green-600">
-                R$ {getIncomeByDate(format(new Date(), "yyyy-MM-dd")).toFixed(2)}
+                R$ {dailyReceipts.toFixed(2)}
               </span>
             </div>
           </CardContent>
@@ -1346,7 +1292,7 @@ export default function CashRegister() {
             <div className="flex items-center gap-2">
               <ArrowDownRight className="h-5 w-5 text-red-500" />
               <span className="text-2xl font-bold text-red-600">
-                R$ {getExpensesByDate(format(new Date(), "yyyy-MM-dd")).toFixed(2)}
+                R$ {dailyExpenses.toFixed(2)}
               </span>
             </div>
           </CardContent>
@@ -1360,7 +1306,7 @@ export default function CashRegister() {
             <div className="flex items-center gap-2">
               <CircleDollarSign className="h-5 w-5 text-[#F1F6CE]" />
               <span className="text-2xl font-bold text-[#F1F6CE]">
-                R$ {(getIncomeByDate(format(new Date(), "yyyy-MM-dd")) - getExpensesByDate(format(new Date(), "yyyy-MM-dd"))).toFixed(2)}
+                R$ {dailyBalance.toFixed(2)}
               </span>
             </div>
           </CardContent>
