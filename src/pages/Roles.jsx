@@ -68,7 +68,9 @@ export default function Roles() {
     { id: "manage_appointments", name: "Gerenciar Agendamentos", description: "Criar e gerenciar agendamentos" },
     { id: "manage_sales", name: "Gerenciar Vendas", description: "Registrar e gerenciar vendas" },
     { id: "manage_finances", name: "Gerenciar Finanças", description: "Acesso ao módulo financeiro" },
-    { id: "view_reports", name: "Visualizar Relatórios", description: "Acesso aos relatórios do sistema" }
+    { id: "view_reports", name: "Visualizar Relatórios", description: "Acesso aos relatórios do sistema" },
+    { id: "manage_gift_cards", name: "Gerenciar Gift Cards", description: "Criar e gerenciar gift cards" },
+    { id: "manage_subscriptions", name: "Gerenciar Assinaturas", description: "Gerenciar planos e assinaturas" }
   ];
 
   useEffect(() => {
