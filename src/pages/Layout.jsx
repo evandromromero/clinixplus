@@ -283,7 +283,7 @@ export default function Layout() {
       </aside>
 
       {/* Conteúdo principal */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-y-auto">
         {/* Header */}
         <header className="bg-white shadow-sm">
           <div className="flex items-center justify-between p-4">
@@ -306,7 +306,7 @@ export default function Layout() {
 
         {/* Conteúdo da página */}
         <main className="flex-1 flex flex-col bg-gray-100">
-          <div className="flex-1 p-4 overflow-y-auto">
+          <div className="flex-1 p-4">
             <Outlet />
           </div>
           
