@@ -1,21 +1,86 @@
-# Base44 App
+# ClinixPlus
 
+Sistema de gerenciamento para clínicas estéticas desenvolvido com React e Firebase.
 
-This app was created automatically by Base44.
-It's a Vite+React app that communicates with the Base44 API.
+## Funcionalidades
 
-## Running the app
+### Gestão de Clientes
+- Cadastro e edição de informações dos clientes
+- Visualização detalhada do perfil do cliente
+- Histórico de agendamentos e compras
+- Upload de fotos antes/depois
+- Sistema de observações e acompanhamento
+- Integração híbrida Firebase/Base44 para melhor performance
 
-```bash
-npm install
-npm run dev
+### Padrões de Desenvolvimento
+
+#### Cores
+- Azul Principal: `#3475B8`
+- Azul Secundário: `#518CD0`
+- Status Positivo: `bg-green-100 text-green-700`
+- Status Pendente: `bg-yellow-100 text-yellow-700`
+
+#### Componentes
+- Cards com `shadow-sm` e `rounded-lg`
+- Grids responsivos usando Tailwind CSS
+- Tabs para organização de conteúdo
+- Modais para ações específicas
+
+#### Nomenclatura
+- Funções de evento: `handle[Ação]` (ex: handleUpdateClient)
+- Estados booleanos: `is[Estado]` (ex: isEditing)
+- Classes CSS: Prefixos Tailwind consistentes
+
+#### Firebase Integration
+- Armazenamento de dados do cliente
+- Upload e gerenciamento de imagens
+- Sistema de observações
+- Solução híbrida com Base44 para limites de taxa
+
+## Estrutura do Projeto
+
+```
+src/
+  ├── components/
+  │   └── ...
+  ├── firebase/
+  │   ├── config.js
+  │   ├── entities.js
+  │   └── enhancedEntities.js
+  ├── pages/
+  │   ├── ClientDetails.jsx
+  │   └── ...
+  └── ...
 ```
 
-## Building the app
+## Desenvolvimento
 
-```bash
-npm run build
-```
+### Páginas Implementadas
+
+#### Detalhes do Cliente (ClientDetails.jsx)
+- Visualização e edição de dados do cliente
+- Histórico de agendamentos e compras
+- Sistema de fotos antes/depois
+- Observações e acompanhamento
+- Layout responsivo com cards e tabs
+- Feedback visual para todas as ações
+- Mensagens de fallback para dados vazios
+
+### Integração Firebase/Base44
+- Solução híbrida para melhor performance
+- Métodos principais em entities.js:
+  - update: Atualização de dados do cliente
+  - get: Busca de informações
+  - addObservation: Sistema de observações
+- Sincronização automática entre plataformas
+
+## UI/UX Guidelines
+- Cards com sombras suaves para hierarquia visual
+- Botões com estados hover para feedback
+- Loading states para ações assíncronas
+- Mensagens claras para dados vazios
+- Cores consistentes para status
+- Layout responsivo em todas as telas
 
 ## Notas de Desenvolvimento
 
