@@ -30,6 +30,7 @@ export function createPageUrl(pageName, params) {
     AccountsReceivable: '/accounts-receivable',
     PaymentMethods: '/payment-methods',
     DataManager: '/data-manager',
+    'contract-templates': '/contract-templates',
     Public: '/'
   };
 

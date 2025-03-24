@@ -2,7 +2,7 @@
 import { base44 } from '../api/base44Client';
 import { createEnhancedEntity } from './enhancedEntities';
 import { db } from './config';
-import { collection, doc, getDoc, getDocs, setDoc, deleteDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where, orderBy } from 'firebase/firestore';
 
 // Cria versões aprimoradas das entidades mais utilizadas
 export const Client = createEnhancedEntity('clients', base44.entities.Client);
@@ -35,16 +35,101 @@ export const ClientAuth = base44.entities.ClientAuth;
 export const User = base44.auth;
 
 // Entidades apenas Firebase
+export class ContractTemplate {
+  static collection = 'contract_templates';
+
+  static async create(data) {
+    try {
+      const templateData = {
+        name: data.name,
+        description: data.description,
+        created_at: new Date().toISOString(),
+        sections: data.sections || []
+      };
+
+      const collectionRef = collection(db, this.collection);
+      const docRef = doc(collectionRef);
+      await setDoc(docRef, templateData);
+      
+      return { id: docRef.id, ...templateData };
+    } catch (error) {
+      console.error('Error creating contract template:', error);
+      throw error;
+    }
+  }
+
+  static async list() {
+    try {
+      const collectionRef = collection(db, this.collection);
+      const q = query(collectionRef, orderBy('created_at', 'desc'));
+      const snapshot = await getDocs(q);
+
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('Error listing contract templates:', error);
+      throw error;
+    }
+  }
+
+  static async get(id) {
+    try {
+      const docRef = doc(db, this.collection, id);
+      const docSnap = await getDoc(docRef);
+      
+      if (!docSnap.exists()) {
+        throw new Error('Template not found');
+      }
+
+      return {
+        id: docSnap.id,
+        ...docSnap.data()
+      };
+    } catch (error) {
+      console.error('Error getting contract template:', error);
+      throw error;
+    }
+  }
+
+  static async update(id, data) {
+    try {
+      const docRef = doc(db, this.collection, id);
+      await setDoc(docRef, data, { merge: true });
+      return true;
+    } catch (error) {
+      console.error('Error updating contract template:', error);
+      throw error;
+    }
+  }
+
+  static async delete(id) {
+    try {
+      const docRef = doc(db, this.collection, id);
+      await deleteDoc(docRef);
+      return true;
+    } catch (error) {
+      console.error('Error deleting contract template:', error);
+      throw error;
+    }
+  }
+}
+
 export class Contract {
   static collection = 'contracts';
 
-  static async generate(clientId) {
+  static async generate(clientId, templateId = null) {
     try {
-      const contractData = {
-        client_id: clientId,
-        issue_date: new Date().toISOString(),
-        status: 'draft',
-        content: {
+      let content;
+      
+      if (templateId) {
+        const template = await ContractTemplate.get(templateId);
+        content = {
+          sections: template.sections
+        };
+      } else {
+        content = {
           sections: [
             {
               title: 'Cláusula Primeira - Do Objeto',
@@ -59,10 +144,21 @@ export class Contract {
               content: 'O CONTRATADO se compromete a prestar os serviços com qualidade e profissionalismo...'
             }
           ]
-        }
+        };
+      }
+
+      const contractData = {
+        client_id: clientId,
+        template_id: templateId,
+        issue_date: new Date().toISOString(),
+        status: 'draft',
+        content
       };
 
-      const docRef = await db.collection(this.collection).add(contractData);
+      const collectionRef = collection(db, this.collection);
+      const docRef = doc(collectionRef);
+      await setDoc(docRef, contractData);
+      
       return { id: docRef.id, ...contractData };
     } catch (error) {
       console.error('Error generating contract:', error);
@@ -83,10 +179,13 @@ export class Contract {
 
   static async getByClientId(clientId) {
     try {
-      const snapshot = await db.collection(this.collection)
-        .where('client_id', '==', clientId)
-        .orderBy('issue_date', 'desc')
-        .get();
+      const collectionRef = collection(db, this.collection);
+      const q = query(
+        collectionRef,
+        where('client_id', '==', clientId),
+        orderBy('issue_date', 'desc')
+      );
+      const snapshot = await getDocs(q);
 
       return snapshot.docs.map(doc => ({
         id: doc.id,
@@ -100,7 +199,8 @@ export class Contract {
 
   static async update(contractId, data) {
     try {
-      await db.collection(this.collection).doc(contractId).update(data);
+      const docRef = doc(db, this.collection, contractId);
+      await setDoc(docRef, data, { merge: true });
       return true;
     } catch (error) {
       console.error('Error updating contract:', error);
@@ -110,7 +210,8 @@ export class Contract {
 
   static async delete(contractId) {
     try {
-      await db.collection(this.collection).doc(contractId).delete();
+      const docRef = doc(db, this.collection, contractId);
+      await deleteDoc(docRef);
       return true;
     } catch (error) {
       console.error('Error deleting contract:', error);

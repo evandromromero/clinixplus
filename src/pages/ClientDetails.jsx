@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Client, Appointment, Sale, ClientPackage, Package, Service, Contract } from "@/firebase/entities";
+import { Client, Appointment, Sale, ClientPackage, Package, Service, Contract, ContractTemplate } from "@/firebase/entities";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -39,6 +39,8 @@ export default function ClientDetails() {
   const [packageFilter, setPackageFilter] = useState('all');
   const [periodFilter, setPeriodFilter] = useState('all');
   const [contractData, setContractData] = useState(null);
+  const [templates, setTemplates] = useState([]);
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
   const urlParams = new URLSearchParams(window.location.search);
   const clientId = urlParams.get('id');
 
@@ -89,11 +91,12 @@ export default function ClientDetails() {
 
   useEffect(() => {
     if (clientId) {
-      loadClientData();
+      loadData();
+      loadTemplates();
     }
   }, [clientId]);
 
-  const loadClientData = async () => {
+  const loadData = async () => {
     try {
       const [clientData, appointmentsData, salesData, clientPackagesData, packagesData, servicesData] = await Promise.all([
         Client.list(),
@@ -171,9 +174,18 @@ export default function ClientDetails() {
     }
   };
 
+  const loadTemplates = async () => {
+    try {
+      const data = await ContractTemplate.list();
+      setTemplates(data);
+    } catch (error) {
+      console.error('Error loading templates:', error);
+    }
+  };
+
   const generateContract = async () => {
     try {
-      const contract = await Contract.generate(clientId);
+      const contract = await Contract.generate(clientId, selectedTemplate?.id);
       setContractData(contract);
     } catch (error) {
       console.error(error);
@@ -202,7 +214,7 @@ export default function ClientDetails() {
         <RateLimitHandler
           error={loadError}
           entityName="cliente"
-          onRetry={loadClientData}
+          onRetry={loadData}
         />
       </div>
     );
@@ -608,7 +620,7 @@ export default function ClientDetails() {
                     ...client,
                     dependents: newDependents
                   });
-                  loadClientData();
+                  loadData();
                 }}
               />
             </CardContent>
@@ -636,7 +648,7 @@ export default function ClientDetails() {
                   });
                   setShowDependentForm(false);
                   setEditingDependent(null);
-                  loadClientData();
+                  loadData();
                 }}
                 onCancel={() => {
                   setShowDependentForm(false);
@@ -652,7 +664,19 @@ export default function ClientDetails() {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-xl font-medium text-gray-800">Contrato do Cliente</h3>
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-center">
+                <select
+                  value={selectedTemplate?.id || ''}
+                  onChange={(e) => setSelectedTemplate(templates.find(t => t.id === e.target.value))}
+                  className="border rounded-md px-3 py-2 text-sm"
+                >
+                  <option value="">Modelo Padrão</option>
+                  {templates.map(template => (
+                    <option key={template.id} value={template.id}>
+                      {template.name}
+                    </option>
+                  ))}
+                </select>
                 <button
                   onClick={() => generateContract()}
                   className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#3475B8] rounded-md hover:bg-[#2C64A0] transition-colors"
