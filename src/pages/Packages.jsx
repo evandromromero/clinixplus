@@ -43,6 +43,7 @@ export default function Packages() {
     validity_days: 90,
     total_price: 0,
     discount: 0,
+    discount_type: "percentage", // percentage ou fixed
     services: []
   });
   const [selectedServiceId, setSelectedServiceId] = useState("");
@@ -79,6 +80,7 @@ export default function Packages() {
         validity_days: pkg.validity_days,
         total_price: pkg.total_price,
         discount: pkg.discount || 0,
+        discount_type: pkg.discount_type || "percentage",
         services: pkg.services || []
       });
       setCurrentPackage(pkg);
@@ -90,6 +92,7 @@ export default function Packages() {
         validity_days: 90,
         total_price: 0,
         discount: 0,
+        discount_type: "percentage",
         services: []
       });
       setCurrentPackage(null);
@@ -118,6 +121,7 @@ export default function Packages() {
       validity_days: packageToEdit.validity_days,
       total_price: packageToEdit.total_price,
       discount: packageToEdit.discount || 0,
+      discount_type: packageToEdit.discount_type || "percentage",
       services: updatedServices
     });
 
@@ -172,7 +176,7 @@ export default function Packages() {
       }));
     }
 
-    calculateTotalPrice();
+    calculateFinalPrice();
     
     setSelectedServiceId("");
     setSelectedServiceQuantity(1);
@@ -184,27 +188,39 @@ export default function Packages() {
       services: prev.services.filter(s => s.service_id !== serviceId)
     }));
     
-    calculateTotalPrice();
+    calculateFinalPrice();
   };
 
-  const calculateTotalPrice = () => {
-    const servicesTotal = packageForm.services.reduce((total, service) => {
+  const calculateFinalPrice = () => {
+    const subtotal = packageForm.services.reduce((total, service) => {
       return total + (service.price * service.quantity);
     }, 0);
-    
-    const discountAmount = packageForm.discount > 0 
-      ? (servicesTotal * (packageForm.discount / 100)) 
-      : 0;
-    
+
+    let discount = 0;
+    if (packageForm.discount_type === "percentage") {
+      discount = (subtotal * packageForm.discount) / 100;
+    } else {
+      discount = packageForm.discount;
+    }
+
     setPackageForm(prev => ({
       ...prev,
-      total_price: servicesTotal - discountAmount
+      total_price: subtotal - discount
     }));
   };
 
+  const handleDiscountChange = (value, type) => {
+    setPackageForm(prev => ({
+      ...prev,
+      discount: value,
+      discount_type: type
+    }));
+    calculateFinalPrice();
+  };
+
   useEffect(() => {
-    calculateTotalPrice();
-  }, [packageForm.services, packageForm.discount]);
+    calculateFinalPrice();
+  }, [packageForm.services, packageForm.discount, packageForm.discount_type]);
 
   const handleCreatePackage = async () => {
     try {
@@ -222,6 +238,7 @@ export default function Packages() {
         validity_days: packageForm.validity_days,
         total_price: packageForm.total_price,
         discount: packageForm.discount,
+        discount_type: packageForm.discount_type,
         services: packageForm.services.map(s => ({
           service_id: s.service_id,
           quantity: s.quantity
@@ -444,13 +461,27 @@ export default function Packages() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="discount">Desconto (%)</Label>
-                  <Input
-                    id="discount"
-                    type="number"
-                    value={packageForm.discount}
-                    onChange={(e) => setPackageForm({...packageForm, discount: parseFloat(e.target.value) || 0})}
-                  />
+                  <Label htmlFor="discount">Desconto</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="discount"
+                      type="number"
+                      value={packageForm.discount}
+                      onChange={(e) => handleDiscountChange(parseFloat(e.target.value) || 0, packageForm.discount_type)}
+                    />
+                    <Select
+                      value={packageForm.discount_type}
+                      onValueChange={(value) => handleDiscountChange(packageForm.discount, value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Tipo de desconto" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="percentage">Porcentagem (%)</SelectItem>
+                        <SelectItem value="fixed">Valor fixo (R$)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               </div>
 
@@ -528,12 +559,14 @@ export default function Packages() {
                       {packageForm.discount > 0 && (
                         <TableRow>
                           <TableCell colSpan={3} className="text-right font-medium">
-                            Desconto ({packageForm.discount}%)
+                            Desconto ({packageForm.discount_type === "percentage" ? `${packageForm.discount}%` : `R$ ${formatCurrency(packageForm.discount)}`})
                           </TableCell>
                           <TableCell className="text-right text-red-500">
                             -{formatCurrency(
-                              packageForm.services.reduce((total, s) => total + (s.price * s.quantity), 0) * 
-                              (packageForm.discount / 100)
+                              packageForm.discount_type === "percentage" 
+                                ? packageForm.services.reduce((total, s) => total + (s.price * s.quantity), 0) * 
+                                  (packageForm.discount / 100)
+                                : packageForm.discount
                             )}
                           </TableCell>
                           <TableCell></TableCell>
