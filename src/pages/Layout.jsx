@@ -305,8 +305,17 @@ export default function Layout() {
         </header>
 
         {/* Conteúdo da página */}
-        <main className="flex-1 overflow-y-auto bg-gray-100 p-4">
-          <Outlet />
+        <main className="flex-1 flex flex-col bg-gray-100">
+          <div className="flex-1 p-4 overflow-y-auto">
+            <Outlet />
+          </div>
+          
+          {/* Footer */}
+          <footer className="border-t border-gray-200 py-4 px-6 bg-white">
+            <div className="text-center text-sm text-gray-600">
+              {new Date().getFullYear()} ClinixPlus. Todos os direitos reservados.
+            </div>
+          </footer>
         </main>
       </div>
     </div>
