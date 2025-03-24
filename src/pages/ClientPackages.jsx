@@ -281,7 +281,14 @@ export default function ClientPackages() {
   useEffect(() => {
     loadData();
     checkUnfinishedSales();
-    checkUnfinishedSaleStatus();
+    
+    // Verificar a cada 5 segundos se há atualizações nas vendas
+    const interval = setInterval(() => {
+      checkUnfinishedSaleStatus();
+    }, 5000);
+
+    // Limpar o intervalo quando o componente for desmontado
+    return () => clearInterval(interval);
   }, []);
 
   const loadData = async () => {
@@ -314,56 +321,60 @@ export default function ClientPackages() {
 
   const checkUnfinishedSales = async () => {
     try {
-      const sales = await UnfinishedSale.list();
-      const pendingSales = sales.filter(sale => 
-        sale.status === 'pendente' && 
-        sale.type === 'pacote'
-      );
-
+      // Pega todas as vendas não finalizadas
+      const unfinishedSalesList = await UnfinishedSale.list();
+      
+      // Pega todas as vendas do caixa
+      const allSales = await Sale.list();
+      
+      // Filtra apenas as vendas pendentes que NÃO têm uma venda paga correspondente
+      const pendingSales = unfinishedSalesList.filter(unfinishedSale => {
+        // Verifica se existe uma venda paga correspondente
+        const hasPaidSale = allSales.some(sale => {
+          // Se o status é pago e o sale_id corresponde
+          return sale.status === 'pago' && sale.sale_id === unfinishedSale.sale_id;
+        });
+        
+        // Só mantém na lista se:
+        // 1. É uma venda pendente
+        // 2. NÃO existe uma venda paga correspondente
+        return unfinishedSale.status === 'pendente' && !hasPaidSale;
+      });
+      
+      console.log('Vendas pendentes:', pendingSales);
       setUnfinishedSales(pendingSales);
       setHasUnfinishedSales(pendingSales.length > 0);
     } catch (error) {
       console.error("Erro ao verificar vendas não finalizadas:", error);
-      toast({
-        title: "Erro",
-        description: error.message || "Erro ao verificar vendas não finalizadas. Tente novamente.",
-        variant: "destructive"
-      });
     }
   };
 
   const checkUnfinishedSaleStatus = async () => {
     try {
+      // Pega todas as vendas do caixa
       const sales = await Sale.list();
-      const completedSales = sales.filter(sale => sale.status === 'finalizada');
-
       const unfinishedSalesList = await UnfinishedSale.list();
-
+      
       for (const unfinishedSale of unfinishedSalesList) {
-        if (unfinishedSale.status === 'pendente' && unfinishedSale.client_package_id) {
-          const matchingCompletedSale = completedSales.find(sale => 
-            sale.items && 
-            sale.items.some(item => 
-              item.type === 'pacote' &&
-              item.item_id === unfinishedSale.client_package_id &&
-              sale.client_id === unfinishedSale.client_id
-            )
-          );
-
-          if (matchingCompletedSale) {
-            await UnfinishedSale.update(unfinishedSale.id, { status: 'concluida' });
-          }
+        // Procura uma venda paga correspondente pelo sale_id
+        const paidSale = sales.find(sale => 
+          sale.status === 'pago' && sale.sale_id === unfinishedSale.sale_id
+        );
+        
+        if (paidSale) {
+          console.log('Encontrada venda paga:', paidSale.sale_id);
+          // Atualiza o status da venda não finalizada
+          await UnfinishedSale.update(unfinishedSale.id, {
+            status: 'concluida',
+            date_completed: new Date().toISOString()
+          });
         }
       }
-
+      
+      // Recarrega a lista de vendas não finalizadas
       await checkUnfinishedSales();
     } catch (error) {
       console.error("Erro ao verificar status de vendas não finalizadas:", error);
-      toast({
-        title: "Erro",
-        description: error.message || "Erro ao verificar status de vendas não finalizadas. Tente novamente.",
-        variant: "destructive"
-      });
     }
   };
 
@@ -547,7 +558,9 @@ export default function ClientPackages() {
       try {
         const sales = await Sale.list();
         const relatedSale = sales.find(s => 
-          s.items && s.items.some(item => item.client_package_id === packageId)
+          s.items?.some(item => 
+            item.client_package_id === packageId
+          )
         );
 
         if (relatedSale && relatedSale.status === "pago") {

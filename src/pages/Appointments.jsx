@@ -46,6 +46,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
+import { toast } from "@/components/ui/toast"; // Import the toast component
 
 export default function Appointments() {
   const [date, setDate] = useState(new Date());
@@ -73,6 +74,7 @@ export default function Appointments() {
   const [filteredPackages, setFilteredPackages] = useState([]);
   const [selectedPackageId, setSelectedPackageId] = useState("");
   const [packages, setPackages] = useState([]);
+  const [availableHours, setAvailableHours] = useState([]);
 
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [showMoveDialog, setShowMoveDialog] = useState(false);
@@ -273,6 +275,48 @@ export default function Appointments() {
       format(new Date(app.date), 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd')
     );
   };
+
+  // Função para gerar horários baseados no intervalo do profissional
+  const getAvailableHours = (employeeId) => {
+    if (!employeeId) return timeSlots;
+    
+    const employee = employees.find(emp => emp.id === employeeId);
+    if (!employee || !employee.appointment_interval) return timeSlots;
+    
+    const interval = employee.appointment_interval;
+    const intervalInHours = interval / 60;
+    
+    // Horário de trabalho padrão das 8h às 20h
+    const startHour = 8;
+    const endHour = 20;
+    
+    // Gerar slots baseados no intervalo
+    const slots = [];
+    for (let hour = startHour; hour < endHour; hour += intervalInHours) {
+      // Arredondar para evitar problemas com números decimais
+      const roundedHour = Math.round(hour * 100) / 100;
+      slots.push(roundedHour);
+    }
+    
+    return slots;
+  };
+
+  // Função para formatar a hora
+  const formatHour = (hour) => {
+    const hours = Math.floor(hour);
+    const minutes = Math.round((hour % 1) * 60);
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+  };
+
+  // Atualizar horários quando selecionar o profissional
+  useEffect(() => {
+    if (newAppointment.employee_id) {
+      const hours = getAvailableHours(newAppointment.employee_id);
+      setAvailableHours(hours);
+    } else {
+      setAvailableHours([]);
+    }
+  }, [newAppointment.employee_id]);
 
   const timeSlots = Array.from({ length: 12 }, (_, i) => i + 8);
 
@@ -700,6 +744,44 @@ export default function Appointments() {
     });
   };
 
+  // Função para validar se o horário escolhido respeita o intervalo do profissional
+  const validateAppointmentInterval = (employeeId, selectedHour) => {
+    if (!employeeId) return true;
+    
+    const employee = employees.find(emp => emp.id === employeeId);
+    if (!employee || !employee.appointment_interval) return true;
+    
+    const interval = employee.appointment_interval;
+    const dayAppointments = getDayAppointments(newAppointment.date);
+    const employeeAppointments = dayAppointments.filter(app => app.employee_id === employeeId);
+    
+    // Verificar se existe algum agendamento dentro do intervalo mínimo
+    return !employeeAppointments.some(app => {
+      const appHour = new Date(app.date).getHours();
+      const hourDiff = Math.abs(appHour - selectedHour);
+      return hourDiff < (interval / 60);
+    });
+  };
+
+  // Modificar o onChange do Select de horário para validar o intervalo
+  const handleTimeSelection = (value) => {
+    const selectedHour = parseFloat(value);
+    const isValidInterval = validateAppointmentInterval(newAppointment.employee_id, selectedHour);
+    
+    if (!isValidInterval) {
+      toast({
+        title: "Horário Indisponível",
+        description: "Este horário não respeita o intervalo mínimo entre agendamentos do profissional.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const newDate = new Date(newAppointment.date);
+    newDate.setHours(selectedHour, 0, 0);
+    setNewAppointment({...newAppointment, date: newDate});
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -770,7 +852,7 @@ export default function Appointments() {
                   <h3 className="font-medium">Filtrar Profissionais</h3>
                   <Button 
                     variant="ghost" 
-                    size="sm"
+                    size="sm" 
                     onClick={() => setSelectedEmployees(employees.map(e => e.id))}
                   >
                     Todos
@@ -1075,20 +1157,16 @@ export default function Appointments() {
               <div className="space-y-2">
                 <Label>Hora</Label>
                 <Select
-                  value={String(newAppointment.date.getHours())}
-                  onValueChange={(value) => {
-                    const newDate = new Date(newAppointment.date);
-                    newDate.setHours(parseInt(value), 0, 0);
-                    setNewAppointment({...newAppointment, date: newDate});
-                  }}
+                  value={String(newAppointment.date.getHours() + (newAppointment.date.getMinutes() / 60)).padStart(5, '0')}
+                  onValueChange={handleTimeSelection}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Horário..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {timeSlots.map((hour) => (
+                    {availableHours.map((hour) => (
                       <SelectItem key={hour} value={String(hour)}>
-                        {`${hour}:00`}
+                        {formatHour(hour)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -1179,15 +1257,15 @@ export default function Appointments() {
                   <Label>Horário:</Label>
                   <Select
                     value={moveTarget.hour !== null ? String(moveTarget.hour) : ""}
-                    onValueChange={(value) => setMoveTarget({...moveTarget, hour: parseInt(value)})}
+                    onValueChange={(value) => setMoveTarget({...moveTarget, hour: parseFloat(value)})}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Selecione o horário..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {timeSlots.map((hour) => (
+                      {getAvailableHours(moveTarget.employeeId).map((hour) => (
                         <SelectItem key={hour} value={String(hour)}>
-                          {`${hour}:00`}
+                          {formatHour(hour)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -1331,11 +1409,7 @@ export default function Appointments() {
                                 </div>
                               </div>
                               <div className="flex items-center gap-2">
-                                <Badge variant={
-                                  app.status === 'concluido' ? 'success' :
-                                  app.status === 'cancelado' ? 'destructive' :
-                                  'default'
-                                }>
+                                <Badge variant={app.status === 'concluido' ? 'success' : 'default'}>
                                   {app.status}
                                 </Badge>
                                 

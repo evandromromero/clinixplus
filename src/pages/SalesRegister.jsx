@@ -539,13 +539,26 @@ export default function SalesRegister() {
           installments: parseInt(pm.installments) || 1
         })),
         installments: paymentMethods.reduce((total, pm) => total + (pm.installments > 1 ? parseInt(pm.installments) : 0), 0),
-        status: "finalizada",
+        status: "pago",
         date: new Date().toISOString(),
         notes: ""
       };
       
       // Salvar a venda no banco de dados
       const createdSale = await Sale.create(saleData);
+
+      // Se veio de uma venda não finalizada, atualizar o status
+      const params = new URLSearchParams(window.location.search);
+      const unfinishedSaleId = params.get('unfinished_sale_id');
+      
+      if (unfinishedSaleId) {
+        console.log('Atualizando venda não finalizada:', unfinishedSaleId);
+        await UnfinishedSale.update(unfinishedSaleId, {
+          status: 'concluida',
+          sale_id: createdSale.id,
+          date_completed: new Date().toISOString()
+        });
+      }
       
       // Criar transações financeiras para cada método de pagamento
       for (const payment of paymentMethods) {
