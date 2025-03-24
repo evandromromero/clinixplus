@@ -969,75 +969,21 @@ export default function ClientDetails() {
             <div className="flex items-center justify-between">
               <h3 className="text-xl font-medium text-gray-800">Fotos do Cliente</h3>
               <div className="flex gap-2">
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={(e) => {
-                    if (e.target.files.length === 2) {
-                      setBeforePhoto(e.target.files[0]);
-                      setAfterPhoto(e.target.files[1]);
-                    } else {
-                      toast.error('Selecione exatamente 2 fotos (antes e depois)');
-                    }
-                  }}
-                  className="hidden"
-                  id="photo-upload"
-                />
-                <label
-                  htmlFor="photo-upload"
-                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#3475B8] border border-[#3475B8] rounded-md hover:bg-[#3475B8] hover:text-white transition-colors cursor-pointer"
-                >
-                  <FileUp className="w-4 h-4" />
-                  Enviar Fotos
-                </label>
                 <button
                   onClick={showCamera ? stopCamera : startCamera}
                   className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#3475B8] rounded-md hover:bg-[#2C64A0] transition-colors"
                 >
                   <Camera className="w-4 h-4" />
-                  {showCamera ? 'Parar Câmera' : 'Tirar Foto'}
+                  Tirar Foto
                 </button>
                 <button
                   onClick={() => setShowUploadDialog(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#22C55E] rounded-md hover:bg-[#16A34A] transition-colors"
                 >
-                  <Upload className="h-5 w-5" />
+                  <Upload className="w-4 h-4" />
                   Enviar Fotos
                 </button>
               </div>
-            </div>
-
-            {/* Controles da câmera */}
-            <div className="flex flex-wrap gap-4 mb-6">
-              <button
-                onClick={showCamera ? stopCamera : startCamera}
-                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium ${
-                  showCamera 
-                    ? 'text-red-600 border border-red-600 hover:bg-red-600 hover:text-white' 
-                    : 'text-[#3475B8] border border-[#3475B8] hover:bg-[#3475B8] hover:text-white'
-                } rounded-md transition-colors`}
-              >
-                {showCamera ? (
-                  <>
-                    <X className="w-4 h-4" />
-                    Parar Câmera
-                  </>
-                ) : (
-                  <>
-                    <Camera className="w-4 h-4" />
-                    Tirar Foto
-                  </>
-                )}
-              </button>
-
-              <button
-                onClick={() => setShowUploadDialog(true)}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#3475B8] border border-[#3475B8] rounded-md hover:bg-[#3475B8] hover:text-white transition-colors"
-              >
-                <FileUp className="w-4 h-4" />
-                Enviar Fotos
-              </button>
             </div>
 
             {/* Preview da câmera */}
