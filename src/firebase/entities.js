@@ -2,7 +2,7 @@
 import { base44 } from '../api/base44Client';
 import { createEnhancedEntity } from './enhancedEntities';
 import { db } from './config';
-import { collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where, orderBy } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where, orderBy, addDoc } from 'firebase/firestore';
 
 // Criar as versões base das entidades
 const baseClient = createEnhancedEntity('clients', base44.entities.Client);
@@ -14,7 +14,7 @@ export const Client = {
   ...baseClient,
   collection: 'clients',
   
-  async uploadPhoto(clientId, { before, after }, type = 'upload') {
+  uploadPhoto: async function(clientId, { before, after }, type = 'upload') {
     if (!before || !after) {
       throw new Error('Both before and after photos are required');
     }
@@ -56,7 +56,7 @@ export const Client = {
     }
   },
 
-  async getPhotos(clientId) {
+  getPhotos: async function(clientId) {
     try {
       const collectionRef = collection(db, 'clients', clientId, 'photos');
       const q = query(collectionRef, orderBy('uploadedAt', 'desc'));
@@ -72,12 +72,79 @@ export const Client = {
     }
   },
 
-  async deletePhoto(clientId, photoId) {
+  deletePhoto: async function(clientId, photoId) {
     try {
       const photoRef = doc(db, 'clients', clientId, 'photos', photoId);
       await deleteDoc(photoRef);
     } catch (error) {
       console.error('Error deleting photo:', error);
+      throw error;
+    }
+  },
+
+  getObservations: async function(clientId) {
+    try {
+      const observationsRef = collection(db, 'clients', clientId, 'observations');
+      const observationsSnapshot = await getDocs(observationsRef);
+      return observationsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('Error getting observations:', error);
+      throw error;
+    }
+  },
+
+  addObservation: async function(clientId, observation) {
+    try {
+      const observationsRef = collection(db, 'clients', clientId, 'observations');
+      const docRef = await addDoc(observationsRef, observation);
+      return docRef.id;
+    } catch (error) {
+      console.error('Error adding observation:', error);
+      throw error;
+    }
+  },
+
+  deleteObservation: async function(clientId, observationId) {
+    try {
+      const observationRef = doc(db, 'clients', clientId, 'observations', observationId);
+      await deleteDoc(observationRef);
+    } catch (error) {
+      console.error('Error deleting observation:', error);
+      throw error;
+    }
+  },
+
+  update: async function(clientId, data) {
+    try {
+      const clientRef = doc(db, 'clients', clientId);
+      await setDoc(clientRef, data, { merge: true });
+      
+      // Atualizar também no Base44
+      await baseClient.update(clientId, data);
+    } catch (error) {
+      console.error('Error updating client:', error);
+      throw error;
+    }
+  },
+
+  get: async function(clientId) {
+    try {
+      const docRef = doc(db, 'clients', clientId);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        return {
+          id: docSnap.id,
+          ...docSnap.data()
+        };
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error getting client:', error);
       throw error;
     }
   }
@@ -88,7 +155,7 @@ export const ContractTemplate = {
   ...baseContractTemplate,
   collection: 'contract_templates',
 
-  async create(data) {
+  create: async function(data) {
     try {
       const templateData = {
         name: data.name,
@@ -109,7 +176,7 @@ export const ContractTemplate = {
     }
   },
 
-  async list() {
+  list: async function() {
     try {
       const collectionRef = collection(db, this.collection);
       const q = query(collectionRef, orderBy('created_at', 'desc'));
@@ -125,7 +192,7 @@ export const ContractTemplate = {
     }
   },
 
-  async get(id) {
+  get: async function(id) {
     try {
       const docRef = doc(db, this.collection, id);
       const docSnap = await getDoc(docRef);
@@ -144,7 +211,7 @@ export const ContractTemplate = {
     }
   },
 
-  async update(id, data) {
+  update: async function(id, data) {
     try {
       const docRef = doc(db, this.collection, id);
       await setDoc(docRef, data, { merge: true });
@@ -155,7 +222,7 @@ export const ContractTemplate = {
     }
   },
 
-  async delete(id) {
+  delete: async function(id) {
     try {
       const docRef = doc(db, this.collection, id);
       await deleteDoc(docRef);
@@ -172,7 +239,7 @@ export const Contract = {
   ...baseContract,
   collection: 'contracts',
 
-  async generate(clientId, templateId = null) {
+  generate: async function(clientId, templateId = null) {
     try {
       let content;
       
@@ -221,7 +288,7 @@ export const Contract = {
     }
   },
 
-  async sendByEmail(contractData, email, pdfFileName) {
+  sendByEmail: async function(contractData, email, pdfFileName) {
     try {
       // Aqui você implementará a lógica de envio de email com o seu serviço de email
       console.log('Sending contract by email:', {
@@ -249,7 +316,7 @@ export const Contract = {
     }
   },
 
-  async getByClientId(clientId) {
+  getByClientId: async function(clientId) {
     try {
       const collectionRef = collection(db, this.collection);
       const q = query(
@@ -269,7 +336,7 @@ export const Contract = {
     }
   },
 
-  async update(contractId, data) {
+  update: async function(contractId, data) {
     try {
       const docRef = doc(db, this.collection, contractId);
       await setDoc(docRef, data, { merge: true });
@@ -280,7 +347,7 @@ export const Contract = {
     }
   },
 
-  async delete(contractId) {
+  delete: async function(contractId) {
     try {
       const docRef = doc(db, this.collection, contractId);
       await deleteDoc(docRef);

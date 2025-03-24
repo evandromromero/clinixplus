@@ -6,26 +6,31 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import {
-  User,
-  Phone,
-  MapPin,
+  Activity,
   Calendar,
-  Package as PackageIcon,
-  Clock,
+  CalendarDays,
   Camera,
-  Pencil,
-  Plus,
-  FileText,
-  Share,
-  Printer,
+  Check,
+  Clock,
   FileDown,
-  MessageCircle,
-  Mail,
+  FileText,
   FileUp,
-  X,
-  Trash2,
   Loader2,
-  Upload
+  Mail,
+  MapPin,
+  MessageCircle,
+  Package as PackageIcon,
+  Pencil,
+  Phone,
+  Plus,
+  Printer,
+  Share,
+  ShoppingCart,
+  Trash2,
+  Upload,
+  User,
+  Wallet,
+  X
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -63,6 +68,18 @@ export default function ClientDetails() {
   const [previewAfter, setPreviewAfter] = useState(null);
   const [isCapturingBefore, setIsCapturingBefore] = useState(true);
   const [showUploadDialog, setShowUploadDialog] = useState(false);
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [showObservationDialog, setShowObservationDialog] = useState(false);
+  const [observationText, setObservationText] = useState('');
+  const [observations, setObservations] = useState([]);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState({
+    name: '',
+    phone: '',
+    email: '',
+    address: '',
+    skinType: ''
+  });
   const urlParams = new URLSearchParams(window.location.search);
   const clientId = urlParams.get('id');
 
@@ -116,6 +133,7 @@ export default function ClientDetails() {
       loadData();
       loadTemplates();
       loadPhotos();
+      loadObservations();
     }
   }, [clientId]);
 
@@ -133,6 +151,18 @@ export default function ClientDetails() {
       videoRef.current.srcObject = stream;
     }
   }, [stream]);
+
+  useEffect(() => {
+    if (client) {
+      setEditForm({
+        name: client.name || '',
+        phone: client.phone || '',
+        email: client.email || '',
+        address: client.address || '',
+        skinType: client.skinType || ''
+      });
+    }
+  }, [client]);
 
   const loadData = async () => {
     try {
@@ -228,6 +258,15 @@ export default function ClientDetails() {
     } catch (error) {
       console.error('Error loading photos:', error);
       toast.error('Erro ao carregar fotos');
+    }
+  };
+
+  const loadObservations = async () => {
+    try {
+      const clientObservations = await Client.getObservations(clientId);
+      setObservations(clientObservations || []);
+    } catch (error) {
+      console.error('Error loading observations:', error);
     }
   };
 
@@ -398,6 +437,83 @@ export default function ClientDetails() {
     }
   };
 
+  const openImageModal = (imageUrl) => {
+    setSelectedImage(imageUrl);
+  };
+
+  const closeImageModal = () => {
+    setSelectedImage(null);
+  };
+
+  const addObservation = async () => {
+    if (!observationText.trim()) {
+      toast.error('Por favor, digite uma observação');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      await Client.addObservation(clientId, {
+        text: observationText,
+        createdAt: new Date().toISOString(),
+      });
+
+      // Recarregar observações
+      const updatedObservations = await Client.getObservations(clientId);
+      setObservations(updatedObservations);
+      
+      setObservationText('');
+      setShowObservationDialog(false);
+      toast.success('Observação adicionada com sucesso!');
+    } catch (error) {
+      console.error('Erro ao adicionar observação:', error);
+      toast.error('Erro ao adicionar observação');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const deleteObservation = async (observationId) => {
+    if (!window.confirm('Tem certeza que deseja excluir esta observação?')) {
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      await Client.deleteObservation(clientId, observationId);
+      
+      // Recarregar observações
+      const updatedObservations = await Client.getObservations(clientId);
+      setObservations(updatedObservations);
+      
+      toast.success('Observação excluída com sucesso!');
+    } catch (error) {
+      console.error('Erro ao excluir observação:', error);
+      toast.error('Erro ao excluir observação');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleUpdateClient = async () => {
+    try {
+      setIsLoading(true);
+      await Client.update(clientId, editForm);
+      
+      // Recarregar dados do cliente
+      const updatedClient = await Client.get(clientId);
+      setClient(updatedClient);
+      
+      setIsEditing(false);
+      toast.success('Cliente atualizado com sucesso!');
+    } catch (error) {
+      console.error('Erro ao atualizar cliente:', error);
+      toast.error('Erro ao atualizar cliente');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   if (!client && !loadError) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -420,74 +536,170 @@ export default function ClientDetails() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <h2 className="text-3xl font-bold text-[#175EA0]">Detalhes do Cliente</h2>
-        <div className="flex gap-3">
-          <Button variant="outline">
-            <Pencil className="w-4 h-4 mr-2" />
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold text-[#3475B8]">Detalhes do Cliente</h1>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setIsEditing(true)}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#3475B8] border border-[#3475B8] rounded-md hover:bg-[#3475B8] hover:text-white transition-colors"
+          >
+            <Pencil className="w-4 h-4" />
             Editar
-          </Button>
-          <Link to={createPageUrl("Appointments")}>
-            <Button className="bg-[#518CD0] hover:bg-[#3475B8]">
-              <Plus className="w-4 h-4 mr-2" />
-              Novo Agendamento
-            </Button>
-          </Link>
+          </button>
+          <button
+            onClick={() => router.push('/agendamento/novo?clientId=' + clientId)}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#3475B8] rounded-md hover:bg-[#2C64A0] transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Novo Agendamento
+          </button>
         </div>
       </div>
 
-      {/* Client Info Card */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="grid md:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <User className="w-5 h-5 text-[#518CD0]" />
+      {/* Cabeçalho com informações do cliente */}
+      <div className="bg-white rounded-lg shadow-sm p-6">
+        {!isEditing ? (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="flex items-start gap-3">
+                <User className="w-5 h-5 text-gray-400" />
                 <div>
-                  <p className="text-sm text-[#3475B8]">Nome</p>
-                  <p className="font-medium">{client.name}</p>
+                  <p className="text-sm font-medium text-gray-500">Nome</p>
+                  <p className="text-gray-900">{client?.name}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <Phone className="w-5 h-5 text-[#518CD0]" />
+
+              <div className="flex items-start gap-3">
+                <Phone className="w-5 h-5 text-gray-400" />
                 <div>
-                  <p className="text-sm text-[#3475B8]">Telefone</p>
-                  <p className="font-medium">{client.phone}</p>
+                  <p className="text-sm font-medium text-gray-500">Telefone</p>
+                  <p className="text-gray-900">{client?.phone}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <Mail className="w-5 h-5 text-[#518CD0]" />
+
+              <div className="flex items-start gap-3">
+                <Mail className="w-5 h-5 text-gray-400" />
                 <div>
-                  <p className="text-sm text-[#3475B8]">Email</p>
-                  <p className="font-medium">{client.email}</p>
+                  <p className="text-sm font-medium text-gray-500">Email</p>
+                  <p className="text-gray-900">{client?.email}</p>
                 </div>
               </div>
-            </div>
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <MapPin className="w-5 h-5 text-[#518CD0]" />
+
+              <div className="flex items-start gap-3">
+                <MapPin className="w-5 h-5 text-gray-400" />
                 <div>
-                  <p className="text-sm text-[#3475B8]">Endereço</p>
-                  <p className="font-medium">{client.address}</p>
+                  <p className="text-sm font-medium text-gray-500">Endereço</p>
+                  <p className="text-gray-900">{client?.address || 'Não informado'}</p>
                 </div>
               </div>
-              <div>
-                <p className="text-sm text-[#3475B8] mb-1">Tipo de Pele</p>
-                <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-sm font-medium bg-[#8BBAFF] text-[#175EA0]">
-                  {client.skin_type}
-                </span>
-              </div>
-              {client.allergies && (
+
+              <div className="flex items-start gap-3">
+                <Activity className="w-5 h-5 text-gray-400" />
                 <div>
-                  <p className="text-sm text-[#3475B8] mb-1">Alergias</p>
-                  <p className="font-medium">{client.allergies}</p>
+                  <p className="text-sm font-medium text-gray-500">Tipo de Pele</p>
+                  <p className="text-gray-900">{client?.skinType || 'Não informado'}</p>
                 </div>
-              )}
+              </div>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        ) : (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center mb-6">
+              <h1 className="text-2xl font-bold text-gray-900">Editar Cliente</h1>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setIsEditing(false)}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleUpdateClient}
+                  disabled={isLoading}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#3475B8] rounded-md hover:bg-[#2C64A0] transition-colors disabled:opacity-50"
+                >
+                  {isLoading ? (
+                    <span className="animate-spin">⏳</span>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4" />
+                      Salvar
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Nome
+                </label>
+                <input
+                  type="text"
+                  value={editForm.name}
+                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                  className="w-full p-3 border border-gray-300 rounded-md focus:ring-[#3475B8] focus:border-[#3475B8]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Telefone
+                </label>
+                <input
+                  type="text"
+                  value={editForm.phone}
+                  onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                  className="w-full p-3 border border-gray-300 rounded-md focus:ring-[#3475B8] focus:border-[#3475B8]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  value={editForm.email}
+                  onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                  className="w-full p-3 border border-gray-300 rounded-md focus:ring-[#3475B8] focus:border-[#3475B8]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Endereço
+                </label>
+                <input
+                  type="text"
+                  value={editForm.address}
+                  onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
+                  className="w-full p-3 border border-gray-300 rounded-md focus:ring-[#3475B8] focus:border-[#3475B8]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Tipo de Pele
+                </label>
+                <select
+                  value={editForm.skinType}
+                  onChange={(e) => setEditForm({ ...editForm, skinType: e.target.value })}
+                  className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3475B8] focus:border-transparent"
+                >
+                  <option value="">Selecione...</option>
+                  <option value="normal">Normal</option>
+                  <option value="seca">Seca</option>
+                  <option value="oleosa">Oleosa</option>
+                  <option value="mista">Mista</option>
+                  <option value="sensível">Sensível</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Tabs Content */}
       <Tabs defaultValue="historico" className="space-y-6">
@@ -501,126 +713,107 @@ export default function ClientDetails() {
         </TabsList>
 
         <TabsContent value="historico" className="space-y-6">
-          {/* Histórico de Agendamentos */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-[#518CD0]" />
-                Histórico de Agendamentos
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {appointments.map((appointment, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center justify-between p-3 bg-[#8BBAFF]/10 rounded-lg"
-                  >
-                    <div className="flex items-center gap-3">
-                      <Clock className="w-4 h-4 text-[#518CD0]" />
-                      <div>
-                        <p className="font-medium">
-                          {format(new Date(appointment.date), "dd/MM/yyyy 'às' HH:mm", {
-                            locale: ptBR,
-                          })}
-                        </p>
-                        <p className="text-sm text-[#3475B8]">
-                          {appointment.service_id}
-                        </p>
-                      </div>
-                    </div>
-                    <span
-                      className={`text-sm font-medium px-2.5 py-0.5 rounded-full ${
-                        appointment.status === 'concluído'
-                          ? 'bg-[#518CD0] text-white border border-[#3475B8]'
-                          : appointment.status === 'cancelado'
-                          ? 'bg-red-100 text-red-700 border border-red-200'
-                          : 'bg-blue-100 text-blue-700 border border-blue-200'
-                      }`}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Histórico de Agendamentos */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                  <Calendar className="w-5 h-5 text-[#518CD0]" />
+                  Histórico de Agendamentos
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {appointments.map((appointment, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
                     >
-                      {appointment.status}
-                    </span>
-                  </div>
-                ))}
-                {appointments.length === 0 && (
-                  <p className="text-center text-[#518CD0] py-4">
-                    Nenhum agendamento encontrado
-                  </p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Sales History */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                <PackageIcon className="w-5 h-5 text-[#518CD0]" />
-                Histórico de Compras
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {sales.map((sale, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center justify-between p-3 bg-[#8BBAFF]/10 rounded-lg"
-                  >
-                    <div>
-                      <p className="font-medium">
-                        R$ {sale.total_amount.toFixed(2)}
-                      </p>
-                      <p className="text-sm text-[#3475B8]">
-                        {format(new Date(sale.date), "dd/MM/yyyy", {
-                          locale: ptBR,
-                        })}
-                      </p>
-                    </div>
-                    <div className="text-right">
+                      <div className="flex items-center gap-4">
+                        <div className="flex-shrink-0">
+                          <Clock className="w-5 h-5 text-gray-400" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900">
+                            {format(new Date(appointment.date), "dd/MM/yyyy 'às' HH:mm", {
+                              locale: ptBR,
+                            })}
+                          </p>
+                          <p className="text-sm text-gray-500">{appointment.id}</p>
+                        </div>
+                      </div>
                       <span
-                        className={`text-sm font-medium px-2.5 py-0.5 rounded-full ${
-                          sale.status === 'pago'
-                            ? 'bg-[#518CD0] text-white border border-[#3475B8]'
-                            : sale.status === 'cancelado'
-                            ? 'bg-red-100 text-red-700 border border-red-200'
-                            : 'bg-yellow-100 text-yellow-700 border border-yellow-200'
+                        className={`px-2 py-1 text-xs font-medium rounded-full ${
+                          appointment.status === "concluído"
+                            ? "bg-green-100 text-green-700"
+                            : "bg-yellow-100 text-yellow-700"
                         }`}
                       >
-                        {sale.status}
+                        {appointment.status}
                       </span>
-                      <p className="text-sm text-[#3475B8] mt-1">
-                        {sale.payment_method}
-                      </p>
                     </div>
-                  </div>
-                ))}
-                {sales.length === 0 && (
-                  <p className="text-center text-[#518CD0] py-4">
-                    Nenhuma compra encontrada
-                  </p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Histórico de Compras */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                  <ShoppingCart className="w-5 h-5 text-[#518CD0]" />
+                  Histórico de Compras
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {(sales || []).map((sale, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="flex-shrink-0">
+                          <ShoppingCart className="w-5 h-5 text-gray-400" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-gray-900">
+                              R$ {(sale?.total_amount || 0).toFixed(2)}
+                            </p>
+                          </div>
+                          <p className="text-sm text-gray-500">
+                            {format(new Date(sale?.date || new Date()), "dd/MM/yyyy", {
+                              locale: ptBR,
+                            })}
+                          </p>
+                        </div>
+                      </div>
+                      <span
+                        className={`px-2 py-1 text-xs font-medium rounded-full ${
+                          sale?.status === "finalizada"
+                            ? "bg-green-100 text-green-700"
+                            : "bg-yellow-100 text-yellow-700"
+                        }`}
+                      >
+                        {sale?.status || 'pendente'}
+                      </span>
+                    </div>
+                  ))}
+                  {(!sales || sales.length === 0) && (
+                    <p className="text-center text-gray-500 py-4">
+                      Nenhuma compra encontrada
+                    </p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="pacotes" className="space-y-6">
           {/* Pacotes Ativos */}
           <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  <PackageIcon className="w-5 h-5 text-[#518CD0]" />
-                  Pacotes do Cliente
-                </CardTitle>
-                <Link to={createPageUrl("ClientPackages", { client_id: clientId })}>
-                  <Button variant="outline" size="sm">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Novo Pacote
-                  </Button>
-                </Link>
-              </div>
-            </CardHeader>
             <CardContent>
               <div className="flex gap-4 p-4 bg-white rounded-lg shadow-sm">
                 <div className="flex-1">
@@ -790,20 +983,6 @@ export default function ClientDetails() {
 
         <TabsContent value="dependentes">
           <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg font-semibold">
-                  Dependentes
-                </CardTitle>
-                <Button 
-                  onClick={() => setShowDependentForm(true)}
-                  className="bg-[#518CD0] hover:bg-[#3475B8]"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Adicionar Dependente
-                </Button>
-              </div>
-            </CardHeader>
             <CardContent>
               <DependentList
                 dependents={client.dependents}
@@ -1057,7 +1236,8 @@ export default function ClientDetails() {
                       <img
                         src={photo.before}
                         alt="Foto antes"
-                        className="w-full h-48 object-cover rounded-lg border border-gray-200"
+                        className="w-full h-48 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-90 transition-opacity"
+                        onClick={() => openImageModal(photo.before)}
                       />
                     </div>
                     <div>
@@ -1065,7 +1245,8 @@ export default function ClientDetails() {
                       <img
                         src={photo.after}
                         alt="Foto depois"
-                        className="w-full h-48 object-cover rounded-lg border border-gray-200"
+                        className="w-full h-48 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-90 transition-opacity"
+                        onClick={() => openImageModal(photo.after)}
                       />
                     </div>
                   </div>
@@ -1084,6 +1265,29 @@ export default function ClientDetails() {
                 </div>
               ))}
             </div>
+
+            {/* Modal de visualização da imagem */}
+            {selectedImage && (
+              <div 
+                className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+                onClick={closeImageModal}
+              >
+                <div className="relative max-w-4xl w-full h-full flex items-center justify-center">
+                  <button
+                    onClick={closeImageModal}
+                    className="absolute top-2 right-2 text-white hover:text-gray-300 transition-colors"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                  <img
+                    src={selectedImage}
+                    alt="Imagem ampliada"
+                    className="max-w-full max-h-[90vh] object-contain rounded-lg"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                </div>
+              </div>
+            )}
 
             {/* Diálogo de upload */}
             {showUploadDialog && (
@@ -1151,22 +1355,96 @@ export default function ClientDetails() {
         </TabsContent>
 
         <TabsContent value="observacoes">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg font-semibold">
-                Observações
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {client.notes ? (
-                <p className="whitespace-pre-wrap">{client.notes}</p>
-              ) : (
-                <p className="text-center text-[#518CD0] py-4">
-                  Nenhuma observação encontrada
-                </p>
-              )}
-            </CardContent>
-          </Card>
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h2 className="text-lg font-medium">Observações do Cliente</h2>
+              <button
+                onClick={() => setShowObservationDialog(true)}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#3475B8] rounded-md hover:bg-[#2C64A0] transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Adicionar Observação
+              </button>
+            </div>
+
+            {observations.length === 0 ? (
+              <p className="text-gray-500 text-center py-8">Nenhuma observação encontrada</p>
+            ) : (
+              <div className="space-y-4">
+                {observations.map((obs) => (
+                  <div key={obs.id} className="bg-white p-4 rounded-lg border border-gray-200">
+                    <div className="flex justify-between items-start gap-4">
+                      <div className="flex-1">
+                        <p className="text-gray-700 whitespace-pre-wrap">{obs.text}</p>
+                        <p className="text-sm text-gray-500 mt-2">
+                          {new Date(obs.createdAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => deleteObservation(obs.id)}
+                        className="text-red-600 hover:text-red-700 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Modal para adicionar observação */}
+            {showObservationDialog && (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="bg-white p-6 rounded-lg shadow-xl max-w-lg w-full">
+                  <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-lg font-medium">Adicionar Observação</h2>
+                    <button
+                      onClick={() => setShowObservationDialog(false)}
+                      className="text-gray-400 hover:text-gray-600"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Observação
+                      </label>
+                      <textarea
+                        value={observationText}
+                        onChange={(e) => setObservationText(e.target.value)}
+                        rows={4}
+                        className="w-full p-3 border border-gray-300 rounded-md focus:ring-[#3475B8] focus:border-[#3475B8] resize-none"
+                        placeholder="Digite sua observação aqui..."
+                      />
+                    </div>
+                    <div className="flex justify-end gap-4">
+                      <button
+                        onClick={() => setShowObservationDialog(false)}
+                        className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        onClick={addObservation}
+                        disabled={isLoading}
+                        className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#3475B8] rounded-md hover:bg-[#2C64A0] transition-colors disabled:opacity-50"
+                      >
+                        {isLoading ? (
+                          <span className="animate-spin">⏳</span>
+                        ) : (
+                          <>
+                            <Plus className="w-4 h-4" />
+                            Adicionar
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </TabsContent>
       </Tabs>
     </div>
