@@ -43,7 +43,8 @@ export default function Packages() {
     validity_days: 90,
     total_price: 0,
     discount: 0,
-    discount_type: "percentage", // percentage ou fixed
+    discount_type: "percentage",
+    color: "#294380", // Cor padrão
     services: []
   });
   const [selectedServiceId, setSelectedServiceId] = useState("");
@@ -51,6 +52,16 @@ export default function Packages() {
   const [alert, setAlert] = useState({ type: '', message: '' });
   const [showEditPackageDialog, setShowEditPackageDialog] = useState(false);
   
+  const colors = [
+    "#294380", // Azul principal
+    "#FF6B6B", // Vermelho
+    "#4CAF50", // Verde
+    "#FFA07A", // Salmão
+    "#9370DB", // Roxo
+    "#20B2AA", // Verde água
+    "#FFD700"  // Dourado
+  ];
+
   useEffect(() => {
     loadData();
   }, []);
@@ -81,6 +92,7 @@ export default function Packages() {
         total_price: pkg.total_price,
         discount: pkg.discount || 0,
         discount_type: pkg.discount_type || "percentage",
+        color: pkg.color || "#294380",
         services: pkg.services || []
       });
       setCurrentPackage(pkg);
@@ -93,6 +105,7 @@ export default function Packages() {
         total_price: 0,
         discount: 0,
         discount_type: "percentage",
+        color: "#294380",
         services: []
       });
       setCurrentPackage(null);
@@ -122,6 +135,7 @@ export default function Packages() {
       total_price: packageToEdit.total_price,
       discount: packageToEdit.discount || 0,
       discount_type: packageToEdit.discount_type || "percentage",
+      color: packageToEdit.color || "#294380",
       services: updatedServices
     });
 
@@ -239,6 +253,7 @@ export default function Packages() {
         total_price: packageForm.total_price,
         discount: packageForm.discount,
         discount_type: packageForm.discount_type,
+        color: packageForm.color,
         services: packageForm.services.map(s => ({
           service_id: s.service_id,
           quantity: s.quantity
@@ -358,7 +373,11 @@ export default function Packages() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {packages.map(pkg => (
-                <Card key={pkg.id} className="hover:shadow-md transition-shadow">
+                <Card key={pkg.id} className="hover:shadow-md transition-shadow relative overflow-hidden">
+                  <div 
+                    className="absolute top-0 left-0 w-1 h-full" 
+                    style={{ backgroundColor: pkg.color || "#294380" }}
+                  />
                   <CardHeader className="pb-2">
                     <div className="flex justify-between items-start">
                       <CardTitle className="text-lg">{pkg.name}</CardTitle>
@@ -448,6 +467,21 @@ export default function Packages() {
                   placeholder="Descreva os benefícios deste pacote"
                   rows={3}
                 />
+              </div>
+
+              <div className="space-y-2 mb-4">
+                <Label htmlFor="color">Cor do Pacote</Label>
+                <div className="flex gap-2">
+                  {colors.map(color => (
+                    <button
+                      key={color}
+                      type="button"
+                      className={`w-6 h-6 rounded-full border-2 ${packageForm.color === color ? 'border-black' : 'border-transparent'}`}
+                      style={{ backgroundColor: color }}
+                      onClick={() => setPackageForm(prev => ({ ...prev, color: color }))}
+                    />
+                  ))}
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
