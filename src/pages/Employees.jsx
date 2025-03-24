@@ -48,11 +48,12 @@ import {
   AlertTriangle,
   Scissors,
   Filter,
-  Tag
+  Tag,
+  Shield
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Employee, Service } from "@/firebase/entities";
+import { Employee, Service, Role } from "@/firebase/entities";
 import {
   Pagination,
   PaginationContent,
@@ -67,6 +68,7 @@ import ServiceSelector from "../components/employees/ServiceSelector";
 export default function Employees() {
   const [employees, setEmployees] = useState([]);
   const [services, setServices] = useState([]);
+  const [roles, setRoles] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [serviceSearchTerm, setServiceSearchTerm] = useState("");
   const [serviceFilterCategory, setServiceFilterCategory] = useState("all");
@@ -86,7 +88,7 @@ export default function Employees() {
     cpf: "",
     rg: "",
     birthdate: "",
-    role: "esteticista",
+    roleId: "",
     specialties: [],
     email: "",
     phone: "",
@@ -153,12 +155,14 @@ export default function Employees() {
 
   const loadData = async () => {
     try {
-      const [employeeData, serviceData] = await Promise.all([
+      const [employeeData, serviceData, roleData] = await Promise.all([
         Employee.list(),
-        Service.list()
+        Service.list(),
+        Role.list()
       ]);
       setEmployees(employeeData);
       setServices(serviceData);
+      setRoles(roleData);
     } catch (error) {
       console.error("Error loading data:", error);
       setAlert({
@@ -202,7 +206,7 @@ export default function Employees() {
       cpf: employee.cpf || "",
       rg: employee.rg || "",
       birthdate: employee.birthdate || "",
-      role: employee.role || "esteticista",
+      roleId: employee.roleId || "",
       specialties: employee.specialties || [],
       email: employee.email || "",
       phone: employee.phone || "",
@@ -275,7 +279,7 @@ export default function Employees() {
       cpf: "",
       rg: "",
       birthdate: "",
-      role: "esteticista",
+      roleId: "",
       specialties: [],
       email: "",
       phone: "",
@@ -483,8 +487,8 @@ export default function Employees() {
           <TableHeader>
             <TableRow>
               <TableHead>Nome</TableHead>
-              <TableHead>Contato</TableHead>
               <TableHead>Cargo</TableHead>
+              <TableHead>Contato</TableHead>
               <TableHead>Comissão</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Ações</TableHead>
@@ -505,6 +509,12 @@ export default function Employees() {
                     <div className="text-sm text-gray-500">{employee.cpf}</div>
                   </TableCell>
                   <TableCell>
+                    <div className="flex items-center gap-2">
+                      <Shield className="w-4 h-4" />
+                      <span>{roles.find(r => r.id === employee.roleId)?.name || 'Sem cargo'}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell>
                     {employee.phone && (
                       <div className="flex items-center gap-1">
                         <Phone className="w-4 h-4 text-gray-500" />
@@ -517,11 +527,6 @@ export default function Employees() {
                         {employee.email}
                       </div>
                     )}
-                  </TableCell>
-                  <TableCell>
-                    <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-purple-100 text-purple-700">
-                      {employee.role}
-                    </span>
                   </TableCell>
                   <TableCell>{employee.commission_rate}%</TableCell>
                   <TableCell>
@@ -1054,20 +1059,18 @@ export default function Employees() {
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="role">Cargo*</Label>
+                      <Label htmlFor="roleId">Cargo*</Label>
                       <Select
-                        value={newEmployee.role}
-                        onValueChange={(value) => setNewEmployee({...newEmployee, role: value})}
+                        value={newEmployee.roleId}
+                        onValueChange={(value) => setNewEmployee({...newEmployee, roleId: value})}
                       >
-                        <SelectTrigger id="role">
+                        <SelectTrigger id="roleId">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="esteticista">Esteticista</SelectItem>
-                          <SelectItem value="dermatologista">Dermatologista</SelectItem>
-                          <SelectItem value="massoterapeuta">Massoterapeuta</SelectItem>
-                          <SelectItem value="administrativo">Administrativo</SelectItem>
-                          <SelectItem value="recepcionista">Recepcionista</SelectItem>
+                          {roles.map(role => (
+                            <SelectItem key={role.id} value={role.id}>{role.name}</SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
@@ -1293,7 +1296,7 @@ export default function Employees() {
             <Button 
               onClick={handleCreateEmployee}
               className="bg-purple-600 hover:bg-purple-700"
-              disabled={!newEmployee.name || !newEmployee.role}
+              disabled={!newEmployee.name || !newEmployee.roleId}
             >
               {isEditing ? "Atualizar" : "Salvar"} Funcionário
             </Button>
