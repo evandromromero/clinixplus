@@ -65,6 +65,91 @@ export default function SalesRegister() {
   const [isLoading, setIsLoading] = useState(true);
   const [retryCount, setRetryCount] = useState(0);
   
+  const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+  
+  const fetchWithRetry = async (fn, maxRetries = 3, initialDelay = 1000) => {
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        return await fn();
+      } catch (error) {
+        console.error(`[SalesRegister] Erro na tentativa ${i + 1}/${maxRetries}:`, error);
+        if (i < maxRetries - 1) {
+          const delayMs = initialDelay * Math.pow(2, i);
+          console.log(`[SalesRegister] Tentando novamente em ${delayMs}ms...`);
+          await delay(delayMs);
+        } else {
+          throw error;
+        }
+      }
+    }
+  };
+  
+  const loadDataWithRetry = async (maxRetries = 3) => {
+    try {
+      setIsLoading(true);
+      
+      // Usa Promise.allSettled para permitir que as chamadas sejam feitas em paralelo
+      // e não falhar completamente se apenas algumas APIs falharem
+      const results = await Promise.allSettled([
+        fetchWithRetry(() => Client.list(), maxRetries),
+        fetchWithRetry(() => Product.list(), maxRetries),
+        fetchWithRetry(() => Service.list(), maxRetries),
+        fetchWithRetry(() => Package.list(), maxRetries),
+        fetchWithRetry(() => GiftCard.list(), maxRetries),
+        fetchWithRetry(() => SubscriptionPlan.list(), maxRetries),
+        fetchWithRetry(() => Employee.list(), maxRetries),
+        fetchWithRetry(() => PaymentMethod.list(), maxRetries)
+      ]);
+      
+      // Processa os resultados
+      const [
+        clientsResult,
+        productsResult,
+        servicesResult,
+        packagesResult,
+        giftCardsResult,
+        subscriptionPlansResult,
+        employeesResult,
+        paymentMethodsResult
+      ] = results;
+      
+      // Atualiza os estados com os dados obtidos, usando arrays vazios para falhas
+      setClients(clientsResult.status === 'fulfilled' ? clientsResult.value : []);
+      setProducts(productsResult.status === 'fulfilled' ? productsResult.value : []);
+      setServices(servicesResult.status === 'fulfilled' ? servicesResult.value : []);
+      setPackages(packagesResult.status === 'fulfilled' ? packagesResult.value : []);
+      setGiftCards(giftCardsResult.status === 'fulfilled' ? giftCardsResult.value : []);
+      setSubscriptionPlans(subscriptionPlansResult.status === 'fulfilled' ? subscriptionPlansResult.value : []);
+      setEmployees(employeesResult.status === 'fulfilled' ? employeesResult.value : []);
+      setAvailablePaymentMethods(paymentMethodsResult.status === 'fulfilled' ? paymentMethodsResult.value : []);
+      
+      // Verifica se alguma chamada falhou
+      const failedCalls = results.filter(r => r.status === 'rejected');
+      if (failedCalls.length > 0) {
+        console.warn(`[SalesRegister] ${failedCalls.length} chamadas falharam ao carregar dados`);
+        toast({
+          title: "Aviso",
+          description: "Alguns dados podem estar desatualizados. Tente recarregar a página.",
+          variant: "warning"
+        });
+      } else {
+        console.log("[SalesRegister] Todos os dados foram carregados com sucesso");
+      }
+      
+      return true;
+    } catch (error) {
+      console.error("[SalesRegister] Erro ao carregar dados:", error);
+      toast({
+        title: "Erro",
+        description: "Erro ao carregar dados. Tente recarregar a página.",
+        variant: "destructive"
+      });
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Função para formatar valores monetários
   const formatCurrency = (value) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -392,6 +477,12 @@ export default function SalesRegister() {
     try {
       setIsLoading(true);
       
+      // Verificar se o caixa ainda está aberto
+      const isCashOpen = await checkCashRegister();
+      if (!isCashOpen) {
+        return; // checkCashRegister já mostra o toast e redireciona
+      }
+      
       // Validações
       if (!selectedClient?.id) {
         toast({
@@ -480,7 +571,7 @@ export default function SalesRegister() {
         });
       }
       
-      // Limpar o carrinho e fechar o diálogo
+      // Limpar o estado e manter na página de vendas
       setCartItems([]);
       setSelectedClient(null);
       setSalesEmployee("");
@@ -495,8 +586,8 @@ export default function SalesRegister() {
         variant: "success"
       });
       
-      // Redirecionar para a página de detalhes da venda
-      navigate(createPageUrl("sales", createdSale.id));
+      // Recarregar os dados
+      await loadDataWithRetry();
     } catch (error) {
       console.error("Erro ao confirmar venda:", error);
       toast({
@@ -509,222 +600,36 @@ export default function SalesRegister() {
     }
   };
 
-  // Função para criar um atraso com tempo variável
-  const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-  // Função para carregar dados com retry e backoff exponencial
-  const loadDataWithRetry = async (maxRetries = 3) => {
+  // Função para verificar se o caixa está aberto
+  const checkCashRegister = async () => {
     try {
-      setIsLoading(true);
-      // Usa Promise.allSettled para permitir que as chamadas sejam feitas em paralelo
-      // e não falhar completamente se apenas algumas APIs falharem
-      const results = await Promise.allSettled([
-        fetchWithRetry(() => Client.list(), maxRetries),
-        fetchWithRetry(() => Product.list(), maxRetries),
-        fetchWithRetry(() => Service.list(), maxRetries),
-        fetchWithRetry(() => Package.list(), maxRetries),
-        fetchWithRetry(() => GiftCard.list(), maxRetries),
-        fetchWithRetry(() => SubscriptionPlan.list(), maxRetries),
-        fetchWithRetry(() => Employee.list(), maxRetries),
-        fetchWithRetry(() => PaymentMethod.list(), maxRetries)
-      ]);
-      
-      // Processa os resultados usando dados padrão se alguma chamada falhar
-      const clientsData = results[0].status === 'fulfilled' ? results[0].value : [];
-      const productsData = results[1].status === 'fulfilled' ? results[1].value : [];
-      const servicesData = results[2].status === 'fulfilled' ? results[2].value : [];
-      const packagesData = results[3].status === 'fulfilled' ? results[3].value : [];
-      const giftCardsData = results[4].status === 'fulfilled' ? results[4].value : [];
-      const subscriptionPlansData = results[5].status === 'fulfilled' ? results[5].value : [];
-      const employeesData = results[6].status === 'fulfilled' ? results[6].value : [];
-      const paymentMethodsData = results[7].status === 'fulfilled' ? results[7].value : [];
-      
-      // Atualiza estados apenas com dados válidos
-      if (clientsData.length > 0) setClients(clientsData);
-      if (productsData.length > 0) setProducts(productsData);
-      if (servicesData.length > 0) setServices(servicesData);
-      if (packagesData.length > 0) setPackages(packagesData);
-      if (giftCardsData.length > 0) setGiftCards(giftCardsData.filter(gc => gc.status === "ativo"));
-      if (subscriptionPlansData.length > 0) setSubscriptionPlans(subscriptionPlansData.filter(sp => sp.is_active));
-      if (employeesData.length > 0) setEmployees(employeesData);
-      
-      // Para métodos de pagamento, adiciona fallbacks para garantir que algum método esteja disponível
-      let availableMethods = [];
-      if (paymentMethodsData.length > 0) {
-        availableMethods = paymentMethodsData.filter(pm => pm.isActive);
-      } else {
-        // Dados fallback caso a API falhe
-        availableMethods = [
-          { id: "dinheiro", name: "Dinheiro", isActive: true, type: "dinheiro", allowsInstallments: false },
-          { id: "cartao_credito", name: "Cartão de Crédito", isActive: true, type: "cartao_credito", allowsInstallments: true, maxInstallments: 12 },
-          { id: "cartao_debito", name: "Cartão de Débito", isActive: true, type: "cartao_debito", allowsInstallments: false },
-          { id: "pix", name: "PIX", isActive: true, type: "pix", allowsInstallments: false }
-        ];
-      }
-      
-      setAvailablePaymentMethods(availableMethods);
-      
-      // Atualiza métodos de pagamento iniciais
-      if (availableMethods.length > 0) {
-        const firstActive = availableMethods[0];
-        setPaymentMethods([{ 
-          methodId: firstActive.id, 
-          amount: 0, 
-          installments: 1 
-        }]);
-      }
-      
-      // Verifica se há erros graves que precisam ser notificados ao usuário
-      const failedRequests = results.filter(r => r.status === 'rejected').length;
-      if (failedRequests > 0) {
+      const today = format(new Date(), "yyyy-MM-dd");
+      const transactions = await FinancialTransaction.list();
+      const cashOpening = transactions.find(t => 
+        t.category === "abertura_caixa" && 
+        t.payment_date.split('T')[0] === today
+      );
+
+      if (!cashOpening) {
         toast({
-          title: "Erro",
-          description: "Alguns dados não puderam ser carregados",
-          variant: "destructive"
+          title: "Aviso",
+          description: "O caixa precisa ser aberto antes de realizar vendas",
+          variant: "warning"
         });
+        navigate(createPageUrl('CashRegister'));
+        return false;
       }
-      
-      // Inicialize dados simulados para casos extremos onde muitas chamadas falharam
-      if (failedRequests > 5) {
-        loadSimulatedData();
-      }
-      
+
+      setCashIsOpen(true);
+      return true;
     } catch (error) {
-      console.error("Erro final ao carregar dados:", error);
+      console.error('Erro ao verificar caixa:', error);
       toast({
         title: "Erro",
-        description: "Houve um problema ao carregar os dados",
+        description: "Erro ao verificar status do caixa",
         variant: "destructive"
       });
-      loadSimulatedData();
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Função para carregar dados simulados se as APIs falharem
-  const loadSimulatedData = () => {
-    console.log("Carregando dados simulados...");
-    
-    // Clientes simulados
-    if (clients.length === 0) {
-      setClients([
-        { id: "sim_client1", name: "Maria Silva", email: "maria@example.com", phone: "(11) 98765-4321" },
-        { id: "sim_client2", name: "João Santos", email: "joao@example.com", phone: "(11) 91234-5678" }
-      ]);
-    }
-    
-    // Produtos simulados
-    if (products.length === 0) {
-      setProducts([
-        { id: "sim_prod1", name: "Creme Facial", price: 89.90, stock: 10, category: "cosmético" },
-        { id: "sim_prod2", name: "Sérum Anti-idade", price: 129.90, stock: 5, category: "cosmético" }
-      ]);
-    }
-    
-    // Serviços simulados
-    if (services.length === 0) {
-      setServices([
-        { id: "sim_serv1", name: "Limpeza de Pele", price: 120, duration: 60, category: "facial" },
-        { id: "sim_serv2", name: "Massagem Relaxante", price: 150, duration: 60, category: "massagem" }
-      ]);
-    }
-    
-    // Pacotes simulados
-    if (packages.length === 0) {
-      setPackages([
-        { 
-          id: "sim_pkg1", 
-          name: "Pacote Facial Completo", 
-          total_price: 450, 
-          services: [{ service_id: "sim_serv1", quantity: 3 }],
-          validity_days: 90
-        }
-      ]);
-    }
-    
-    // Funcionários simulados
-    if (employees.length === 0) {
-      setEmployees([
-        { id: "sim_emp1", name: "Ana Terapeuta", role: "esteticista" },
-        { id: "sim_emp2", name: "Carlos Massagista", role: "massoterapeuta" }
-      ]);
-    }
-    
-    // Métodos de pagamento simulados
-    if (availablePaymentMethods.length === 0) {
-      const simulatedMethods = [
-        { id: "dinheiro", name: "Dinheiro", isActive: true, type: "dinheiro", allowsInstallments: false },
-        { id: "cartao_credito", name: "Cartão de Crédito", isActive: true, type: "cartao_credito", allowsInstallments: true, maxInstallments: 12 },
-        { id: "cartao_debito", name: "Cartão de Débito", isActive: true, type: "cartao_debito", allowsInstallments: false },
-        { id: "pix", name: "PIX", isActive: true, type: "pix", allowsInstallments: false }
-      ];
-      
-      setAvailablePaymentMethods(simulatedMethods);
-      setPaymentMethods([{ methodId: "dinheiro", amount: 0, installments: 1 }]);
-    }
-  };
-
-  // Função para fazer chamadas de API com retry
-  const fetchWithRetry = async (fetchFn, maxRetries, initialDelay = 1000) => {
-    let lastError;
-    
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-      try {
-        // Adiciona um atraso progressivo entre as tentativas (exceto a primeira)
-        if (attempt > 0) {
-          const delayMs = initialDelay * Math.pow(2, attempt);
-          console.log(`Tentativa ${attempt + 1}: aguardando ${delayMs}ms antes de tentar novamente...`);
-          await delay(delayMs);
-        }
-        
-        const result = await fetchFn();
-        return result;
-      } catch (error) {
-        console.error(`Tentativa ${attempt + 1} falhou:`, error);
-        lastError = error;
-        
-        // Verifique se é um erro de rate limit
-        const isRateLimit = 
-          error.message?.includes('429') || 
-          error.message?.includes('Rate limit') || 
-          error.toString().includes('429');
-          
-        if (isRateLimit) {
-          // Para rate limit, adiciona um atraso extra
-          await delay(2000 + (attempt * 1000));
-        }
-        
-        // Se não for a última tentativa, continua tentando
-        if (attempt < maxRetries - 1) continue;
-        
-        // Na última tentativa, propaga o erro
-        throw error;
-      }
-    }
-  };
-
-  const checkCashStatus = async () => {
-    try {
-      // Primeiro tenta obter do localStorage
-      const storedCashStatus = localStorage.getItem('cashIsOpen');
-      if (storedCashStatus !== null) {
-        setCashIsOpen(storedCashStatus === 'true');
-      }
-      
-      // Depois tenta atualizar do servidor
-      const data = await FinancialTransaction.filter({
-        category: "abertura_caixa",
-        payment_date: format(new Date(), "yyyy-MM-dd")
-      });
-      
-      const isOpen = data && data.length > 0;
-      setCashIsOpen(isOpen);
-      localStorage.setItem('cashIsOpen', isOpen ? 'true' : 'false');
-      
-    } catch (error) {
-      console.error("Error checking cash status:", error);
-      // Se falhar, mantém o valor do localStorage
+      return false;
     }
   };
 
@@ -792,93 +697,28 @@ export default function SalesRegister() {
     loadUrlData();
   }, []);
 
-  // Função para verificar se o caixa está aberto
-  const checkCashRegister = async () => {
-    try {
-      const today = format(new Date(), "yyyy-MM-dd");
-      const transactions = await FinancialTransaction.list();
-      const cashOpening = transactions.find(t => 
-        t.category === "abertura_caixa" && 
-        t.payment_date.split('T')[0] === today
-      );
-
-      if (!cashOpening) {
-        toast({
-          title: "Aviso",
-          description: "O caixa precisa ser aberto antes de realizar vendas",
-          variant: "warning"
-        });
-        navigate(createPageUrl('CashRegister'));
-        return false;
-      }
-
-      setCashIsOpen(true);
-      return true;
-    } catch (error) {
-      console.error('Erro ao verificar caixa:', error);
-      toast({
-        title: "Erro",
-        description: "Erro ao verificar status do caixa",
-        variant: "destructive"
-      });
-      return false;
-    }
-  };
-
-  // Função para carregar dados iniciais
-  const loadData = async () => {
-    try {
-      setIsLoading(true);
-      
-      const [
-        clientsData,
-        productsData,
-        servicesData,
-        packagesData,
-        giftCardsData,
-        subscriptionPlansData,
-        employeesData,
-        paymentMethodsData
-      ] = await Promise.all([
-        Client.list(),
-        Product.list(),
-        Service.list(),
-        Package.list(),
-        GiftCard.list(),
-        SubscriptionPlan.list(),
-        Employee.list(),
-        PaymentMethod.list()
-      ]);
-
-      setClients(clientsData);
-      setProducts(productsData);
-      setServices(servicesData);
-      setPackages(packagesData);
-      setGiftCards(giftCardsData);
-      setSubscriptionPlans(subscriptionPlansData);
-      setEmployees(employeesData);
-      setAvailablePaymentMethods(paymentMethodsData);
-
-      await checkCashRegister();
-    } catch (error) {
-      console.error('Erro ao carregar dados:', error);
-      toast({
-        title: "Erro",
-        description: "Não foi possível carregar os dados necessários",
-        variant: "destructive"
-      });
-
-      if (retryCount < 3) {
-        setRetryCount(prev => prev + 1);
-        setTimeout(loadData, 2000);
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   useEffect(() => {
-    loadData();
+    const initializeData = async () => {
+      try {
+        // Primeiro verifica se o caixa está aberto
+        const isCashOpen = await checkCashRegister();
+        if (!isCashOpen) {
+          return; // Se o caixa não estiver aberto, não carrega os dados
+        }
+        
+        // Se o caixa estiver aberto, carrega os dados
+        await loadDataWithRetry();
+      } catch (error) {
+        console.error("[SalesRegister] Erro na inicialização:", error);
+        toast({
+          title: "Erro",
+          description: "Erro ao inicializar o registro de vendas",
+          variant: "destructive"
+        });
+      }
+    };
+
+    initializeData();
   }, []);
 
   // Renderização condicional para caixa fechado
@@ -1075,7 +915,9 @@ export default function SalesRegister() {
                   {cartItems.length === 0 ? (
                     <div className="text-center py-8 bg-gray-50 rounded-lg border">
                       <ShoppingBag className="h-8 w-8 mx-auto text-gray-400" />
-                      <p className="mt-2 text-gray-500">Nenhum item adicionado</p>
+                      <p className="text-gray-500">
+                        Nenhum item adicionado
+                      </p>
                     </div>
                   ) : (
                     <Table>
