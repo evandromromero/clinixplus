@@ -363,7 +363,19 @@ export const Contract = {
 export const Appointment = createEnhancedEntity('appointments', base44.entities.Appointment);
 export const Sale = createEnhancedEntity('sales', null); 
 export const FinancialTransaction = createEnhancedEntity('financial_transactions', base44.entities.FinancialTransaction);
-export const ClientPackage = createEnhancedEntity('client_packages', base44.entities.ClientPackage);
+export const ClientPackage = createEnhancedEntity('client_packages', {
+  create: true,
+  update: true,
+  delete: true,
+  list: true,
+  get: true,
+  query: true,
+  defaultData: {
+    dependents: [],
+    session_history: [],
+    status: 'ativo'
+  }
+});
 export const Package = createEnhancedEntity('packages', base44.entities.Package);
 export const Service = createEnhancedEntity('services', base44.entities.Service);
 export const Product = createEnhancedEntity('products', base44.entities.Product);
@@ -381,9 +393,40 @@ export const Employee = createEnhancedEntity('employees', base44.entities.Employ
 export const CompanySettings = createEnhancedEntity('company_settings', base44.entities.CompanySettings);
 export const SlideShowImage = createEnhancedEntity('slideshow_images', base44.entities.SlideShowImage);
 export const Testimonial = createEnhancedEntity('testimonials', base44.entities.Testimonial);
+export const Anamnesis = createEnhancedEntity('anamnesis', {
+  create: true,
+  update: true,
+  delete: true,
+  list: true,
+  get: true,
+  query: true,
+  defaultData: {
+    skin_type: "",
+    allergies: "",
+    health_conditions: "",
+    medications: "",
+    observations: "",
+    last_update: ""
+  }
+});
 
 // Exporta as entidades originais para as demais (que serão migradas gradualmente)
 export const ClientAuth = base44.entities.ClientAuth;
 
 // Auth SDK
 export const User = base44.auth;
+
+export const FIREBASE_ONLY_ENTITIES = [
+  'appointments',
+  'employees',
+  'services',
+  'payment_methods',
+  'company_settings',
+  'slideshow_images',
+  'testimonials',
+  'inventory',
+  'inventory_movements',
+  'products',
+  'anamnesis',
+  'client_packages'
+];

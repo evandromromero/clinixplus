@@ -8,7 +8,8 @@ import {
   Service, 
   Sale, 
   UnfinishedSale,
-  Employee
+  Employee,
+  Anamnesis
 } from "@/firebase/entities";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,6 +54,16 @@ export default function ClientPackages() {
   const [selectedClient, setSelectedClient] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("todos");
   const [selectedPackage, setSelectedPackage] = useState("");
+  const [anamnesis, setAnamnesis] = useState(null);
+  const [isEditingAnamnesis, setIsEditingAnamnesis] = useState(false);
+  const [anamnesisForm, setAnamnesisForm] = useState({
+    skin_type: "",
+    allergies: "",
+    health_conditions: "",
+    medications: "",
+    observations: "",
+    last_update: ""
+  });
 
   const [showSellDialog, setShowSellDialog] = useState(false);
   const [sellForm, setSellForm] = useState({
@@ -104,6 +115,13 @@ export default function ClientPackages() {
     purchase_date: format(new Date(), 'yyyy-MM-dd'),
     expiration_date: format(addDays(new Date(), 90), 'yyyy-MM-dd'),
     sell_now: false
+  });
+
+  const [showAddDependentDialog, setShowAddDependentDialog] = useState(false);
+  const [dependentForm, setDependentForm] = useState({
+    name: "",
+    birth_date: format(new Date(), 'yyyy-MM-dd'),
+    relationship: ""
   });
 
   const resetNewPackageForm = () => {
@@ -377,6 +395,78 @@ export default function ClientPackages() {
       console.error("Erro ao verificar status de vendas não finalizadas:", error);
     }
   };
+
+  const loadAnamnesis = async (clientId) => {
+    try {
+      const clientAnamnesis = await Anamnesis.query({ client_id: clientId });
+      if (clientAnamnesis && clientAnamnesis.length > 0) {
+        setAnamnesis(clientAnamnesis[0]);
+        setAnamnesisForm({
+          skin_type: clientAnamnesis[0].skin_type || "",
+          allergies: clientAnamnesis[0].allergies || "",
+          health_conditions: clientAnamnesis[0].health_conditions || "",
+          medications: clientAnamnesis[0].medications || "",
+          observations: clientAnamnesis[0].observations || "",
+          last_update: clientAnamnesis[0].last_update || ""
+        });
+      } else {
+        setAnamnesis(null);
+        setAnamnesisForm({
+          skin_type: "",
+          allergies: "",
+          health_conditions: "",
+          medications: "",
+          observations: "",
+          last_update: ""
+        });
+      }
+    } catch (error) {
+      console.error("Erro ao carregar anamnese:", error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível carregar a anamnese do cliente.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleSaveAnamnesis = async () => {
+    try {
+      const data = {
+        ...anamnesisForm,
+        client_id: selectedPackage.client_id,
+        last_update: new Date().toISOString()
+      };
+
+      if (anamnesis) {
+        await Anamnesis.update(anamnesis.id, data);
+      } else {
+        await Anamnesis.create(data);
+      }
+
+      await loadAnamnesis(selectedPackage.client_id);
+      setIsEditingAnamnesis(false);
+      
+      toast({
+        title: "Sucesso",
+        description: "Anamnese salva com sucesso!",
+        variant: "success"
+      });
+    } catch (error) {
+      console.error("Erro ao salvar anamnese:", error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível salvar a anamnese.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (selectedPackage && selectedPackage.client_id) {
+      loadAnamnesis(selectedPackage.client_id);
+    }
+  }, [selectedPackage]);
 
   const checkAndUpdatePackageStatus = async () => {
     const today = new Date();
@@ -906,6 +996,80 @@ export default function ClientPackages() {
     }
   };
 
+  const handleAddDependent = async () => {
+    try {
+      if (!dependentForm.name || !dependentForm.birth_date) {
+        toast({
+          title: "Erro",
+          description: "Nome e data de nascimento são obrigatórios",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      const updatedPackage = {
+        ...selectedPackage,
+        dependents: [
+          ...(selectedPackage.dependents || []),
+          {
+            ...dependentForm,
+            added_at: new Date().toISOString()
+          }
+        ]
+      };
+
+      await ClientPackage.update(selectedPackage.id, updatedPackage);
+      setSelectedPackage(updatedPackage);
+      setShowAddDependentDialog(false);
+      setDependentForm({
+        name: "",
+        birth_date: format(new Date(), 'yyyy-MM-dd'),
+        relationship: ""
+      });
+
+      toast({
+        title: "Sucesso",
+        description: "Dependente adicionado com sucesso!",
+        variant: "success"
+      });
+    } catch (error) {
+      console.error("Erro ao adicionar dependente:", error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível adicionar o dependente.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleRemoveDependent = async (index) => {
+    try {
+      const updatedDependents = [...(selectedPackage.dependents || [])];
+      updatedDependents.splice(index, 1);
+
+      const updatedPackage = {
+        ...selectedPackage,
+        dependents: updatedDependents
+      };
+
+      await ClientPackage.update(selectedPackage.id, updatedPackage);
+      setSelectedPackage(updatedPackage);
+
+      toast({
+        title: "Sucesso",
+        description: "Dependente removido com sucesso!",
+        variant: "success"
+      });
+    } catch (error) {
+      console.error("Erro ao remover dependente:", error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível remover o dependente.",
+        variant: "destructive"
+      });
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -1145,9 +1309,11 @@ export default function ClientPackages() {
 
       {selectedPackage && (
         <Tabs defaultValue="details">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="details">Detalhes do Pacote</TabsTrigger>
             <TabsTrigger value="history">Histórico de Sessões</TabsTrigger>
+            <TabsTrigger value="dependents">Dependentes</TabsTrigger>
+            <TabsTrigger value="anamnesis">Anamnese</TabsTrigger>
           </TabsList>
           <TabsContent value="details" className="pt-4">
             <Card>
@@ -1273,6 +1439,157 @@ export default function ClientPackages() {
                     Nenhuma sessão utilizada ainda.
                   </p>
                 )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+          <TabsContent value="dependents" className="pt-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle>Dependentes</CardTitle>
+                <Button onClick={() => setShowAddDependentDialog(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Adicionar Dependente
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {selectedPackage.dependents && selectedPackage.dependents.length > 0 ? (
+                  <div className="space-y-4">
+                    {selectedPackage.dependents.map((dependent, index) => (
+                      <div key={index} className="p-4 border rounded-lg">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-medium">{dependent.name}</p>
+                            <p className="text-sm text-gray-500">
+                              {format(new Date(dependent.birth_date), "dd/MM/yyyy", { locale: ptBR })}
+                            </p>
+                            {dependent.relationship && (
+                              <p className="text-sm text-gray-500">
+                                Parentesco: {dependent.relationship}
+                              </p>
+                            )}
+                          </div>
+                          <Button 
+                            variant="ghost" 
+                            size="icon"
+                            className="text-red-500 hover:bg-red-50"
+                            onClick={() => handleRemoveDependent(index)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-10 bg-gray-50 rounded-lg">
+                    <p className="text-gray-500">Nenhum dependente cadastrado.</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+          <TabsContent value="anamnesis" className="pt-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle>Anamnese do Cliente</CardTitle>
+                {!isEditingAnamnesis ? (
+                  <Button variant="outline" onClick={() => setIsEditingAnamnesis(true)}>
+                    Editar
+                  </Button>
+                ) : (
+                  <div className="flex gap-2">
+                    <Button variant="outline" onClick={() => setIsEditingAnamnesis(false)}>
+                      Cancelar
+                    </Button>
+                    <Button onClick={handleSaveAnamnesis}>
+                      Salvar
+                    </Button>
+                  </div>
+                )}
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div>
+                    <Label>Tipo de Pele</Label>
+                    {isEditingAnamnesis ? (
+                      <Select 
+                        value={anamnesisForm.skin_type} 
+                        onValueChange={(value) => setAnamnesisForm(prev => ({ ...prev, skin_type: value }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione o tipo de pele" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="normal">Normal</SelectItem>
+                          <SelectItem value="seca">Seca</SelectItem>
+                          <SelectItem value="oleosa">Oleosa</SelectItem>
+                          <SelectItem value="mista">Mista</SelectItem>
+                          <SelectItem value="sensivel">Sensível</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <p className="text-gray-600">{anamnesis?.skin_type || "Não informado"}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label>Alergias</Label>
+                    {isEditingAnamnesis ? (
+                      <Textarea 
+                        value={anamnesisForm.allergies}
+                        onChange={(e) => setAnamnesisForm(prev => ({ ...prev, allergies: e.target.value }))}
+                        placeholder="Liste as alergias do cliente"
+                      />
+                    ) : (
+                      <p className="text-gray-600">{anamnesis?.allergies || "Nenhuma alergia registrada"}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label>Condições de Saúde</Label>
+                    {isEditingAnamnesis ? (
+                      <Textarea 
+                        value={anamnesisForm.health_conditions}
+                        onChange={(e) => setAnamnesisForm(prev => ({ ...prev, health_conditions: e.target.value }))}
+                        placeholder="Liste as condições de saúde relevantes"
+                      />
+                    ) : (
+                      <p className="text-gray-600">{anamnesis?.health_conditions || "Nenhuma condição registrada"}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label>Medicamentos em Uso</Label>
+                    {isEditingAnamnesis ? (
+                      <Textarea 
+                        value={anamnesisForm.medications}
+                        onChange={(e) => setAnamnesisForm(prev => ({ ...prev, medications: e.target.value }))}
+                        placeholder="Liste os medicamentos em uso"
+                      />
+                    ) : (
+                      <p className="text-gray-600">{anamnesis?.medications || "Nenhum medicamento registrado"}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label>Observações Adicionais</Label>
+                    {isEditingAnamnesis ? (
+                      <Textarea 
+                        value={anamnesisForm.observations}
+                        onChange={(e) => setAnamnesisForm(prev => ({ ...prev, observations: e.target.value }))}
+                        placeholder="Adicione observações relevantes"
+                      />
+                    ) : (
+                      <p className="text-gray-600">{anamnesis?.observations || "Nenhuma observação registrada"}</p>
+                    )}
+                  </div>
+
+                  {anamnesis?.last_update && !isEditingAnamnesis && (
+                    <p className="text-sm text-gray-500">
+                      Última atualização: {format(new Date(anamnesis.last_update), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                    </p>
+                  )}
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -1610,6 +1927,61 @@ export default function ClientPackages() {
             >
               <PackageCheck className="w-4 h-4 mr-2" />
               Criar Pacote
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showAddDependentDialog} onOpenChange={setShowAddDependentDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Adicionar Dependente</DialogTitle>
+            <DialogDescription>
+              Preencha os dados do dependente abaixo.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Nome do Dependente</Label>
+              <Input
+                value={dependentForm.name}
+                onChange={(e) => setDependentForm(prev => ({ ...prev, name: e.target.value }))}
+                placeholder="Nome completo"
+              />
+            </div>
+            <div>
+              <Label>Data de Nascimento</Label>
+              <Input
+                type="date"
+                value={dependentForm.birth_date}
+                onChange={(e) => setDependentForm(prev => ({ ...prev, birth_date: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label>Parentesco</Label>
+              <Select
+                value={dependentForm.relationship}
+                onValueChange={(value) => setDependentForm(prev => ({ ...prev, relationship: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o parentesco" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="filho">Filho(a)</SelectItem>
+                  <SelectItem value="conjuge">Cônjuge</SelectItem>
+                  <SelectItem value="pai">Pai</SelectItem>
+                  <SelectItem value="mae">Mãe</SelectItem>
+                  <SelectItem value="outro">Outro</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddDependentDialog(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleAddDependent}>
+              Adicionar
             </Button>
           </DialogFooter>
         </DialogContent>

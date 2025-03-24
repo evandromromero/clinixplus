@@ -40,6 +40,9 @@ import DependentForm from '@/components/clients/DependentForm';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import RateLimitHandler from '@/components/RateLimitHandler';
 import toast from 'react-hot-toast';
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export default function ClientDetails() {
   const [client, setClient] = useState(null);
@@ -79,6 +82,13 @@ export default function ClientDetails() {
     email: '',
     address: '',
     skinType: ''
+  });
+  const [anamneseData, setAnamneseData] = useState({
+    skin_type: '',
+    allergies: '',
+    health_conditions: '',
+    medications: '',
+    observations: ''
   });
   const urlParams = new URLSearchParams(window.location.search);
   const clientId = urlParams.get('id');
@@ -134,6 +144,7 @@ export default function ClientDetails() {
       loadTemplates();
       loadPhotos();
       loadObservations();
+      loadAnamnese();
     }
   }, [clientId]);
 
@@ -267,6 +278,21 @@ export default function ClientDetails() {
       setObservations(clientObservations || []);
     } catch (error) {
       console.error('Error loading observations:', error);
+    }
+  };
+
+  const loadAnamnese = async () => {
+    try {
+      const clientAnamnese = await Client.getAnamnese(clientId);
+      setAnamneseData(clientAnamnese || {
+        skin_type: '',
+        allergies: '',
+        health_conditions: '',
+        medications: '',
+        observations: ''
+      });
+    } catch (error) {
+      console.error('Error loading anamnese:', error);
     }
   };
 
@@ -514,6 +540,20 @@ export default function ClientDetails() {
     }
   };
 
+  const handleUpdateAnamnese = async () => {
+    try {
+      setIsLoading(true);
+      await Client.updateAnamnese(clientId, anamneseData);
+      
+      toast.success('Anamnese atualizada com sucesso!');
+    } catch (error) {
+      console.error('Erro ao atualizar anamnese:', error);
+      toast.error('Erro ao atualizar anamnese');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   if (!client && !loadError) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -702,14 +742,14 @@ export default function ClientDetails() {
       </div>
 
       {/* Tabs Content */}
-      <Tabs defaultValue="historico" className="space-y-6">
-        <TabsList>
+      <Tabs defaultValue="historico" className="space-y-4">
+        <TabsList className="grid grid-cols-6 gap-4">
           <TabsTrigger value="historico">Histórico</TabsTrigger>
           <TabsTrigger value="pacotes">Pacotes</TabsTrigger>
           <TabsTrigger value="dependentes">Dependentes</TabsTrigger>
+          <TabsTrigger value="anamnese">Anamnese</TabsTrigger>
           <TabsTrigger value="contrato">Contrato</TabsTrigger>
           <TabsTrigger value="fotos">Fotos</TabsTrigger>
-          <TabsTrigger value="observacoes">Observações</TabsTrigger>
         </TabsList>
 
         <TabsContent value="historico" className="space-y-6">
@@ -981,17 +1021,35 @@ export default function ClientDetails() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="dependentes">
+        <TabsContent value="dependentes" className="space-y-6">
+          {/* Aba de Dependentes */}
           <Card>
             <CardContent>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-medium text-[#175EA0]">Dependentes</h3>
+                <Button
+                  onClick={() => {
+                    setEditingDependent(null);
+                    setShowDependentForm(true);
+                  }}
+                  className="flex items-center gap-2 text-white bg-[#3475B8] hover:bg-[#2C64A0] transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                  Adicionar Dependente
+                </Button>
+              </div>
+              
               <DependentList
-                dependents={client.dependents}
+                dependents={client?.dependents || []}
                 onEdit={(dependent, index) => {
                   setEditingDependent({ dependent, index });
                   setShowDependentForm(true);
                 }}
                 onDelete={async (index) => {
-                  const newDependents = [...client.dependents];
+                  if (!window.confirm('Tem certeza que deseja remover este dependente?')) {
+                    return;
+                  }
+                  const newDependents = [...(client.dependents || [])];
                   newDependents.splice(index, 1);
                   await Client.update(client.id, {
                     ...client,
@@ -1013,7 +1071,7 @@ export default function ClientDetails() {
               <DependentForm
                 dependent={editingDependent?.dependent}
                 onSubmit={async (data) => {
-                  const newDependents = [...(client.dependents || [])];
+                  const newDependents = [...(client?.dependents || [])];
                   if (editingDependent) {
                     newDependents[editingDependent.index] = data;
                   } else {
@@ -1034,6 +1092,91 @@ export default function ClientDetails() {
               />
             </DialogContent>
           </Dialog>
+        </TabsContent>
+
+        <TabsContent value="anamnese" className="space-y-6">
+          {/* Aba de Anamnese */}
+          <Card>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-xl font-medium text-[#175EA0]">Anamnese</h3>
+                  <Button
+                    onClick={handleUpdateAnamnese}
+                    className="flex items-center gap-2 text-white bg-[#3475B8] hover:bg-[#2C64A0] transition-colors"
+                  >
+                    <Check className="w-4 h-4" />
+                    Salvar Alterações
+                  </Button>
+                </div>
+
+                <div className="grid gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="skin_type">Tipo de Pele</Label>
+                    <Select
+                      value={anamneseData.skin_type}
+                      onValueChange={(value) => setAnamneseData({ ...anamneseData, skin_type: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="normal">Normal</SelectItem>
+                        <SelectItem value="seca">Seca</SelectItem>
+                        <SelectItem value="oleosa">Oleosa</SelectItem>
+                        <SelectItem value="mista">Mista</SelectItem>
+                        <SelectItem value="sensível">Sensível</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="allergies">Alergias</Label>
+                    <Textarea
+                      id="allergies"
+                      value={anamneseData.allergies}
+                      onChange={(e) => setAnamneseData({ ...anamneseData, allergies: e.target.value })}
+                      placeholder="Descreva as alergias do cliente..."
+                      className="min-h-[100px]"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="health_conditions">Condições de Saúde</Label>
+                    <Textarea
+                      id="health_conditions"
+                      value={anamneseData.health_conditions}
+                      onChange={(e) => setAnamneseData({ ...anamneseData, health_conditions: e.target.value })}
+                      placeholder="Descreva as condições de saúde do cliente..."
+                      className="min-h-[100px]"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="medications">Medicamentos</Label>
+                    <Textarea
+                      id="medications"
+                      value={anamneseData.medications}
+                      onChange={(e) => setAnamneseData({ ...anamneseData, medications: e.target.value })}
+                      placeholder="Liste os medicamentos que o cliente utiliza..."
+                      className="min-h-[100px]"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="observations">Observações Adicionais</Label>
+                    <Textarea
+                      id="observations"
+                      value={anamneseData.observations}
+                      onChange={(e) => setAnamneseData({ ...anamneseData, observations: e.target.value })}
+                      placeholder="Adicione observações relevantes..."
+                      className="min-h-[100px]"
+                    />
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="contrato" className="space-y-6">
