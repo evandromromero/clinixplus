@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Client, Appointment, Sale, ClientPackage, Package, Service } from "@/firebase/entities";
+import { Client, Appointment, Sale, ClientPackage, Package, Service, Contract } from "@/firebase/entities";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -15,7 +15,8 @@ import {
   Clock,
   Camera,
   Pencil,
-  Plus
+  Plus,
+  FileText
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -23,6 +24,7 @@ import DependentList from '@/components/clients/DependentList';
 import DependentForm from '@/components/clients/DependentForm'; 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import RateLimitHandler from '@/components/RateLimitHandler';
+import { Mail as MailIcon } from "lucide-react";
 
 export default function ClientDetails() {
   const [client, setClient] = useState(null);
@@ -36,6 +38,7 @@ export default function ClientDetails() {
   const [loadError, setLoadError] = useState(null);
   const [packageFilter, setPackageFilter] = useState('all');
   const [periodFilter, setPeriodFilter] = useState('all');
+  const [contractData, setContractData] = useState(null);
   const urlParams = new URLSearchParams(window.location.search);
   const clientId = urlParams.get('id');
 
@@ -168,6 +171,23 @@ export default function ClientDetails() {
     }
   };
 
+  const generateContract = async () => {
+    try {
+      const contract = await Contract.generate(clientId);
+      setContractData(contract);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const sendContractByEmail = async () => {
+    try {
+      await Contract.sendByEmail(contractData);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   if (!client && !loadError) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -265,6 +285,7 @@ export default function ClientDetails() {
           <TabsTrigger value="historico">Histórico</TabsTrigger>
           <TabsTrigger value="pacotes">Pacotes</TabsTrigger>
           <TabsTrigger value="dependentes">Dependentes</TabsTrigger>
+          <TabsTrigger value="contrato">Contrato</TabsTrigger>
           <TabsTrigger value="fotos">Fotos</TabsTrigger>
           <TabsTrigger value="observacoes">Observações</TabsTrigger>
         </TabsList>
@@ -624,6 +645,61 @@ export default function ClientDetails() {
               />
             </DialogContent>
           </Dialog>
+        </TabsContent>
+
+        <TabsContent value="contrato" className="space-y-6">
+          {/* Aba de Contrato */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xl font-medium text-gray-800">Contrato do Cliente</h3>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => generateContract()}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#3475B8] rounded-md hover:bg-[#2C64A0] transition-colors"
+                >
+                  <FileText className="w-4 h-4" />
+                  Gerar Contrato
+                </button>
+                {contractData && (
+                  <button
+                    onClick={() => sendContractByEmail()}
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#3475B8] border border-[#3475B8] rounded-md hover:bg-[#3475B8] hover:text-white transition-colors"
+                  >
+                    <MailIcon className="w-4 h-4" />
+                    Enviar por Email
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {contractData ? (
+              <div className="bg-white p-6 rounded-lg shadow-sm">
+                <div className="prose max-w-none">
+                  {/* Preview do contrato */}
+                  <h2 className="text-center text-xl font-bold mb-6">CONTRATO DE PRESTAÇÃO DE SERVIÇOS</h2>
+                  <p className="mb-4">
+                    <strong>CONTRATANTE:</strong> {client?.name}
+                  </p>
+                  <p className="mb-4">
+                    <strong>CPF:</strong> {client?.cpf}
+                  </p>
+                  <p className="mb-4">
+                    <strong>Data de Emissão:</strong> {new Date(contractData.issue_date).toLocaleDateString()}
+                  </p>
+                  {contractData.content?.sections?.map((section, index) => (
+                    <div key={index} className="mb-6">
+                      <h3 className="text-lg font-semibold mb-2">{section.title}</h3>
+                      <p>{section.content}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                Clique em "Gerar Contrato" para criar um novo contrato
+              </div>
+            )}
+          </div>
         </TabsContent>
 
         <TabsContent value="fotos">

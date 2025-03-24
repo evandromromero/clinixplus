@@ -1,6 +1,8 @@
 // Versões aprimoradas das entidades do Base44 com suporte ao Firebase
 import { base44 } from '../api/base44Client';
 import { createEnhancedEntity } from './enhancedEntities';
+import { db } from './config';
+import { collection, doc, getDoc, getDocs, setDoc, deleteDoc } from 'firebase/firestore';
 
 // Cria versões aprimoradas das entidades mais utilizadas
 export const Client = createEnhancedEntity('clients', base44.entities.Client);
@@ -31,3 +33,88 @@ export const ClientAuth = base44.entities.ClientAuth;
 
 // Auth SDK
 export const User = base44.auth;
+
+// Entidades apenas Firebase
+export class Contract {
+  static collection = 'contracts';
+
+  static async generate(clientId) {
+    try {
+      const contractData = {
+        client_id: clientId,
+        issue_date: new Date().toISOString(),
+        status: 'draft',
+        content: {
+          sections: [
+            {
+              title: 'Cláusula Primeira - Do Objeto',
+              content: 'O presente contrato tem por objeto a prestação de serviços de estética e bem-estar...'
+            },
+            {
+              title: 'Cláusula Segunda - Do Preço e Forma de Pagamento',
+              content: 'Pelos serviços prestados, o CONTRATANTE pagará ao CONTRATADO o valor acordado...'
+            },
+            {
+              title: 'Cláusula Terceira - Das Obrigações',
+              content: 'O CONTRATADO se compromete a prestar os serviços com qualidade e profissionalismo...'
+            }
+          ]
+        }
+      };
+
+      const docRef = await db.collection(this.collection).add(contractData);
+      return { id: docRef.id, ...contractData };
+    } catch (error) {
+      console.error('Error generating contract:', error);
+      throw error;
+    }
+  }
+
+  static async sendByEmail(contractData) {
+    try {
+      // Aqui implementaremos o envio por email quando tivermos o serviço configurado
+      console.log('Sending contract by email:', contractData);
+      return true;
+    } catch (error) {
+      console.error('Error sending contract by email:', error);
+      throw error;
+    }
+  }
+
+  static async getByClientId(clientId) {
+    try {
+      const snapshot = await db.collection(this.collection)
+        .where('client_id', '==', clientId)
+        .orderBy('issue_date', 'desc')
+        .get();
+
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('Error getting contracts:', error);
+      throw error;
+    }
+  }
+
+  static async update(contractId, data) {
+    try {
+      await db.collection(this.collection).doc(contractId).update(data);
+      return true;
+    } catch (error) {
+      console.error('Error updating contract:', error);
+      throw error;
+    }
+  }
+
+  static async delete(contractId) {
+    try {
+      await db.collection(this.collection).doc(contractId).delete();
+      return true;
+    } catch (error) {
+      console.error('Error deleting contract:', error);
+      throw error;
+    }
+  }
+}
