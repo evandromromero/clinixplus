@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Client, Appointment, Sale, ClientPackage, Package } from "@/firebase/entities";
+import React, { useState, useEffect, useMemo } from 'react';
+import { Client, Appointment, Sale, ClientPackage, Package, Service } from "@/firebase/entities";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -30,11 +30,59 @@ export default function ClientDetails() {
   const [sales, setSales] = useState([]);
   const [clientPackages, setClientPackages] = useState([]);
   const [packages, setPackages] = useState([]);
+  const [services, setServices] = useState([]);
   const [showDependentForm, setShowDependentForm] = useState(false);
   const [editingDependent, setEditingDependent] = useState(null);
   const [loadError, setLoadError] = useState(null);
+  const [packageFilter, setPackageFilter] = useState('all');
+  const [periodFilter, setPeriodFilter] = useState('all');
   const urlParams = new URLSearchParams(window.location.search);
   const clientId = urlParams.get('id');
+
+  // Função para filtrar os pacotes
+  const filteredPackages = useMemo(() => {
+    return clientPackages.filter(pkg => {
+      // Filtro por status
+      if (packageFilter !== 'all') {
+        const now = new Date();
+        const expirationDate = new Date(pkg.valid_until);
+        
+        if (packageFilter === 'active' && (pkg.status === 'cancelado' || expirationDate < now)) {
+          return false;
+        }
+        if (packageFilter === 'expired' && expirationDate >= now) {
+          return false;
+        }
+        if (packageFilter === 'finished' && pkg.sessions_used < pkg.total_sessions) {
+          return false;
+        }
+        if (packageFilter === 'canceled' && pkg.status !== 'cancelado') {
+          return false;
+        }
+      }
+
+      // Filtro por período
+      if (periodFilter !== 'all') {
+        const purchaseDate = new Date(pkg.purchase_date);
+        const now = new Date();
+        
+        if (periodFilter === 'last30' && (now - purchaseDate) > 30 * 24 * 60 * 60 * 1000) {
+          return false;
+        }
+        if (periodFilter === 'last90' && (now - purchaseDate) > 90 * 24 * 60 * 60 * 1000) {
+          return false;
+        }
+        if (periodFilter === 'last180' && (now - purchaseDate) > 180 * 24 * 60 * 60 * 1000) {
+          return false;
+        }
+        if (periodFilter === 'thisYear' && purchaseDate.getFullYear() !== now.getFullYear()) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [clientPackages, packageFilter, periodFilter]);
 
   useEffect(() => {
     if (clientId) {
@@ -44,12 +92,13 @@ export default function ClientDetails() {
 
   const loadClientData = async () => {
     try {
-      const [clientData, appointmentsData, salesData, clientPackagesData, packagesData] = await Promise.all([
+      const [clientData, appointmentsData, salesData, clientPackagesData, packagesData, servicesData] = await Promise.all([
         Client.list(),
         Appointment.list(),
         Sale.list(),
         ClientPackage.list(),
-        Package.list()
+        Package.list(),
+        Service.list()
       ]);
 
       const client = clientData.find(c => c.id === clientId);
@@ -72,12 +121,31 @@ export default function ClientDetails() {
           // Encontra o pacote base
           const basePackage = packagesData.find(p => p.id === cp.package_id);
           
+          // Encontra os serviços do package_snapshot
+          let services = [];
+          if (cp.package_snapshot?.services) {
+            services = Object.entries(cp.package_snapshot.services).map(([_, serviceData]) => {
+              const service = servicesData.find(s => s.id === serviceData.service_id);
+              return {
+                service_id: serviceData.service_id,
+                name: service?.name || 'Serviço não encontrado',
+                quantity: serviceData.quantity || 0
+              };
+            });
+          }
+          
+          // Log para debug
+          console.log('Package:', cp.id);
+          console.log('Package snapshot:', cp.package_snapshot);
+          console.log('Services:', services);
+          
           return {
             ...cp,
             packageData: basePackage,
             sessions_used: cp.sessions_used || 0,
             total_sessions: cp.total_sessions || 0,
-            session_history: cp.session_history || []
+            session_history: cp.session_history || [],
+            services: services
           };
         })
         .filter(cp => cp.packageData)
@@ -93,6 +161,7 @@ export default function ClientDetails() {
       
       setClientPackages(activePackages);
       setPackages(packagesData);
+      setServices(servicesData);
     } catch (error) {
       console.error(error);
       setLoadError(error.message);
@@ -123,14 +192,14 @@ export default function ClientDetails() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <h2 className="text-3xl font-bold text-gray-800">Detalhes do Cliente</h2>
+        <h2 className="text-3xl font-bold text-[#175EA0]">Detalhes do Cliente</h2>
         <div className="flex gap-3">
           <Button variant="outline">
             <Pencil className="w-4 h-4 mr-2" />
             Editar
           </Button>
           <Link to={createPageUrl("Appointments")}>
-            <Button className="bg-purple-600 hover:bg-purple-700">
+            <Button className="bg-[#518CD0] hover:bg-[#3475B8]">
               <Plus className="w-4 h-4 mr-2" />
               Novo Agendamento
             </Button>
@@ -144,44 +213,44 @@ export default function ClientDetails() {
           <div className="grid md:grid-cols-2 gap-6">
             <div className="space-y-4">
               <div className="flex items-center gap-3">
-                <User className="w-5 h-5 text-gray-500" />
+                <User className="w-5 h-5 text-[#518CD0]" />
                 <div>
-                  <p className="text-sm text-gray-500">Nome</p>
+                  <p className="text-sm text-[#3475B8]">Nome</p>
                   <p className="font-medium">{client.name}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <Phone className="w-5 h-5 text-gray-500" />
+                <Phone className="w-5 h-5 text-[#518CD0]" />
                 <div>
-                  <p className="text-sm text-gray-500">Telefone</p>
+                  <p className="text-sm text-[#3475B8]">Telefone</p>
                   <p className="font-medium">{client.phone}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <Mail className="w-5 h-5 text-gray-500" />
+                <Mail className="w-5 h-5 text-[#518CD0]" />
                 <div>
-                  <p className="text-sm text-gray-500">Email</p>
+                  <p className="text-sm text-[#3475B8]">Email</p>
                   <p className="font-medium">{client.email}</p>
                 </div>
               </div>
             </div>
             <div className="space-y-4">
               <div className="flex items-center gap-3">
-                <MapPin className="w-5 h-5 text-gray-500" />
+                <MapPin className="w-5 h-5 text-[#518CD0]" />
                 <div>
-                  <p className="text-sm text-gray-500">Endereço</p>
+                  <p className="text-sm text-[#3475B8]">Endereço</p>
                   <p className="font-medium">{client.address}</p>
                 </div>
               </div>
               <div>
-                <p className="text-sm text-gray-500 mb-1">Tipo de Pele</p>
-                <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-sm font-medium bg-purple-100 text-purple-700">
+                <p className="text-sm text-[#3475B8] mb-1">Tipo de Pele</p>
+                <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-sm font-medium bg-[#8BBAFF] text-[#175EA0]">
                   {client.skin_type}
                 </span>
               </div>
               {client.allergies && (
                 <div>
-                  <p className="text-sm text-gray-500 mb-1">Alergias</p>
+                  <p className="text-sm text-[#3475B8] mb-1">Alergias</p>
                   <p className="font-medium">{client.allergies}</p>
                 </div>
               )}
@@ -205,7 +274,7 @@ export default function ClientDetails() {
           <Card>
             <CardHeader>
               <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                <Calendar className="w-5 h-5" />
+                <Calendar className="w-5 h-5 text-[#518CD0]" />
                 Histórico de Agendamentos
               </CardTitle>
             </CardHeader>
@@ -214,17 +283,17 @@ export default function ClientDetails() {
                 {appointments.map((appointment, i) => (
                   <div
                     key={i}
-                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                    className="flex items-center justify-between p-3 bg-[#8BBAFF]/10 rounded-lg"
                   >
                     <div className="flex items-center gap-3">
-                      <Clock className="w-4 h-4 text-purple-600" />
+                      <Clock className="w-4 h-4 text-[#518CD0]" />
                       <div>
                         <p className="font-medium">
                           {format(new Date(appointment.date), "dd/MM/yyyy 'às' HH:mm", {
                             locale: ptBR,
                           })}
                         </p>
-                        <p className="text-sm text-gray-500">
+                        <p className="text-sm text-[#3475B8]">
                           {appointment.service_id}
                         </p>
                       </div>
@@ -232,10 +301,10 @@ export default function ClientDetails() {
                     <span
                       className={`text-sm font-medium px-2.5 py-0.5 rounded-full ${
                         appointment.status === 'concluído'
-                          ? 'bg-green-100 text-green-700'
+                          ? 'bg-[#518CD0] text-white border border-[#3475B8]'
                           : appointment.status === 'cancelado'
-                          ? 'bg-red-100 text-red-700'
-                          : 'bg-blue-100 text-blue-700'
+                          ? 'bg-red-100 text-red-700 border border-red-200'
+                          : 'bg-blue-100 text-blue-700 border border-blue-200'
                       }`}
                     >
                       {appointment.status}
@@ -243,7 +312,7 @@ export default function ClientDetails() {
                   </div>
                 ))}
                 {appointments.length === 0 && (
-                  <p className="text-center text-gray-500 py-4">
+                  <p className="text-center text-[#518CD0] py-4">
                     Nenhum agendamento encontrado
                   </p>
                 )}
@@ -255,7 +324,7 @@ export default function ClientDetails() {
           <Card>
             <CardHeader>
               <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                <PackageIcon className="w-5 h-5" />
+                <PackageIcon className="w-5 h-5 text-[#518CD0]" />
                 Histórico de Compras
               </CardTitle>
             </CardHeader>
@@ -264,13 +333,13 @@ export default function ClientDetails() {
                 {sales.map((sale, i) => (
                   <div
                     key={i}
-                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                    className="flex items-center justify-between p-3 bg-[#8BBAFF]/10 rounded-lg"
                   >
                     <div>
                       <p className="font-medium">
                         R$ {sale.total_amount.toFixed(2)}
                       </p>
-                      <p className="text-sm text-gray-500">
+                      <p className="text-sm text-[#3475B8]">
                         {format(new Date(sale.date), "dd/MM/yyyy", {
                           locale: ptBR,
                         })}
@@ -280,22 +349,22 @@ export default function ClientDetails() {
                       <span
                         className={`text-sm font-medium px-2.5 py-0.5 rounded-full ${
                           sale.status === 'pago'
-                            ? 'bg-green-100 text-green-700'
+                            ? 'bg-[#518CD0] text-white border border-[#3475B8]'
                             : sale.status === 'cancelado'
-                            ? 'bg-red-100 text-red-700'
-                            : 'bg-yellow-100 text-yellow-700'
+                            ? 'bg-red-100 text-red-700 border border-red-200'
+                            : 'bg-yellow-100 text-yellow-700 border border-yellow-200'
                         }`}
                       >
                         {sale.status}
                       </span>
-                      <p className="text-sm text-gray-500 mt-1">
+                      <p className="text-sm text-[#3475B8] mt-1">
                         {sale.payment_method}
                       </p>
                     </div>
                   </div>
                 ))}
                 {sales.length === 0 && (
-                  <p className="text-center text-gray-500 py-4">
+                  <p className="text-center text-[#518CD0] py-4">
                     Nenhuma compra encontrada
                   </p>
                 )}
@@ -310,7 +379,7 @@ export default function ClientDetails() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
-                  <PackageIcon className="w-5 h-5" />
+                  <PackageIcon className="w-5 h-5 text-[#518CD0]" />
                   Pacotes do Cliente
                 </CardTitle>
                 <Link to={createPageUrl("ClientPackages", { client_id: clientId })}>
@@ -322,39 +391,79 @@ export default function ClientDetails() {
               </div>
             </CardHeader>
             <CardContent>
-              {clientPackages.length > 0 ? (
+              <div className="flex gap-4 p-4 bg-white rounded-lg shadow-sm">
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                  <select
+                    value={packageFilter}
+                    onChange={(e) => setPackageFilter(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-[#3475B8] focus:border-transparent"
+                  >
+                    <option value="all">Todos os status</option>
+                    <option value="active">Ativos</option>
+                    <option value="finished">Finalizados</option>
+                    <option value="expired">Expirados</option>
+                    <option value="canceled">Cancelados</option>
+                  </select>
+                </div>
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Período</label>
+                  <select
+                    value={periodFilter}
+                    onChange={(e) => setPeriodFilter(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-[#3475B8] focus:border-transparent"
+                  >
+                    <option value="all">Todos os períodos</option>
+                    <option value="last30">Últimos 30 dias</option>
+                    <option value="last90">Últimos 90 dias</option>
+                    <option value="last180">Últimos 180 dias</option>
+                    <option value="thisYear">Este ano</option>
+                  </select>
+                </div>
+                <button
+                  onClick={() => {
+                    setPackageFilter('all');
+                    setPeriodFilter('all');
+                  }}
+                  className="self-end px-4 py-2 text-sm text-[#3475B8] hover:text-[#2C64A0] transition-colors"
+                >
+                  Limpar Filtros
+                </button>
+              </div>
+
+              {filteredPackages.length > 0 ? (
                 <div className="space-y-4">
-                  {clientPackages.map((pkg) => (
-                    <div key={pkg.id} className="border rounded-lg p-4 bg-white">
+                  {filteredPackages.map((pkg) => (
+                    <div key={pkg.id} className="border rounded-lg p-4 bg-white shadow-sm hover:shadow-md transition-shadow">
                       <div className="flex justify-between items-start mb-2">
                         <div>
-                          <h4 className="font-medium text-lg">{pkg.packageData?.name}</h4>
+                          <h4 className="font-medium text-lg text-[#175EA0]">{pkg.packageData?.name}</h4>
                           <div className="flex items-center gap-2 mt-1">
                             <div className="flex items-center">
-                              <Clock className="w-4 h-4 mr-1 text-gray-500" />
-                              <span className="text-sm text-gray-600">
+                              <Clock className="w-4 h-4 mr-1 text-[#3475B8]" />
+                              <span className="text-sm text-[#175EA0]">
                                 {pkg.sessions_used} de {pkg.total_sessions} sessões utilizadas
                               </span>
                             </div>
-                            <span className="text-gray-300">•</span>
-                            <span className="text-sm text-gray-600">
+                            <span className="text-[#6EA3E7]">•</span>
+                            <span className="text-sm text-[#3475B8]">
                               Criado em {format(new Date(pkg.purchase_date || pkg.created_date), "dd/MM/yyyy")}
                             </span>
                           </div>
                         </div>
                         <div className="text-right">
-                          <span className={`inline-block px-2 py-1 rounded-full text-xs ${
+                          <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
                             pkg.status === 'ativo' 
-                              ? 'bg-green-100 text-green-800'
+                              ? 'bg-[#518CD0] text-white border border-[#3475B8]'
                               : pkg.status === 'finalizado'
-                              ? 'bg-gray-100 text-gray-800'
-                              : 'bg-yellow-100 text-yellow-800'
+                              ? 'bg-gray-100 text-gray-800 border border-gray-200'
+                              : 'bg-yellow-100 text-yellow-800 border border-yellow-200'
                           }`}>
                             {pkg.status === 'ativo' ? 'Ativo' : 
                              pkg.status === 'finalizado' ? 'Finalizado' : 'Pendente'}
                           </span>
                           {pkg.valid_until && (
-                            <p className="text-sm text-gray-500 mt-1">
+                            <p className="text-sm text-[#3475B8] mt-1">
                               {pkg.status === 'ativo' ? 'Válido até ' : 'Expirou em '}
                               {format(new Date(pkg.valid_until), "dd/MM/yyyy")}
                             </p>
@@ -363,59 +472,66 @@ export default function ClientDetails() {
                       </div>
                       
                       <div className="mt-4">
-                        <h5 className="text-sm font-medium mb-2">Serviços Incluídos:</h5>
+                        <h5 className="text-sm font-medium mb-2 text-[#175EA0]">Serviços Incluídos:</h5>
                         <div className="space-y-1">
-                          {pkg.packageData?.services?.map((service, index) => (
-                            <div key={index} className="text-sm text-gray-600 flex items-center justify-between bg-gray-50 p-2 rounded">
-                              <div className="flex items-center">
-                                <Clock className="w-4 h-4 mr-2" />
-                                {service.name}
+                          {pkg.services && pkg.services.length > 0 ? (
+                            pkg.services.map((service) => (
+                              <div key={service.service_id} className="text-sm text-[#3475B8] flex items-center justify-between bg-[#8BBAFF]/5 p-2 rounded border border-[#6EA3E7] hover:bg-[#8BBAFF]/10">
+                                <div className="flex items-center">
+                                  <Clock className="w-4 h-4 mr-2 text-[#518CD0]" />
+                                  {service.name}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium text-[#175EA0] bg-[#8BBAFF]/10 px-2 py-0.5 rounded">
+                                    {service.quantity}x
+                                  </span>
+                                </div>
                               </div>
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium">{service.sessions}x</span>
-                              </div>
-                            </div>
-                          ))}
+                            ))
+                          ) : (
+                            <p className="text-sm text-[#518CD0] text-center py-2">Nenhum serviço incluído</p>
+                          )}
                         </div>
                       </div>
 
-                      <div className="mt-4 pt-4 border-t">
-                        <h5 className="text-sm font-medium mb-2">Histórico de Uso:</h5>
+                      <div className="mt-4 pt-4 border-t border-[#6EA3E7]">
+                        <h5 className="text-sm font-medium mb-2 text-[#175EA0]">Histórico de Uso:</h5>
                         <div className="space-y-2">
                           {pkg.session_history?.length > 0 ? (
                             pkg.session_history.map((session, index) => (
-                              <div key={index} className="text-sm text-gray-600 flex justify-between items-center bg-gray-50 p-2 rounded">
+                              <div key={index} className="text-sm flex justify-between items-center bg-[#8BBAFF]/10 p-2 rounded border border-[#6EA3E7]">
                                 <div className="flex-1">
-                                  <div className="flex items-center">
-                                    <Calendar className="w-4 h-4 mr-2" />
+                                  <div className="flex items-center text-[#175EA0]">
+                                    <Calendar className="w-4 h-4 mr-2 text-[#518CD0]" />
                                     {format(new Date(session.date), "dd/MM/yyyy HH:mm")}
                                   </div>
-                                  <div className="text-gray-500 mt-1 flex items-center">
+                                  <div className="text-[#3475B8] mt-1 flex items-center">
                                     <User className="w-3 h-3 mr-1" />
                                     {session.employee_name}
                                   </div>
                                 </div>
                                 <div className="text-right">
-                                  <div>{session.service_name}</div>
+                                  <div className="text-[#175EA0]">{session.service_name}</div>
                                   {session.notes && (
-                                    <div className="text-xs text-gray-500 mt-1">{session.notes}</div>
+                                    <div className="text-xs text-[#518CD0] mt-1">{session.notes}</div>
                                   )}
                                 </div>
                               </div>
                             ))
                           ) : (
-                            <p className="text-sm text-gray-500">Nenhum uso registrado</p>
+                            <p className="text-sm text-[#518CD0]">Nenhum uso registrado</p>
                           )}
                         </div>
                       </div>
 
-                      <div className="mt-4 pt-4 border-t flex justify-between items-center">
-                        <div className="text-sm text-gray-600">
-                          <span className="font-medium">Valor Total:</span> R$ {pkg.total_price?.toFixed(2) || '0.00'}
+                      <div className="mt-4 pt-4 border-t border-[#6EA3E7] flex justify-between items-center">
+                        <div className="text-sm">
+                          <span className="font-medium text-[#175EA0]">Valor Total:</span>
+                          <span className="text-[#3475B8]"> R$ {pkg.total_price?.toFixed(2) || '0.00'}</span>
                         </div>
                         {pkg.status === 'ativo' && pkg.sessions_used < pkg.total_sessions && (
                           <Link to={createPageUrl("Appointments", { client_id: clientId, package_id: pkg.id })}>
-                            <Button variant="outline" size="sm">
+                            <Button variant="outline" size="sm" className="bg-[#8BBAFF]/10 border-[#6EA3E7] text-[#175EA0] hover:bg-[#8BBAFF]/20 hover:text-[#175EA0]">
                               <Plus className="w-4 h-4 mr-2" />
                               Agendar Sessão
                             </Button>
@@ -450,7 +566,7 @@ export default function ClientDetails() {
                 </CardTitle>
                 <Button 
                   onClick={() => setShowDependentForm(true)}
-                  className="bg-[#294380] hover:bg-[#0D0F36]"
+                  className="bg-[#518CD0] hover:bg-[#3475B8]"
                 >
                   <Plus className="w-4 h-4 mr-2" />
                   Adicionar Dependente
@@ -540,7 +656,7 @@ export default function ClientDetails() {
                           className="w-full h-48 object-cover rounded-lg"
                         />
                       </div>
-                      <div className="text-sm text-gray-500">
+                      <div className="text-sm text-[#3475B8]">
                         <p>{photo.treatment}</p>
                         <p>{format(new Date(photo.date), 'dd/MM/yyyy')}</p>
                       </div>
@@ -548,7 +664,7 @@ export default function ClientDetails() {
                   ))}
                 </div>
               ) : (
-                <p className="text-center text-gray-500 py-4">
+                <p className="text-center text-[#518CD0] py-4">
                   Nenhuma foto encontrada
                 </p>
               )}
@@ -567,7 +683,7 @@ export default function ClientDetails() {
               {client.notes ? (
                 <p className="whitespace-pre-wrap">{client.notes}</p>
               ) : (
-                <p className="text-center text-gray-500 py-4">
+                <p className="text-center text-[#518CD0] py-4">
                   Nenhuma observação encontrada
                 </p>
               )}
