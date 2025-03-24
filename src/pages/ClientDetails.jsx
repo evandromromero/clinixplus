@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Client, Appointment, Sale, ClientPackage, Package, Service, Contract, ContractTemplate } from "@/firebase/entities";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,7 +20,12 @@ import {
   Printer,
   FileDown,
   MessageCircle,
-  Mail
+  Mail,
+  FileUp,
+  X,
+  Trash2,
+  Loader2,
+  Upload
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -29,6 +34,7 @@ import DependentList from '@/components/clients/DependentList';
 import DependentForm from '@/components/clients/DependentForm'; 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import RateLimitHandler from '@/components/RateLimitHandler';
+import toast from 'react-hot-toast';
 
 export default function ClientDetails() {
   const [client, setClient] = useState(null);
@@ -46,6 +52,17 @@ export default function ClientDetails() {
   const [templates, setTemplates] = useState([]);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [showShareDialog, setShowShareDialog] = useState(false);
+  const [showCamera, setShowCamera] = useState(false);
+  const [stream, setStream] = useState(null);
+  const videoRef = useRef(null);
+  const [photos, setPhotos] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [beforePhoto, setBeforePhoto] = useState(null);
+  const [afterPhoto, setAfterPhoto] = useState(null);
+  const [previewBefore, setPreviewBefore] = useState(null);
+  const [previewAfter, setPreviewAfter] = useState(null);
+  const [isCapturingBefore, setIsCapturingBefore] = useState(true);
+  const [showUploadDialog, setShowUploadDialog] = useState(false);
   const urlParams = new URLSearchParams(window.location.search);
   const clientId = urlParams.get('id');
 
@@ -98,8 +115,24 @@ export default function ClientDetails() {
     if (clientId) {
       loadData();
       loadTemplates();
+      loadPhotos();
     }
   }, [clientId]);
+
+  useEffect(() => {
+    // Limpar stream da câmera quando o componente desmontar
+    return () => {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [stream]);
+
+  useEffect(() => {
+    if (videoRef.current && stream) {
+      videoRef.current.srcObject = stream;
+    }
+  }, [stream]);
 
   const loadData = async () => {
     try {
@@ -188,6 +221,16 @@ export default function ClientDetails() {
     }
   };
 
+  const loadPhotos = async () => {
+    try {
+      const clientPhotos = await Client.getPhotos(clientId);
+      setPhotos(clientPhotos);
+    } catch (error) {
+      console.error('Error loading photos:', error);
+      toast.error('Erro ao carregar fotos');
+    }
+  };
+
   const generateContract = async () => {
     try {
       const contract = await Contract.generate(clientId, selectedTemplate?.id);
@@ -237,6 +280,121 @@ export default function ClientDetails() {
       window.open(whatsappUrl, '_blank');
     } catch (error) {
       console.error('Error sharing via WhatsApp:', error);
+    }
+  };
+
+  const startCamera = async () => {
+    try {
+      const mediaStream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'environment' } 
+      });
+      setStream(mediaStream);
+      setShowCamera(true);
+
+      // Limpar fotos anteriores
+      setBeforePhoto(null);
+      setAfterPhoto(null);
+      setPreviewBefore(null);
+      setPreviewAfter(null);
+      setIsCapturingBefore(true);
+    } catch (error) {
+      console.error('Error accessing camera:', error);
+      toast.error('Erro ao acessar câmera');
+    }
+  };
+
+  const stopCamera = () => {
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+      setStream(null);
+      setShowCamera(false);
+    }
+  };
+
+  const takePhoto = async () => {
+    if (!videoRef.current) return;
+
+    try {
+      setIsLoading(true);
+      const canvas = document.createElement('canvas');
+      canvas.width = videoRef.current.videoWidth;
+      canvas.height = videoRef.current.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(videoRef.current, 0, 0);
+      
+      // Converter para blob
+      const blob = await new Promise((resolve) => {
+        canvas.toBlob(resolve, 'image/jpeg', 0.8);
+      });
+
+      if (!blob) {
+        throw new Error('Failed to create photo blob');
+      }
+
+      if (isCapturingBefore) {
+        setBeforePhoto(blob);
+        setPreviewBefore(canvas.toDataURL('image/jpeg'));
+        setIsCapturingBefore(false);
+        toast.success('Foto "antes" capturada! Agora capture a foto "depois".');
+      } else {
+        setAfterPhoto(blob);
+        setPreviewAfter(canvas.toDataURL('image/jpeg'));
+        
+        // Upload das fotos
+        await Client.uploadPhoto(clientId, {
+          before: beforePhoto,
+          after: blob
+        }, 'camera');
+        
+        // Recarregar fotos
+        await loadPhotos();
+        
+        toast.success('Fotos salvas com sucesso!');
+        stopCamera();
+      }
+    } catch (error) {
+      console.error('Error taking photo:', error);
+      toast.error('Erro ao salvar foto');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleFileUpload = async (beforeFile, afterFile) => {
+    if (!beforeFile || !afterFile) {
+      toast.error('Selecione as fotos antes e depois');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      await Client.uploadPhoto(clientId, {
+        before: beforeFile,
+        after: afterFile
+      }, 'upload');
+      
+      await loadPhotos();
+      toast.success('Fotos enviadas com sucesso!');
+      setShowUploadDialog(false);
+    } catch (error) {
+      console.error('Error uploading photos:', error);
+      toast.error('Erro ao enviar fotos');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const deletePhoto = async (photoId) => {
+    try {
+      setIsLoading(true);
+      await Client.deletePhoto(clientId, photoId);
+      await loadPhotos();
+      toast.success('Fotos excluídas com sucesso!');
+    } catch (error) {
+      console.error('Error deleting photo:', error);
+      toast.error('Erro ao excluir fotos');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -727,7 +885,7 @@ export default function ClientDetails() {
                 {contractData && (
                   <div className="flex gap-2">
                     <button
-                      onClick={() => setShowShareDialog(true)}
+                      onClick={sendContractByEmail}
                       className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#3475B8] border border-[#3475B8] rounded-md hover:bg-[#3475B8] hover:text-white transition-colors"
                     >
                       <Share className="w-4 h-4" />
@@ -807,49 +965,243 @@ export default function ClientDetails() {
         </TabsContent>
 
         <TabsContent value="fotos">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg font-semibold">
-                  Fotos Antes/Depois
-                </CardTitle>
-                <Button variant="outline" size="sm">
-                  <Camera className="w-4 h-4 mr-2" />
-                  Adicionar Fotos
-                </Button>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xl font-medium text-gray-800">Fotos do Cliente</h3>
+              <div className="flex gap-2">
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={(e) => {
+                    if (e.target.files.length === 2) {
+                      setBeforePhoto(e.target.files[0]);
+                      setAfterPhoto(e.target.files[1]);
+                    } else {
+                      toast.error('Selecione exatamente 2 fotos (antes e depois)');
+                    }
+                  }}
+                  className="hidden"
+                  id="photo-upload"
+                />
+                <label
+                  htmlFor="photo-upload"
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#3475B8] border border-[#3475B8] rounded-md hover:bg-[#3475B8] hover:text-white transition-colors cursor-pointer"
+                >
+                  <FileUp className="w-4 h-4" />
+                  Enviar Fotos
+                </label>
+                <button
+                  onClick={showCamera ? stopCamera : startCamera}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#3475B8] rounded-md hover:bg-[#2C64A0] transition-colors"
+                >
+                  <Camera className="w-4 h-4" />
+                  {showCamera ? 'Parar Câmera' : 'Tirar Foto'}
+                </button>
+                <button
+                  onClick={() => setShowUploadDialog(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors"
+                >
+                  <Upload className="h-5 w-5" />
+                  Enviar Fotos
+                </button>
               </div>
-            </CardHeader>
-            <CardContent>
-              {client.before_after_photos?.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {client.before_after_photos.map((photo, i) => (
-                    <div key={i} className="space-y-2">
-                      <div className="grid grid-cols-2 gap-4">
-                        <img
-                          src={photo.before_url}
-                          alt="Antes"
-                          className="w-full h-48 object-cover rounded-lg"
-                        />
-                        <img
-                          src={photo.after_url}
-                          alt="Depois"
-                          className="w-full h-48 object-cover rounded-lg"
-                        />
-                      </div>
-                      <div className="text-sm text-[#3475B8]">
-                        <p>{photo.treatment}</p>
-                        <p>{format(new Date(photo.date), 'dd/MM/yyyy')}</p>
-                      </div>
-                    </div>
-                  ))}
+            </div>
+
+            {/* Controles da câmera */}
+            <div className="flex flex-wrap gap-4 mb-6">
+              <button
+                onClick={showCamera ? stopCamera : startCamera}
+                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium ${
+                  showCamera 
+                    ? 'text-red-600 border border-red-600 hover:bg-red-600 hover:text-white' 
+                    : 'text-[#3475B8] border border-[#3475B8] hover:bg-[#3475B8] hover:text-white'
+                } rounded-md transition-colors`}
+              >
+                {showCamera ? (
+                  <>
+                    <X className="w-4 h-4" />
+                    Parar Câmera
+                  </>
+                ) : (
+                  <>
+                    <Camera className="w-4 h-4" />
+                    Tirar Foto
+                  </>
+                )}
+              </button>
+
+              <button
+                onClick={() => setShowUploadDialog(true)}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#3475B8] border border-[#3475B8] rounded-md hover:bg-[#3475B8] hover:text-white transition-colors"
+              >
+                <FileUp className="w-4 h-4" />
+                Enviar Fotos
+              </button>
+            </div>
+
+            {/* Preview da câmera */}
+            {showCamera && (
+              <div className="relative mb-6">
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  className="w-full max-h-[400px] object-cover rounded-lg"
+                />
+                <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2">
+                  <button
+                    onClick={takePhoto}
+                    disabled={isLoading}
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#3475B8] rounded-md hover:bg-[#2C64A0] transition-colors"
+                  >
+                    {isLoading ? (
+                      <span className="animate-spin">⏳</span>
+                    ) : (
+                      <>
+                        <Camera className="w-4 h-4" />
+                        {isCapturingBefore ? 'Capturar Foto "Antes"' : 'Capturar Foto "Depois"'}
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={stopCamera}
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-600 border border-red-600 rounded-md hover:bg-red-600 hover:text-white transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                    Cancelar
+                  </button>
                 </div>
-              ) : (
-                <p className="text-center text-[#518CD0] py-4">
-                  Nenhuma foto encontrada
-                </p>
-              )}
-            </CardContent>
-          </Card>
+              </div>
+            )}
+
+            {/* Preview das fotos capturadas */}
+            {(previewBefore || previewAfter) && (
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                <div>
+                  <h3 className="text-sm font-medium text-gray-700 mb-2">Antes</h3>
+                  {previewBefore && (
+                    <img
+                      src={previewBefore}
+                      alt="Preview antes"
+                      className="w-full h-48 object-cover rounded-lg border border-gray-200"
+                    />
+                  )}
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium text-gray-700 mb-2">Depois</h3>
+                  {previewAfter && (
+                    <img
+                      src={previewAfter}
+                      alt="Preview depois"
+                      className="w-full h-48 object-cover rounded-lg border border-gray-200"
+                    />
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Grid de fotos */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              {photos.map((photo) => (
+                <div key={photo.id} className="border border-gray-200 rounded-lg p-4">
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-700 mb-2">Antes</h3>
+                      <img
+                        src={photo.before}
+                        alt="Foto antes"
+                        className="w-full h-48 object-cover rounded-lg border border-gray-200"
+                      />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-700 mb-2">Depois</h3>
+                      <img
+                        src={photo.after}
+                        alt="Foto depois"
+                        className="w-full h-48 object-cover rounded-lg border border-gray-200"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-500">
+                      {new Date(photo.uploadedAt).toLocaleDateString()} - {photo.type === 'camera' ? 'Câmera' : 'Upload'}
+                    </span>
+                    <button
+                      onClick={() => deletePhoto(photo.id)}
+                      className="flex items-center gap-2 px-3 py-1 text-sm text-red-600 hover:text-red-700 transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Excluir
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Diálogo de upload */}
+            {showUploadDialog && (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="bg-white p-6 rounded-lg shadow-xl max-w-lg w-full">
+                  <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-lg font-medium">Enviar Fotos</h2>
+                    <button
+                      onClick={() => setShowUploadDialog(false)}
+                      className="text-gray-400 hover:text-gray-600"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Foto Antes
+                      </label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => setBeforePhoto(e.target.files[0])}
+                        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-[#3475B8] file:text-white hover:file:bg-[#2C64A0]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Foto Depois
+                      </label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => setAfterPhoto(e.target.files[0])}
+                        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-[#3475B8] file:text-white hover:file:bg-[#2C64A0]"
+                      />
+                    </div>
+                    <div className="flex justify-end gap-4 mt-6">
+                      <button
+                        onClick={() => setShowUploadDialog(false)}
+                        className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        onClick={() => handleFileUpload(beforePhoto, afterPhoto)}
+                        disabled={isLoading}
+                        className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#3475B8] rounded-md hover:bg-[#2C64A0] transition-colors disabled:opacity-50"
+                      >
+                        {isLoading ? (
+                          <span className="animate-spin">⏳</span>
+                        ) : (
+                          <>
+                            <FileUp className="w-4 h-4" />
+                            Enviar
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </TabsContent>
 
         <TabsContent value="observacoes">
