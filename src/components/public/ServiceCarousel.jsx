@@ -1,8 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, ChevronRightIcon } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export default function ServiceCarousel({ services, formatPrice, formatWhatsAppLink, companyWhatsapp, whatsappMessage }) {
   const [currentPage, setCurrentPage] = useState(0);
+  const [selectedService, setSelectedService] = useState(null);
   const servicesPerPage = 3;
   const totalPages = Math.ceil(services.length / servicesPerPage);
   
@@ -29,6 +36,12 @@ export default function ServiceCarousel({ services, formatPrice, formatWhatsAppL
     currentPage * servicesPerPage,
     (currentPage + 1) * servicesPerPage
   );
+
+  const truncateText = (text, limit) => {
+    if (!text) return '';
+    if (text.length <= limit) return text;
+    return text.slice(0, limit) + '...';
+  };
   
   return (
     <div className="relative">
@@ -48,7 +61,17 @@ export default function ServiceCarousel({ services, formatPrice, formatWhatsAppL
             </div>
             <div className="p-6">
               <h3 className="text-xl font-semibold text-[#294380] mb-2">{service.name}</h3>
-              <p className="text-gray-600 mb-4">{service.description}</p>
+              <div className="text-gray-600 mb-4">
+                <p>{truncateText(service.description, 150)}</p>
+                {service.description?.length > 150 && (
+                  <button
+                    onClick={() => setSelectedService(service)}
+                    className="text-[#294380] hover:text-[#1a2a55] text-sm font-medium mt-2"
+                  >
+                    Leia mais
+                  </button>
+                )}
+              </div>
               {service.price && service.show_price_on_website && (
                 <p className="text-lg font-bold text-[#0D0F36] mb-4">
                   {formatPrice(service.price)}
@@ -67,6 +90,18 @@ export default function ServiceCarousel({ services, formatPrice, formatWhatsAppL
           </div>
         ))}
       </div>
+
+      {/* Modal para exibir descrição completa */}
+      <Dialog open={!!selectedService} onOpenChange={() => setSelectedService(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{selectedService?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="mt-4">
+            <p className="text-gray-600">{selectedService?.description}</p>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Mostrar controles de navegação apenas se houver mais de uma página */}
       {totalPages > 1 && (
