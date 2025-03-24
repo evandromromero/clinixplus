@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { format, isToday, isThisMonth, addMonths, isSameMonth, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -6,17 +5,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar, Gift, Mail, Send, Phone } from "lucide-react";
-import { Client } from "@/api/entities";
+import { Client } from "@/firebase/entities";
 import { SendEmail } from "@/api/integrations";
+import { CompanySettings } from "@/firebase/entities"; // Importando a entidade CompanySettings
 
 export default function Birthdays() {
   const [birthdays, setBirthdays] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('thisMonth'); // 'today', 'thisMonth', 'nextMonth', 'all'
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'MM'));
+  const [company, setCompany] = useState({ name: '' }); // Estado para armazenar as configurações da empresa
 
   useEffect(() => {
     loadBirthdays();
+    loadCompanySettings(); // Carregando as configurações da empresa
   }, []);
 
   const loadBirthdays = async () => {
@@ -46,6 +48,17 @@ export default function Birthdays() {
       console.error('Erro ao carregar aniversariantes:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadCompanySettings = async () => {
+    try {
+      const settings = await CompanySettings.list();
+      if (settings && settings.length > 0) {
+        setCompany(settings[0]);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar configurações da empresa:', error);
     }
   };
 
@@ -107,6 +120,18 @@ export default function Birthdays() {
     }
   };
 
+  const sendWhatsAppMessage = (client) => {
+    try {
+      const phoneNumber = client.phone.replace(/\D/g, '');
+      const message = encodeURIComponent(`Olá ${client.name}! Em nome de toda a equipe ${company.name}, desejamos um Feliz Aniversário! 🎉 Que seu dia seja repleto de alegria e momentos especiais. Como presente, preparamos uma surpresa especial para sua próxima visita. Entre em contato para saber mais!`);
+      const whatsappLink = `https://wa.me/${phoneNumber}?text=${message}`;
+      window.open(whatsappLink, '_blank');
+    } catch (error) {
+      console.error('Erro ao enviar mensagem WhatsApp:', error);
+      alert("Erro ao abrir WhatsApp. Verifique se o número de telefone está correto.");
+    }
+  };
+
   const sendBirthdayEmail = async (client) => {
     try {
       await SendEmail({
@@ -115,14 +140,14 @@ export default function Birthdays() {
         body: `
           Olá ${client.name}!
 
-          Em nome de toda a equipe, queremos desejar um Feliz Aniversário!
+          Em nome de toda a equipe ${company.name}, queremos desejar um Feliz Aniversário!
           Que seu dia seja repleto de alegria e momentos especiais.
 
           Como presente especial, preparamos uma surpresa para sua próxima visita.
           Entre em contato conosco para saber mais!
 
           Abraços,
-          Equipe Esthétique
+          Equipe ${company.name}
         `
       });
 
@@ -130,18 +155,6 @@ export default function Birthdays() {
     } catch (error) {
       console.error('Erro ao enviar email:', error);
       alert("Erro ao enviar email de aniversário. Tente novamente.");
-    }
-  };
-
-  const sendWhatsAppMessage = (client) => {
-    try {
-      const phoneNumber = client.phone.replace(/\D/g, '');
-      const message = encodeURIComponent(`Olá ${client.name}! Em nome de toda a equipe Esthétique, desejamos um Feliz Aniversário! 🎉 Que seu dia seja repleto de alegria e momentos especiais. Como presente, preparamos uma surpresa especial para sua próxima visita. Entre em contato para saber mais!`);
-      const whatsappLink = `https://wa.me/${phoneNumber}?text=${message}`;
-      window.open(whatsappLink, '_blank');
-    } catch (error) {
-      console.error('Erro ao enviar mensagem WhatsApp:', error);
-      alert("Erro ao abrir WhatsApp. Verifique se o número de telefone está correto.");
     }
   };
 

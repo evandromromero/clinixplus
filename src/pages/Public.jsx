@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -21,10 +20,7 @@ import AboutModal from "../components/public/AboutModal";
 import ServiceCarousel from "../components/public/ServiceCarousel";
 import TestimonialCarousel from "../components/public/TestimonialCarousel";
 import AddTestimonialDialog from "../components/public/AddTestimonialDialog";
-import { Service } from "@/api/entities";
-import { CompanySettings } from "@/api/entities";
-import { Testimonial } from "@/api/entities";
-import { SubscriptionPlan } from "@/api/entities";
+import { Service, CompanySettings, Testimonial, SubscriptionPlan } from "@/firebase/entities";
 import SubscriptionPlansSection from '../components/public/SubscriptionPlansSection';
 import GiftCardSection from '../components/public/GiftCardSection';
 
@@ -104,7 +100,7 @@ export default function Public() {
 
   const loadSlideShowImages = async () => {
     try {
-      const SlideShowImage = (await import('@/api/entities')).SlideShowImage;
+      const SlideShowImage = (await import('@/firebase/entities')).SlideShowImage;
       const slides = await SlideShowImage.list('order');
       setSlideshowImages(slides.filter(slide => slide.active !== false));
     } catch (error) {
@@ -123,11 +119,9 @@ export default function Public() {
 
   const loadSubscriptionPlans = async () => {
     try {
-      const SubscriptionPlan = (await import('@/api/entities')).SubscriptionPlan;
       const plans = await SubscriptionPlan.list();
       const activePlans = plans.filter(plan => plan.is_active !== false);
       
-      const Service = (await import('@/api/entities')).Service;
       const services = await Service.list();
       
       const enrichedPlans = activePlans.map(plan => {
@@ -644,7 +638,7 @@ export default function Public() {
           </div>
           
           <div className="border-t border-white/10 mt-10 pt-6 flex flex-col md:flex-row justify-between items-center">
-            <p className="text-white/50 text-sm">© 2024 {company.name}. Todos os direitos reservados.</p>
+            <p className="text-white/50 text-sm"> 2024 {company.name}. Todos os direitos reservados.</p>
             <div className="mt-4 md:mt-0">
               <Link to={createPageUrl("ClientPortal")} className="text-[#69D2CD] hover:text-white flex items-center">
                 Área do Cliente
