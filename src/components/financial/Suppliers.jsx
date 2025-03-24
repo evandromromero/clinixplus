@@ -12,6 +12,9 @@ import RateLimitHandler from '@/components/RateLimitHandler';
 export default function Suppliers() {
   const [suppliers, setSuppliers] = useState([]);
   const [showNewSupplierDialog, setShowNewSupplierDialog] = useState(false);
+  const [showViewSupplierDialog, setShowViewSupplierDialog] = useState(false);
+  const [showEditSupplierDialog, setShowEditSupplierDialog] = useState(false);
+  const [currentSupplier, setCurrentSupplier] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [newSupplier, setNewSupplier] = useState({
     name: "",
@@ -82,6 +85,27 @@ export default function Suppliers() {
       loadSuppliers();
     } catch (error) {
       console.error("Error creating supplier:", error);
+    }
+  };
+
+  const handleViewSupplier = (supplier) => {
+    setCurrentSupplier(supplier);
+    setShowViewSupplierDialog(true);
+  };
+
+  const handleEditSupplier = (supplier) => {
+    setCurrentSupplier({...supplier});
+    setShowEditSupplierDialog(true);
+  };
+
+  const handleUpdateSupplier = async () => {
+    try {
+      await Supplier.update(currentSupplier.id, currentSupplier);
+      setShowEditSupplierDialog(false);
+      setCurrentSupplier(null);
+      loadSuppliers();
+    } catch (error) {
+      console.error("Error updating supplier:", error);
     }
   };
 
@@ -166,10 +190,10 @@ export default function Suppliers() {
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="icon">
+                    <Button variant="ghost" size="icon" onClick={() => handleViewSupplier(supplier)}>
                       <FileText className="w-4 h-4 text-gray-500" />
                     </Button>
-                    <Button variant="ghost" size="icon">
+                    <Button variant="ghost" size="icon" onClick={() => handleEditSupplier(supplier)}>
                       <Pencil className="w-4 h-4 text-gray-500" />
                     </Button>
                   </div>
@@ -358,6 +382,255 @@ export default function Suppliers() {
               Cancelar
             </Button>
             <Button onClick={handleCreateSupplier} className="bg-[#294380] hover:bg-[#0D0F36]">
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showViewSupplierDialog} onOpenChange={setShowViewSupplierDialog}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Visualizar Fornecedor</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4 max-h-[70vh] overflow-y-auto pr-2">
+            <div className="space-y-2">
+              <Label>Nome da Empresa</Label>
+              <p>{currentSupplier?.name}</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>CNPJ</Label>
+                <p>{currentSupplier?.cnpj}</p>
+              </div>
+              <div className="space-y-2">
+                <Label>Nome do Contato</Label>
+                <p>{currentSupplier?.contact_name}</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Telefone</Label>
+                <p>{currentSupplier?.phone}</p>
+              </div>
+              <div className="space-y-2">
+                <Label>Email</Label>
+                <p>{currentSupplier?.email}</p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Endereço</Label>
+              <div className="grid grid-cols-2 gap-4">
+                <p>Rua: {currentSupplier?.address.street}</p>
+                <p>Número: {currentSupplier?.address.number}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <p>Complemento: {currentSupplier?.address.complement}</p>
+                <p>Bairro: {currentSupplier?.address.neighborhood}</p>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <p>Cidade: {currentSupplier?.address.city}</p>
+                <p>Estado: {currentSupplier?.address.state}</p>
+                <p>CEP: {currentSupplier?.address.zip}</p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Dados de Pagamento</Label>
+              <div className="grid grid-cols-2 gap-4">
+                <p>Banco: {currentSupplier?.payment_info.bank}</p>
+                <p>Agência: {currentSupplier?.payment_info.agency}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <p>Conta: {currentSupplier?.payment_info.account}</p>
+                <p>Chave PIX: {currentSupplier?.payment_info.pix_key}</p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Observações</Label>
+              <p>{currentSupplier?.notes}</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowViewSupplierDialog(false)}>
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showEditSupplierDialog} onOpenChange={setShowEditSupplierDialog}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Editar Fornecedor</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4 max-h-[70vh] overflow-y-auto pr-2">
+            <div className="space-y-2">
+              <Label>Nome da Empresa</Label>
+              <Input
+                value={currentSupplier?.name}
+                onChange={(e) => setCurrentSupplier({...currentSupplier, name: e.target.value})}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>CNPJ</Label>
+                <Input
+                  value={currentSupplier?.cnpj}
+                  onChange={(e) => setCurrentSupplier({...currentSupplier, cnpj: e.target.value})}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Nome do Contato</Label>
+                <Input
+                  value={currentSupplier?.contact_name}
+                  onChange={(e) => setCurrentSupplier({...currentSupplier, contact_name: e.target.value})}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Telefone</Label>
+                <Input
+                  value={currentSupplier?.phone}
+                  onChange={(e) => setCurrentSupplier({...currentSupplier, phone: e.target.value})}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Email</Label>
+                <Input
+                  type="email"
+                  value={currentSupplier?.email}
+                  onChange={(e) => setCurrentSupplier({...currentSupplier, email: e.target.value})}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Endereço</Label>
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  placeholder="Rua"
+                  value={currentSupplier?.address.street}
+                  onChange={(e) => setCurrentSupplier({
+                    ...currentSupplier, 
+                    address: {...currentSupplier.address, street: e.target.value}
+                  })}
+                />
+                <Input
+                  placeholder="Número"
+                  value={currentSupplier?.address.number}
+                  onChange={(e) => setCurrentSupplier({
+                    ...currentSupplier, 
+                    address: {...currentSupplier.address, number: e.target.value}
+                  })}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  placeholder="Complemento"
+                  value={currentSupplier?.address.complement}
+                  onChange={(e) => setCurrentSupplier({
+                    ...currentSupplier, 
+                    address: {...currentSupplier.address, complement: e.target.value}
+                  })}
+                />
+                <Input
+                  placeholder="Bairro"
+                  value={currentSupplier?.address.neighborhood}
+                  onChange={(e) => setCurrentSupplier({
+                    ...currentSupplier, 
+                    address: {...currentSupplier.address, neighborhood: e.target.value}
+                  })}
+                />
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <Input
+                  placeholder="Cidade"
+                  value={currentSupplier?.address.city}
+                  onChange={(e) => setCurrentSupplier({
+                    ...currentSupplier, 
+                    address: {...currentSupplier.address, city: e.target.value}
+                  })}
+                />
+                <Input
+                  placeholder="Estado"
+                  value={currentSupplier?.address.state}
+                  onChange={(e) => setCurrentSupplier({
+                    ...currentSupplier, 
+                    address: {...currentSupplier.address, state: e.target.value}
+                  })}
+                />
+                <Input
+                  placeholder="CEP"
+                  value={currentSupplier?.address.zip}
+                  onChange={(e) => setCurrentSupplier({
+                    ...currentSupplier, 
+                    address: {...currentSupplier.address, zip: e.target.value}
+                  })}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Dados de Pagamento</Label>
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  placeholder="Banco"
+                  value={currentSupplier?.payment_info.bank}
+                  onChange={(e) => setCurrentSupplier({
+                    ...currentSupplier, 
+                    payment_info: {...currentSupplier.payment_info, bank: e.target.value}
+                  })}
+                />
+                <Input
+                  placeholder="Agência"
+                  value={currentSupplier?.payment_info.agency}
+                  onChange={(e) => setCurrentSupplier({
+                    ...currentSupplier, 
+                    payment_info: {...currentSupplier.payment_info, agency: e.target.value}
+                  })}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  placeholder="Conta"
+                  value={currentSupplier?.payment_info.account}
+                  onChange={(e) => setCurrentSupplier({
+                    ...currentSupplier, 
+                    payment_info: {...currentSupplier.payment_info, account: e.target.value}
+                  })}
+                />
+                <Input
+                  placeholder="Chave PIX"
+                  value={currentSupplier?.payment_info.pix_key}
+                  onChange={(e) => setCurrentSupplier({
+                    ...currentSupplier, 
+                    payment_info: {...currentSupplier.payment_info, pix_key: e.target.value}
+                  })}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Observações</Label>
+              <Textarea
+                value={currentSupplier?.notes}
+                onChange={(e) => setCurrentSupplier({...currentSupplier, notes: e.target.value})}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditSupplierDialog(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleUpdateSupplier} className="bg-[#294380] hover:bg-[#0D0F36]">
               Salvar
             </Button>
           </DialogFooter>
