@@ -48,6 +48,43 @@ npm run build
    - Respeitado o estilo de escrita do projeto
    - Conservada a estrutura de dados atual
 
+#### Sistema de Pacotes
+1. **Sistema de Desconto Flexível**:
+   - Suporte para dois tipos de desconto:
+     * Porcentagem (%)
+     * Valor fixo (R$)
+   - Seleção do tipo de desconto no modal
+   - Cálculo automático do preço final
+
+2. **Identificação Visual por Cores**:
+   - Campo 'color' adicionado aos pacotes
+   - Paleta de cores predefinidas:
+     * Azul principal (#294380)
+     * Vermelho (#FF6B6B)
+     * Verde (#4CAF50)
+     * Salmão (#FFA07A)
+     * Roxo (#9370DB)
+     * Verde água (#20B2AA)
+     * Dourado (#FFD700)
+   - Interface com botões coloridos
+   - Barra lateral colorida nos cards
+
+3. **Layout dos Pacotes**:
+   - Cards informativos com:
+     * Nome do pacote
+     * Preço total com desconto
+     * Descrição
+     * Lista de serviços incluídos
+     * Validade em dias
+   - Identificação visual por cores
+   - Ações de editar e excluir
+
+4. **Integração Firebase**:
+   - Persistência completa dos dados
+   - Novos campos:
+     * discount_type: "percentage" | "fixed"
+     * color: string (hexadecimal)
+
 #### Histórico de Sessões em Pacotes
 1. **Estrutura do Histórico**:
    ```javascript
