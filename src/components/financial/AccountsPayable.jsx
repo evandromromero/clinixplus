@@ -3,13 +3,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { 
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle 
+} from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { format, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Plus, Search, AlertCircle, FileText, TrendingDown, CalendarIcon, CheckCircle, XCircle } from "lucide-react";
+import { Plus, Search, AlertCircle, FileText, TrendingDown, CalendarIcon, CheckCircle, XCircle, InfoIcon } from "lucide-react";
 import { FinancialTransaction, Supplier } from "@/firebase/entities";
 import RateLimitHandler from '@/components/RateLimitHandler';
 import toast, { Toaster } from 'react-hot-toast';
@@ -18,6 +25,15 @@ export default function AccountsPayable() {
   const [transactions, setTransactions] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [showNewTransactionDialog, setShowNewTransactionDialog] = useState(false);
+  const [showDetailsDialog, setShowDetailsDialog] = useState(false);
+  const [showPaymentDialog, setShowPaymentDialog] = useState(false);
+  const [selectedTransaction, setSelectedTransaction] = useState(null);
+  const [paymentDetails, setPaymentDetails] = useState({
+    payment_date: format(new Date(), "yyyy-MM-dd"),
+    payment_method: "dinheiro",
+    interest: "0",
+    observations: ""
+  });
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [dateFilter, setDateFilter] = useState("all"); // all, today, week, month, custom
@@ -252,6 +268,84 @@ export default function AccountsPayable() {
       loadData();
     } catch (error) {
       console.error("Error updating transaction:", error);
+    }
+  };
+
+  const handleViewDetails = (transaction) => {
+    setSelectedTransaction(transaction);
+    setShowDetailsDialog(true);
+  };
+
+  const handlePaymentClick = (transaction) => {
+    setSelectedTransaction(transaction);
+    setPaymentDetails({
+      payment_date: format(new Date(), "yyyy-MM-dd"),
+      payment_method: transaction.payment_method || "dinheiro",
+      interest: "0",
+      observations: ""
+    });
+    setShowPaymentDialog(true);
+  };
+
+  const handleConfirmPayment = async () => {
+    try {
+      const interest = parseFloat(paymentDetails.interest) || 0;
+      const totalAmount = selectedTransaction.amount + interest;
+
+      // Atualiza a transação com os detalhes do pagamento
+      await FinancialTransaction.update(selectedTransaction.id, {
+        ...selectedTransaction,
+        status: "pago",
+        payment_date: paymentDetails.payment_date,
+        payment_method: paymentDetails.payment_method,
+        paid_amount: totalAmount,
+        interest_amount: interest,
+        payment_observations: paymentDetails.observations
+      });
+
+      // Se for recorrente automática, cria a próxima parcela
+      if (selectedTransaction.is_auto_recurring) {
+        await checkAndCreateRecurrences();
+      }
+
+      setShowPaymentDialog(false);
+      await loadData();
+      
+      // Mostra confirmação de sucesso
+      toast.custom((t) => (
+        <div className={`${
+          t.visible ? 'animate-enter' : 'animate-leave'
+        } max-w-md w-full bg-white shadow-lg rounded-lg pointer-events-auto flex ring-1 ring-black ring-opacity-5`}>
+          <div className="flex-1 w-0 p-4">
+            <div className="flex items-start">
+              <div className="flex-shrink-0 pt-0.5">
+                <CheckCircle className="h-10 w-10 text-green-500" />
+              </div>
+              <div className="ml-3 flex-1">
+                <p className="text-sm font-medium text-gray-900">
+                  Pagamento registrado com sucesso!
+                </p>
+                <p className="mt-1 text-sm text-gray-500">
+                  Valor total: R$ {totalAmount.toFixed(2)}
+                  {interest > 0 && ` (inclui juros de R$ ${interest.toFixed(2)})`}
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="flex border-l border-gray-200">
+            <button
+              onClick={() => toast.dismiss(t.id)}
+              className="w-full border border-transparent rounded-none rounded-r-lg p-4 flex items-center justify-center text-sm font-medium text-[#294380] hover:text-[#1e3163] focus:outline-none"
+            >
+              Fechar
+            </button>
+          </div>
+        </div>
+      ), { duration: 5000 });
+
+    } catch (error) {
+      console.error("Erro ao registrar pagamento:", error);
+      toast.error("Erro ao registrar pagamento");
     }
   };
 
@@ -515,8 +609,8 @@ export default function AccountsPayable() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={() => handleStatusChange(transaction, 'pago')}
-                                title="Marcar como pago"
+                                onClick={() => handlePaymentClick(transaction)}
+                                title="Registrar pagamento"
                               >
                                 <CheckCircle className="h-4 w-4 text-green-600" />
                               </Button>
@@ -533,6 +627,7 @@ export default function AccountsPayable() {
                           <Button
                             variant="ghost"
                             size="icon"
+                            onClick={() => handleViewDetails(transaction)}
                             title="Ver detalhes"
                           >
                             <FileText className="h-4 w-4 text-[#294380]" />
@@ -736,6 +831,246 @@ export default function AccountsPayable() {
             </Button>
             <Button onClick={handleCreateTransaction} className="bg-[#294380] hover:bg-[#0D0F36]">
               Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showDetailsDialog} onOpenChange={setShowDetailsDialog}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Detalhes da Despesa</DialogTitle>
+          </DialogHeader>
+          {selectedTransaction && (
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm text-gray-500">Descrição</Label>
+                  <div className="font-medium">{selectedTransaction.description}</div>
+                </div>
+                <div>
+                  <Label className="text-sm text-gray-500">Categoria</Label>
+                  <div className="font-medium">
+                    {selectedTransaction.category.replace(/_/g, ' ')}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm text-gray-500">Valor</Label>
+                  <div className="font-medium">
+                    R$ {selectedTransaction.amount.toFixed(2)}
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-sm text-gray-500">Status</Label>
+                  <div>
+                    <span
+                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                        selectedTransaction.status === 'pago'
+                          ? 'bg-green-100 text-green-800'
+                          : selectedTransaction.status === 'cancelado'
+                          ? 'bg-red-100 text-red-800'
+                          : 'bg-yellow-100 text-yellow-800'
+                      }`}
+                    >
+                      {selectedTransaction.status}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm text-gray-500">Data de Vencimento</Label>
+                  <div className="font-medium">
+                    {format(new Date(selectedTransaction.due_date), "dd/MM/yyyy")}
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-sm text-gray-500">Data de Pagamento</Label>
+                  <div className="font-medium">
+                    {selectedTransaction.payment_date 
+                      ? format(new Date(selectedTransaction.payment_date), "dd/MM/yyyy")
+                      : '-'}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm text-gray-500">Forma de Pagamento</Label>
+                  <div className="font-medium">
+                    {selectedTransaction.payment_method.replace(/_/g, ' ')}
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-sm text-gray-500">Fornecedor</Label>
+                  <div className="font-medium">
+                    {suppliers.find(s => s.id === selectedTransaction.supplier_id)?.name || '-'}
+                  </div>
+                </div>
+              </div>
+
+              {selectedTransaction.is_auto_recurring && (
+                <div className="mt-2 p-4 bg-blue-50 rounded-lg">
+                  <div className="flex items-start">
+                    <CalendarIcon className="h-5 w-5 text-blue-400 mt-0.5 mr-2" />
+                    <div>
+                      <h4 className="text-sm font-medium text-blue-800">Despesa Recorrente Automática</h4>
+                      <p className="text-sm text-blue-600 mt-0.5">
+                        Esta é uma despesa recorrente que gera novas parcelas automaticamente.
+                        {selectedTransaction.recurrence_end_date && (
+                          <> Recorrências serão geradas até {format(new Date(selectedTransaction.recurrence_end_date), "dd/MM/yyyy")}.</>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {selectedTransaction.parent_transaction_id && (
+                <div className="mt-2 p-4 bg-gray-50 rounded-lg">
+                  <div className="flex items-start">
+                    <CalendarIcon className="h-5 w-5 text-gray-400 mt-0.5 mr-2" />
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-800">Parcela Recorrente</h4>
+                      <p className="text-sm text-gray-600 mt-0.5">
+                        Esta é uma parcela de uma despesa recorrente.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDetailsDialog(false)}>
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showPaymentDialog} onOpenChange={setShowPaymentDialog}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Confirmar Pagamento</DialogTitle>
+            <DialogDescription>
+              Preencha os detalhes do pagamento abaixo
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedTransaction && (
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label>Descrição da Despesa</Label>
+                <div className="px-3 py-2 bg-gray-50 rounded-md text-sm">
+                  {selectedTransaction.description}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Valor Original</Label>
+                  <div className="px-3 py-2 bg-gray-50 rounded-md text-sm">
+                    R$ {selectedTransaction.amount.toFixed(2)}
+                  </div>
+                </div>
+                <div>
+                  <Label htmlFor="interest">Juros</Label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2.5 text-gray-500">R$</span>
+                    <Input
+                      id="interest"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      className="pl-8"
+                      value={paymentDetails.interest}
+                      onChange={(e) => setPaymentDetails({
+                        ...paymentDetails,
+                        interest: e.target.value
+                      })}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="payment_date">Data do Pagamento</Label>
+                  <Input
+                    id="payment_date"
+                    type="date"
+                    value={paymentDetails.payment_date}
+                    onChange={(e) => setPaymentDetails({
+                      ...paymentDetails,
+                      payment_date: e.target.value
+                    })}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="payment_method">Forma de Pagamento</Label>
+                  <Select
+                    value={paymentDetails.payment_method}
+                    onValueChange={(value) => setPaymentDetails({
+                      ...paymentDetails,
+                      payment_method: value
+                    })}
+                  >
+                    <SelectTrigger id="payment_method">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="dinheiro">Dinheiro</SelectItem>
+                      <SelectItem value="cartao_credito">Cartão de Crédito</SelectItem>
+                      <SelectItem value="cartao_debito">Cartão de Débito</SelectItem>
+                      <SelectItem value="pix">PIX</SelectItem>
+                      <SelectItem value="transferencia">Transferência</SelectItem>
+                      <SelectItem value="boleto">Boleto</SelectItem>
+                      <SelectItem value="cheque">Cheque</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="observations">Observações</Label>
+                <Textarea
+                  id="observations"
+                  value={paymentDetails.observations}
+                  onChange={(e) => setPaymentDetails({
+                    ...paymentDetails,
+                    observations: e.target.value
+                  })}
+                  placeholder="Observações sobre o pagamento..."
+                />
+              </div>
+
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <div className="flex items-start">
+                  <InfoIcon className="h-5 w-5 text-blue-400 mt-0.5 mr-2" />
+                  <div>
+                    <h4 className="text-sm font-medium text-blue-800">
+                      Valor Total a Pagar
+                    </h4>
+                    <p className="text-sm text-blue-600 mt-0.5">
+                      R$ {(selectedTransaction.amount + parseFloat(paymentDetails.interest || 0)).toFixed(2)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPaymentDialog(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleConfirmPayment}>
+              Confirmar Pagamento
             </Button>
           </DialogFooter>
         </DialogContent>

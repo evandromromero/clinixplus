@@ -51,7 +51,6 @@ export default function CashRegister() {
   const reportRef = useRef(null);
   const [userData, setUserData] = useState(null);
   const [cashIsOpen, setCashIsOpen] = useState(false);
-
   const [initialAmount, setInitialAmount] = useState(0);
   const [finalAmount, setFinalAmount] = useState(0);
   const [closingNotes, setClosingNotes] = useState("");
@@ -94,6 +93,9 @@ export default function CashRegister() {
   const [dailyExpenses, setDailyExpenses] = useState(0);
   const [paymentMethodsTotal, setPaymentMethodsTotal] = useState({});
   const [errorMessage, setErrorMessage] = useState("");
+
+  const [initialAmountValue, setInitialAmountValue] = useState("");
+  const [openingNotes, setOpeningNotes] = useState("");
 
   useEffect(() => {
     const loadInitialData = async () => {
@@ -521,200 +523,33 @@ export default function CashRegister() {
     }
   };
 
-  const handleOpenCash = async (employeeName, initialAmountValue) => {
-    try {
-      const today = format(new Date(), "yyyy-MM-dd");
-      console.log("[CashRegister] Abrindo caixa para a data:", today);
-      
-      // Verificar se o caixa já está aberto
-      if (cashIsOpen) {
-        alert("O caixa já está aberto!");
-        setShowOpenCashDialog(false);
-        return;
-      }
-      
-      // Criar transação de abertura
-      const openingTransaction = {
-        type: "receita",
-        category: "abertura_caixa",
-        description: "Abertura de Caixa",
-        amount: parseFloat(initialAmountValue) || 0,
-        payment_method: "dinheiro",
-        payment_date: today,
-        status: "pago",
-        notes: openingNotes,
-        opened_by: employeeName
-      };
-      
-      // Fechar o diálogo antes de prosseguir para evitar problemas de UI
-      setShowOpenCashDialog(false);
-      
-      // Criar a transação de abertura
-      await FinancialTransaction.create(openingTransaction);
-      
-      // Atualizar o estado do componente
-      setInitialAmount(parseFloat(initialAmountValue) || 0);
-      setOpeningNotes("");
-      setCashIsOpen(true);
-      
-      // Forçar atualização imediata dos dados
-      await loadTransactions();
-      await loadCashRegisters();
-      await checkCashStatus();
-      
-      alert("Caixa aberto com sucesso!");
-    } catch (error) {
-      console.error("[CashRegister] Erro ao abrir o caixa:", error);
-      alert("Erro ao abrir o caixa. Tente novamente.");
-    }
-  };
-
-  const handleCloseCash = async (employeeName) => {
-    try {
-      const today = format(new Date(), "yyyy-MM-dd");
-      console.log("[CashRegister] Fechando caixa para a data:", today);
-      
-      // Verificar se o caixa já está fechado
-      if (!cashIsOpen) {
-        alert("O caixa já está fechado!");
-        return;
-      }
-      
-      // Dados para fechamento do caixa
-      const closeCashData = {
-        expected_cash: expectedCashAmount,
-        final_amount: finalAmount,
-        difference: finalAmount - expectedCashAmount,
-        notes: closingNotes
-      };
-      
-      // Criar transação de fechamento
-      const closingTransaction = {
-        type: "despesa",
-        category: "fechamento_caixa",
-        description: "Fechamento de caixa",
-        payment_method: "dinheiro",
-        payment_date: today,
-        amount: finalAmount,
-        notes: closingNotes,
-        expected_cash: closeCashData.expected_cash,
-        difference: finalAmount - closeCashData.expected_cash,
-        closed_by: employeeName
-      };
-
-      // Fechar o diálogo antes de prosseguir para evitar problemas de UI
-      setShowCloseCashDialog(false);
-      
-      // Criar a transação de fechamento
-      await FinancialTransaction.create(closingTransaction);
-      
-      // Atualizar o estado do componente
-      setFinalAmount(0);
-      setClosingNotes("");
-      setCashIsOpen(false);
-      
-      // Forçar atualização imediata dos dados
-      await loadTransactions();
-      await loadCashRegisters();
-      await checkCashStatus();
-      
-      alert("Caixa fechado com sucesso!");
-    } catch (error) {
-      console.error("Error closing cash:", error);
-      alert("Erro ao fechar o caixa. Tente novamente.");
-    }
-  };
-
-  const handleCreateTransaction = async (transactionData) => {
-    try {
-      if (!cashIsOpen) {
-        alert("O caixa está fechado. Abra o caixa antes de registrar vendas.");
-        setShowNewTransactionDialog(false);
-        return;
-      }
-      
-      const today = format(new Date(), "yyyy-MM-dd");
-      console.log("[CashRegister] Criando transação para a data:", today);
-      
-      // Validar dados da transação
-      if (!transactionData.items || !Array.isArray(transactionData.items) || transactionData.items.length === 0) {
-        alert("Selecione pelo menos um item para a venda.");
-        return;
-      }
-      
-      // Criar transações para cada item
-      const transactionsToCreate = [];
-      
-      for (const item of transactionData.items) {
-        const itemTransaction = {
-          type: "receita",
-          category: item.type,
-          description: item.name,
-          amount: parseFloat(item.price) || 0,
-          payment_method: transactionData.payment_method || "dinheiro",
-          payment_date: today,
-          status: "pago",
-          notes: transactionData.notes || "",
-          client_id: transactionData.client_id || "",
-          employee_id: transactionData.employee_id || "",
-          item_id: item.id || ""
-        };
-        
-        // Adicionar campos específicos por tipo
-        switch (item.type) {
-          case "produto":
-            itemTransaction.product_quantity = item.quantity;
-            itemTransaction.product_unit_price = item.unit_price;
-            break;
-          case "servico":
-            itemTransaction.service_professional = item.professional;
-            itemTransaction.service_duration = item.duration;
-            break;
-          case "pacote":
-            itemTransaction.package_sessions = item.sessions;
-            itemTransaction.package_validity = item.validity;
-            break;
-          case "gift_card":
-            itemTransaction.gift_card_code = item.code;
-            itemTransaction.gift_card_validity = item.validity;
-            break;
-          case "assinatura":
-            itemTransaction.subscription_plan = item.plan;
-            itemTransaction.subscription_duration = item.duration;
-            break;
+  useEffect(() => {
+    const loadEmployees = async () => {
+      try {
+        const cachedEmployees = localStorage.getItem('authorizedEmployees');
+        if (cachedEmployees) {
+          try {
+            const employeesData = JSON.parse(cachedEmployees);
+            if (Array.isArray(employeesData) && employeesData.length > 0) {
+              setAuthorizedEmployees(employeesData);
+              return;
+            }
+          } catch (e) {
+            console.warn("Erro ao usar dados de funcionários em cache:", e);
+          }
         }
-
-        transactionsToCreate.push(itemTransaction);
+        
+        const employees = await Employee.list();
+        const authorized = employees.filter(emp => emp.can_manage_cash === true && emp.active === true);
+        setAuthorizedEmployees(authorized);
+        localStorage.setItem('authorizedEmployees', JSON.stringify(authorized));
+      } catch (error) {
+        console.error("Erro ao carregar funcionários autorizados:", error);
       }
-
-      // Fechar o diálogo antes de criar as transações para evitar problemas de UI
-      setShowNewTransactionDialog(false);
-      
-      // Criar todas as transações no Firebase
-      await Promise.all(transactionsToCreate.map(transaction => 
-        FinancialTransaction.create(transaction)
-      ));
-      
-      // Resetar o estado do formulário
-      setNewTransaction({
-        type: "receita",
-        category: "outros",
-        description: "",
-        amount: "",
-        payment_method: "dinheiro",
-        notes: "",
-        client_id: ""
-      });
-      
-      // Forçar atualização imediata dos dados
-      await loadTransactions();
-      
-      alert("Venda registrada com sucesso!");
-    } catch (error) {
-      console.error("Erro ao criar transação:", error);
-      setErrorMessage("Erro ao registrar a venda. Tente novamente.");
-    }
-  };
+    };
+    
+    loadEmployees();
+  }, []);
 
   const getTodayTransactions = () => {
     const today = format(new Date(), "yyyy-MM-dd");
@@ -726,25 +561,19 @@ export default function CashRegister() {
     });
   };
 
-  const getClientName = (clientId) => {
-    if (!clientId) return "-";
-    const client = clients.find(c => c.id === clientId);
-    return client ? client.name : `ID: ${clientId}`;
-  };
-
-  const getCashBalance = () => {
-    // Usar o valor já calculado no processTransactions
-    return expectedCashAmount;
+  const getTransactionsByDate = (date) => {
+    return transactions.filter(t => 
+      t.payment_date === date &&
+      t.category !== "abertura_caixa" &&
+      t.category !== "fechamento_caixa"
+    );
   };
 
   const getIncomeByDate = (date) => {
     const today = format(new Date(), "yyyy-MM-dd");
     if (date === today) {
-      // Usar o valor já calculado no processTransactions
       return dailyReceipts;
     }
-    
-    // Para outras datas, manter o cálculo original
     return getTransactionsByDate(date)
       .filter(t => t.type === "receita")
       .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
@@ -753,22 +582,11 @@ export default function CashRegister() {
   const getExpensesByDate = (date) => {
     const today = format(new Date(), "yyyy-MM-dd");
     if (date === today) {
-      // Usar o valor já calculado no processTransactions
       return dailyExpenses;
     }
-    
-    // Para outras datas, manter o cálculo original
     return getTransactionsByDate(date)
       .filter(t => t.type === "despesa")
       .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
-  };
-  
-  const getTransactionsByDate = (date) => {
-    return transactions.filter(t => 
-      t.payment_date === date &&
-      t.category !== "abertura_caixa" &&
-      t.category !== "fechamento_caixa"
-    );
   };
 
   const getPaymentMethodTotal = (method, type, date = format(new Date(), "yyyy-MM-dd")) => {
@@ -782,17 +600,187 @@ export default function CashRegister() {
       .filter(t => t.category === category && t.type === type)
       .reduce((sum, t) => sum + t.amount, 0);
   };
-  
-  const getCashRegisterByDate = (date) => {
-    const opening = cashRegisters.find(r => 
-      r.category === "abertura_caixa" && 
-      r.payment_date === date
+
+  const getCashBalance = () => {
+    return expectedCashAmount;
+  };
+
+  const getClientName = (clientId) => {
+    if (!clientId) return "-";
+    const client = clients.find(c => c.id === clientId);
+    return client ? client.name : `ID: ${clientId}`;
+  };
+
+  const OpenCashDialog = ({ open, onClose, onConfirm }) => {
+    const [employeeId, setEmployeeId] = useState("");
+    const [employeeName, setEmployeeName] = useState("");
+    const [initialAmount, setInitialAmount] = useState("0");
+    const [notes, setNotes] = useState("");
+    const [loading, setLoading] = useState(false);
+    
+    // Resetar o estado do diálogo quando ele for fechado
+    useEffect(() => {
+      if (!open) {
+        setEmployeeId("");
+        setEmployeeName("");
+        setInitialAmount("0");
+        setNotes("");
+        setLoading(false);
+      }
+    }, [open]);
+    
+    const handleSubmit = async () => {
+      try {
+        setLoading(true);
+        const numericValue = parseFloat(initialAmount.replace(',', '.'));
+        
+        if (isNaN(numericValue)) {
+          toast.error("Por favor, insira um valor válido.");
+          setLoading(false);
+          return;
+        }
+
+        if (!employeeId) {
+          toast.error("Por favor, selecione um funcionário.");
+          setLoading(false);
+          return;
+        }
+        
+        // Fechar o diálogo antes de prosseguir
+        onClose();
+        
+        // Chamar a função de confirmação
+        await onConfirm(employeeName, numericValue, notes);
+      } catch (error) {
+        console.error("[OpenCashDialog] Erro ao abrir caixa:", error);
+        toast.error("Erro ao abrir o caixa");
+        setLoading(false);
+      }
+    };
+    
+    if (!open) return null;
+    
+    return (
+      <Dialog open={open} onOpenChange={onClose}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Abrir Caixa</DialogTitle>
+            <DialogDescription>
+              Selecione um funcionário responsável e informe o valor inicial em dinheiro.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="employeeId">Funcionário Responsável</Label>
+              <Select 
+                value={employeeId} 
+                onValueChange={(value) => {
+                  setEmployeeId(value);
+                  const emp = authorizedEmployees.find(e => e.id === value);
+                  setEmployeeName(emp ? emp.name : '');
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o funcionário" />
+                </SelectTrigger>
+                <SelectContent>
+                  {authorizedEmployees.map(emp => (
+                    <SelectItem key={emp.id} value={emp.id}>{emp.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="initialAmount">Valor Inicial</Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2">R$</span>
+                <Input
+                  id="initialAmount"
+                  className="pl-10"
+                  value={initialAmount}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/[^0-9.,]/g, '');
+                    setInitialAmount(value);
+                  }}
+                  placeholder="0,00"
+                  type="text"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="notes">Observações</Label>
+              <Textarea
+                id="notes"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Observações sobre a abertura do caixa..."
+              />
+            </div>
+          </div>
+          
+          <DialogFooter className="flex space-x-2 sm:justify-end">
+            <Button 
+              variant="outline" 
+              onClick={onClose}
+              disabled={loading}
+            >
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleSubmit}
+              disabled={!employeeId || loading}
+              className="bg-[#294380] hover:bg-[#0D0F36]"
+            >
+              {loading ? "Processando..." : "Abrir Caixa"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     );
-    const closing = cashRegisters.find(r => 
-      r.category === "fechamento_caixa" && 
-      r.payment_date === date
-    );
-    return { opening, closing };
+  };
+
+  const handleOpenCash = async (employeeName, initialAmount, notes = "") => {
+    try {
+      const today = format(new Date(), "yyyy-MM-dd");
+      console.log("[CashRegister] Abrindo caixa para a data:", today);
+      
+      if (cashIsOpen) {
+        toast.error("O caixa já está aberto!");
+        setShowOpenCashDialog(false);
+        return;
+      }
+      
+      const openingTransaction = {
+        type: "receita",
+        category: "abertura_caixa",
+        description: "Abertura de Caixa",
+        amount: initialAmount,
+        payment_method: "dinheiro",
+        payment_date: today,
+        status: "pago",
+        notes: notes,
+        opened_by: employeeName
+      };
+      
+      setShowOpenCashDialog(false);
+      
+      await FinancialTransaction.create(openingTransaction);
+      
+      setInitialAmount(initialAmount);
+      setCashIsOpen(true);
+      
+      await loadTransactions();
+      await loadCashRegisters();
+      await checkCashStatus();
+      
+      toast.success("Caixa aberto com sucesso!");
+    } catch (error) {
+      console.error("[CashRegister] Erro ao abrir o caixa:", error);
+      toast.error("Erro ao abrir o caixa. Tente novamente.");
+    }
   };
 
   const generateReport = async () => {
@@ -822,10 +810,10 @@ export default function CashRegister() {
         type: t.type,
         amount: t.amount,
         payment_method: t.payment_method === "dinheiro" ? "Dinheiro" :
-                        t.payment_method === "cartao_debito" ? "Cartão de Débito" :
-                        t.payment_method === "cartao_credito" ? "Cartão de Crédito" :
-                        t.payment_method === "pix" ? "PIX" : 
-                        t.payment_method === "transferencia" ? "Transferência" : t.payment_method,
+                       t.payment_method === "cartao_debito" ? "Cartão de Débito" :
+                       t.payment_method === "cartao_credito" ? "Cartão de Crédito" :
+                       t.payment_method === "pix" ? "PIX" : 
+                       t.payment_method === "transferencia" ? "Transferência" : t.payment_method,
         client_name: t.client_name || getClientName(t.client_id) || "N/A",
         time: t.created_date ? format(new Date(t.created_date), "HH:mm") : "N/A"
       }));
@@ -910,7 +898,7 @@ export default function CashRegister() {
       setShowReportDialog(true);
     } catch (error) {
       console.error("Error generating report:", error);
-      alert("Erro ao gerar relatório. Tente novamente.");
+      toast.error("Erro ao gerar relatório. Tente novamente.");
     } finally {
       setIsGeneratingReport(false);
     }
@@ -942,208 +930,18 @@ export default function CashRegister() {
     generateReport();
   };
 
-  const calculateTotalSessions = (services) => {
-    if (!services || !Array.isArray(services)) {
-      return 0;
-    }
-    
-    return services.reduce((total, service) => {
-      return total + (service.quantity || 0);
-    }, 0);
-  };
-
-  const handlePackageSale = async (data) => {
-    try {
-      const packageInfo = await Package.filter({ id: data.package_id });
-      
-      if (!packageInfo || packageInfo.length === 0) {
-        alert("Pacote não encontrado");
-        return;
-      }
-      
-      const packageSnapshot = {
-        original_id: packageInfo[0].id,
-        name: packageInfo[0].name,
-        services: packageInfo[0].services,
-        total_price: packageInfo[0].total_price,
-        discount: packageInfo[0].discount,
-        validity_days: packageInfo[0].validity_days,
-        description: packageInfo[0].description,
-        snapshot_date: new Date().toISOString()
-      };
-      
-      const purchaseDate = new Date(data.date);
-      const expirationDate = addDays(purchaseDate, packageInfo[0].validity_days);
-      
-      const clientPackageData = {
-        client_id: data.client_id,
-        package_id: data.package_id,
-        purchase_date: format(purchaseDate, 'yyyy-MM-dd'),
-        expiration_date: format(expirationDate, 'yyyy-MM-dd'),
-        total_sessions: calculateTotalSessions(packageInfo[0].services),
-        sessions_used: 0,
-        status: 'ativo',
-        session_history: [],
-        package_snapshot: packageSnapshot
-      };
-      
-      const createdClientPackage = await ClientPackage.create(clientPackageData);
-      
-    } catch (error) {
-      console.error("Erro ao processar venda de pacote:", error);
-      alert("Erro ao processar venda. Tente novamente.");
-    }
-  };
-
-  const OpenCashDialog = ({ open, onClose, onConfirm }) => {
-    const [employeeId, setEmployeeId] = useState("");
-    const [employeeName, setEmployeeName] = useState("");
-    const [initialAmount, setInitialAmount] = useState("0");
-    const [loading, setLoading] = useState(false);
-    const [dialogAuthorizedEmployees, setDialogAuthorizedEmployees] = useState([]);
-    
-    // Resetar o estado do diálogo quando ele for fechado
-    useEffect(() => {
-      if (!open) {
-        setEmployeeId("");
-        setEmployeeName("");
-        setInitialAmount("0");
-        setLoading(false);
-      }
-    }, [open]);
-    
-    useEffect(() => {
-      const loadEmployees = async () => {
-        try {
-          if (authorizedEmployees && authorizedEmployees.length > 0) {
-            setDialogAuthorizedEmployees(authorizedEmployees);
-            return;
-          }
-          
-          const cachedEmployees = localStorage.getItem('authorizedEmployees');
-          if (cachedEmployees) {
-            try {
-              const employeesData = JSON.parse(cachedEmployees);
-              if (Array.isArray(employeesData) && employeesData.length > 0) {
-                setDialogAuthorizedEmployees(employeesData);
-                return;
-              }
-            } catch (e) {
-              console.warn("Erro ao usar dados de funcionários em cache:", e);
-            }
-          }
-          
-          const employees = await Employee.list();
-          const authorized = employees.filter(emp => emp.can_manage_cash === true && emp.active === true);
-          setDialogAuthorizedEmployees(authorized);
-          localStorage.setItem('authorizedEmployees', JSON.stringify(authorized));
-        } catch (error) {
-          console.error("Erro ao carregar funcionários autorizados:", error);
-        }
-      };
-      
-      if (open) {
-        loadEmployees();
-      }
-    }, [open]);
-    
-    const handleSubmit = async () => {
-      try {
-        setLoading(true);
-        const numericValue = parseFloat(initialAmount.replace(',', '.'));
-        
-        if (isNaN(numericValue)) {
-          alert("Por favor, insira um valor válido.");
-          setLoading(false);
-          return;
-        }
-        
-        // Fechar o diálogo antes de prosseguir para evitar piscadas
-        onClose();
-        
-        // Chamar a função de confirmação
-        await onConfirm(employeeName, numericValue);
-      } catch (error) {
-        console.error("[OpenCashDialog] Erro ao abrir caixa:", error);
-        setLoading(false);
-      }
-    };
-    
-    // Se o diálogo não estiver aberto, não renderizar nada
-    if (!open) return null;
-    
-    return (
-      <Dialog open={open} onOpenChange={onClose}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Abrir Caixa</DialogTitle>
-            <DialogDescription>
-              Selecione um funcionário responsável e informe o valor inicial em dinheiro.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="employeeId">Funcionário Responsável</Label>
-              <Select 
-                value={employeeId} 
-                onValueChange={(value) => {
-                  setEmployeeId(value);
-                  const emp = dialogAuthorizedEmployees.find(e => e.id === value);
-                  setEmployeeName(emp ? emp.name : '');
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o funcionário" />
-                </SelectTrigger>
-                <SelectContent>
-                  {dialogAuthorizedEmployees.map(emp => (
-                    <SelectItem key={emp.id} value={emp.id}>{emp.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="initialAmount">Valor Inicial</Label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2">R$</span>
-                <Input
-                  id="initialAmount"
-                  className="pl-10"
-                  value={initialAmount}
-                  onChange={(e) => {
-                    const value = e.target.value.replace(/[^0-9.,]/g, '');
-                    setInitialAmount(value);
-                  }}
-                  placeholder="0,00"
-                  type="text"
-                />
-              </div>
-            </div>
-          </div>
-          
-          <DialogFooter className="flex space-x-2 sm:justify-end">
-            <Button 
-              variant="outline" 
-              onClick={onClose}
-              disabled={loading}
-            >
-              Cancelar
-            </Button>
-            <Button 
-              onClick={handleSubmit}
-              disabled={!employeeId || loading}
-              className="bg-[#294380] hover:bg-[#0D0F36]"
-            >
-              {loading ? "Processando..." : "Abrir Caixa"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+  const getCashRegisterByDate = (date) => {
+    const opening = cashRegisters.find(r => 
+      r.category === "abertura_caixa" && 
+      r.payment_date === date
     );
+    const closing = cashRegisters.find(r => 
+      r.category === "fechamento_caixa" && 
+      r.payment_date === date
+    );
+    return { opening, closing };
   };
-  
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -1366,7 +1164,13 @@ export default function CashRegister() {
         </CardContent>
       </Card>
 
-      <OpenCashDialog open={showOpenCashDialog} onClose={() => setShowOpenCashDialog(false)} onConfirm={handleOpenCash} />
+      <Dialog open={showOpenCashDialog} onOpenChange={setShowOpenCashDialog}>
+        <OpenCashDialog 
+          open={showOpenCashDialog} 
+          onClose={() => setShowOpenCashDialog(false)} 
+          onConfirm={handleOpenCash} 
+        />
+      </Dialog>
 
       <Dialog open={showCloseCashDialog} onOpenChange={setShowCloseCashDialog}>
         <DialogContent>
