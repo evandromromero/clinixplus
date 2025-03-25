@@ -289,4 +289,14 @@ Esta solução não alterará o layout ou a lógica de negócios existente, apen
    - Melhor performance com sistema de cache
    - UX consistente em todo o sistema
 
+## Atualizações Recentes
+
+### 25/03/2025
+- **Correção do Módulo de Caixa**
+  - Corrigido o diálogo de abertura de caixa mantendo a seleção de funcionários autorizados
+  - Restauradas funções importantes de manipulação de transações
+  - Restauradas funções de geração e download de relatórios
+  - Melhorado o feedback ao usuário usando toast ao invés de alerts
+  - Mantida a compatibilidade com a integração Firebase
+
 Para mais informações e suporte, please contact Base44 support at app@base44.com.
