@@ -206,7 +206,7 @@ export default function AnamneseTemplates() {
       </div>
 
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
-        <DialogContent className="sm:max-w-[600px]">
+        <DialogContent className="max-w-[600px] max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editingTemplate ? "Editar Modelo" : "Novo Modelo"} de Anamnese
@@ -217,127 +217,145 @@ export default function AnamneseTemplates() {
           </DialogHeader>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Nome do Modelo</Label>
-              <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="Ex: Anamnese Facial"
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="description">Descrição</Label>
-              <Textarea
-                id="description"
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="Descreva o propósito deste modelo..."
-                className="min-h-[100px]"
-              />
-            </div>
-
             <div className="space-y-4">
-              <h3 className="font-medium">Campos do Modelo</h3>
-              
-              {/* Lista de campos existentes */}
-              <div className="space-y-2">
-                {formData.fields.map((field) => (
-                  <div key={field.id} className="flex items-center justify-between p-2 border rounded">
-                    <div>
-                      <span className="font-medium">{field.label}</span>
-                      <span className="text-sm text-gray-500 ml-2">
-                        ({field.type === 'select' ? 'Seleção' : 
-                          field.type === 'boolean' ? 'Sim/Não' : 'Texto'})
-                      </span>
-                      {field.options && (
-                        <span className="text-sm text-gray-500 ml-2">
-                          Opções: {field.options.join(', ')}
-                        </span>
-                      )}
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => removeField(field.id)}
-                    >
-                      <X className="w-4 h-4 text-red-600" />
-                    </Button>
-                  </div>
-                ))}
+              <div className="grid grid-cols-1 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Nome do Modelo *</Label>
+                  <Input
+                    id="name"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    placeholder="Ex: Anamnese Facial"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="description">Descrição</Label>
+                  <Textarea
+                    id="description"
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    placeholder="Descreva o propósito deste modelo..."
+                    className="min-h-[100px]"
+                  />
+                </div>
               </div>
 
-              {/* Adicionar novo campo */}
-              <div className="space-y-2 border-t pt-4">
-                <h4 className="text-sm font-medium">Adicionar Novo Campo</h4>
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium">Campos do Modelo</h3>
                 
-                <div className="flex gap-2">
-                  <div className="flex-1">
-                    <Input
-                      placeholder="Nome do campo"
-                      value={newField.label}
-                      onChange={(e) => setNewField({ ...newField, label: e.target.value })}
-                    />
-                  </div>
-                  <div className="w-40">
-                    <Select
-                      value={newField.type}
-                      onValueChange={(value) => setNewField({ ...newField, type: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Tipo" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="text">Texto</SelectItem>
-                        <SelectItem value="select">Seleção</SelectItem>
-                        <SelectItem value="boolean">Sim/Não</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                <div className="grid gap-4">
+                  {formData.fields.map((field, index) => (
+                    <div key={index} className="flex items-start gap-4 p-4 border rounded-lg">
+                      <div className="flex-1 space-y-2">
+                        <p className="font-medium">{field.label}</p>
+                        <p className="text-sm text-gray-500">
+                          Tipo: {field.type === 'text' ? 'Texto' : field.type === 'select' ? 'Seleção' : 'Sim/Não'}
+                          {field.type === 'select' && (
+                            <> • Opções: {field.options.join(', ')}</>
+                          )}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          const newFields = [...formData.fields];
+                          newFields.splice(index, 1);
+                          setFormData({ ...formData, fields: newFields });
+                        }}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
                 </div>
 
-                {newField.type === 'select' && (
-                  <div>
-                    <Input
-                      placeholder="Opções (separadas por vírgula)"
-                      value={newField.options}
-                      onChange={(e) => setNewField({ ...newField, options: e.target.value })}
-                    />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Ex: Opção 1, Opção 2, Opção 3
-                    </p>
-                  </div>
-                )}
-
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={addField}
-                  className="w-full"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Adicionar Campo
-                </Button>
+                <Card>
+                  <CardContent className="p-4 space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="fieldLabel">Nome do Campo</Label>
+                      <Input
+                        id="fieldLabel"
+                        value={newField.label}
+                        onChange={(e) => setNewField({ ...newField, label: e.target.value })}
+                        placeholder="Ex: Tipo de Pele"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="fieldType">Tipo do Campo</Label>
+                      <Select
+                        value={newField.type}
+                        onValueChange={(value) => setNewField({ ...newField, type: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione o tipo" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="text">Texto</SelectItem>
+                          <SelectItem value="select">Seleção</SelectItem>
+                          <SelectItem value="boolean">Sim/Não</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {newField.type === 'select' && (
+                      <div className="space-y-2">
+                        <Label htmlFor="fieldOptions">Opções (separadas por vírgula)</Label>
+                        <Input
+                          id="fieldOptions"
+                          value={newField.options}
+                          onChange={(e) => setNewField({ ...newField, options: e.target.value })}
+                          placeholder="Ex: Normal, Seca, Oleosa, Mista"
+                        />
+                      </div>
+                    )}
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        if (!newField.label) {
+                          toast.error('Digite o nome do campo');
+                          return;
+                        }
+                        if (newField.type === 'select' && !newField.options) {
+                          toast.error('Digite as opções do campo');
+                          return;
+                        }
+                        const field = {
+                          id: Date.now().toString(),
+                          label: newField.label,
+                          type: newField.type,
+                          options: newField.type === 'select' ? newField.options.split(',').map(o => o.trim()) : []
+                        };
+                        setFormData({
+                          ...formData,
+                          fields: [...formData.fields, field]
+                        });
+                        setNewField({
+                          label: '',
+                          type: 'text',
+                          options: ''
+                        });
+                      }}
+                      className="w-full"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Adicionar Campo
+                    </Button>
+                  </CardContent>
+                </Card>
               </div>
             </div>
 
             <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setShowDialog(false);
-                  setEditingTemplate(null);
-                  resetForm();
-                }}
-              >
+              <Button type="button" variant="outline" onClick={() => {
+                setShowDialog(false);
+                resetForm();
+              }}>
                 Cancelar
               </Button>
-              <Button type="submit" className="bg-[#3475B8] hover:bg-[#2C64A0]">
-                {editingTemplate ? "Atualizar" : "Criar"} Modelo
+              <Button type="submit" className="bg-[#294380] hover:bg-[#0D0F36]">
+                {editingTemplate ? 'Salvar Alterações' : 'Criar Modelo'}
               </Button>
             </DialogFooter>
           </form>

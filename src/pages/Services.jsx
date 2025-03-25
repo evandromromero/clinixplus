@@ -289,170 +289,153 @@ export default function Services() {
           setShowNewServiceDialog(open);
         }}
       >
-        <DialogContent className="sm:max-w-[650px]">
+        <DialogContent className="max-w-[600px] max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{isEditing ? "Editar Serviço" : "Novo Serviço"}</DialogTitle>
           </DialogHeader>
           
-          <div className="grid gap-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Nome do Serviço*</Label>
-              <Input
-                id="name"
-                value={newService.name}
-                onChange={(e) => setNewService({...newService, name: e.target.value})}
-              />
-            </div>
-            
+          <div className="space-y-4 py-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="category">Categoria*</Label>
+                <Label htmlFor="name">Nome do Serviço *</Label>
+                <Input
+                  id="name"
+                  value={newService.name}
+                  onChange={(e) => setNewService({ ...newService, name: e.target.value })}
+                  placeholder="Ex: Limpeza de Pele"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="category">Categoria *</Label>
                 <Select
                   value={newService.category}
-                  onValueChange={(value) => setNewService({...newService, category: value})}
+                  onValueChange={(value) => setNewService({ ...newService, category: value })}
                 >
-                  <SelectTrigger id="category">
-                    <SelectValue />
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione a categoria" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="facial">Facial</SelectItem>
                     <SelectItem value="corporal">Corporal</SelectItem>
-                    <SelectItem value="depilação">Depilação</SelectItem>
+                    <SelectItem value="capilar">Capilar</SelectItem>
                     <SelectItem value="massagem">Massagem</SelectItem>
                     <SelectItem value="outros">Outros</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="duration">Duração (minutos)*</Label>
+                <Label htmlFor="duration">Duração (minutos) *</Label>
                 <Input
                   id="duration"
                   type="number"
-                  min="5"
-                  step="5"
+                  min="0"
                   value={newService.duration}
-                  onChange={(e) => setNewService({...newService, duration: parseInt(e.target.value)})}
+                  onChange={(e) => setNewService({ ...newService, duration: parseInt(e.target.value) || 0 })}
+                  required
                 />
               </div>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="price">Preço (R$)*</Label>
+                <Label htmlFor="price">Preço (R$) *</Label>
                 <Input
                   id="price"
                   type="number"
-                  min="0"
                   step="0.01"
-                  value={newService.price}
-                  onChange={(e) => setNewService({...newService, price: parseFloat(e.target.value)})}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="return_days">Retorno em dias (0 = sem retorno)</Label>
-                <Input
-                  id="return_days"
-                  type="number"
                   min="0"
-                  value={newService.return_days}
-                  onChange={(e) => {
-                    const days = parseInt(e.target.value);
-                    setNewService({
-                      ...newService, 
-                      return_days: days,
-                      requires_return: days > 0
-                    });
-                  }}
+                  value={newService.price}
+                  onChange={(e) => setNewService({ ...newService, price: parseFloat(e.target.value) || 0 })}
+                  required
                 />
               </div>
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="description">Descrição</Label>
               <Textarea
                 id="description"
                 value={newService.description}
-                onChange={(e) => setNewService({...newService, description: e.target.value})}
-                placeholder="Descreva o serviço, procedimentos e benefícios..."
-                rows={3}
+                onChange={(e) => setNewService({ ...newService, description: e.target.value })}
+                placeholder="Descreva o serviço..."
+                className="min-h-[100px]"
               />
             </div>
 
-            <div className="border-t pt-4">
-              <h3 className="font-medium text-gray-800 mb-3 flex items-center">
-                <Globe className="w-4 h-4 mr-2" />
-                Configurações do Site
-              </h3>
-              
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="requires_return">Necessita Retorno</Label>
+                <Switch
+                  id="requires_return"
+                  checked={newService.requires_return}
+                  onCheckedChange={(checked) => setNewService({ ...newService, requires_return: checked })}
+                />
+              </div>
+
+              {newService.requires_return && (
+                <div className="space-y-2">
+                  <Label htmlFor="return_days">Dias para Retorno</Label>
+                  <Input
+                    id="return_days"
+                    type="number"
+                    min="1"
+                    value={newService.return_days}
+                    onChange={(e) => setNewService({ ...newService, return_days: parseInt(e.target.value) || 0 })}
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-4">
+              <h3 className="text-sm font-medium">Configurações do Site</h3>
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="show_on_website" className="cursor-pointer flex items-center">
-                    Exibir serviço no site
-                  </Label>
+                  <Label htmlFor="show_on_website">Mostrar no Site</Label>
                   <Switch
                     id="show_on_website"
                     checked={newService.show_on_website}
-                    onCheckedChange={(checked) => setNewService({...newService, show_on_website: checked})}
-                  />
-                </div>
-                
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="show_price_on_website" className="cursor-pointer flex items-center">
-                    Exibir preço no site
-                  </Label>
-                  <Switch
-                    id="show_price_on_website"
-                    checked={newService.show_price_on_website}
-                    onCheckedChange={(checked) => setNewService({...newService, show_price_on_website: checked})}
+                    onCheckedChange={(checked) => setNewService({ ...newService, show_on_website: checked })}
                   />
                 </div>
 
                 {newService.show_on_website && (
                   <>
-                    <div className="space-y-2">
-                      <Label htmlFor="image_url">URL da Imagem</Label>
-                      <div className="flex gap-2">
-                        <Input
-                          id="image_url"
-                          placeholder="https://exemplo.com/imagem.jpg"
-                          value={newService.image_url}
-                          onChange={(e) => setNewService({...newService, image_url: e.target.value})}
-                        />
-                      </div>
-                      {newService.image_url && (
-                        <div className="mt-2 h-32 overflow-hidden rounded border">
-                          <img 
-                            src={newService.image_url} 
-                            alt="Prévia da imagem" 
-                            className="w-full h-full object-cover"
-                            onError={(e) => {
-                              e.target.onerror = null;
-                              e.target.src = "https://via.placeholder.com/300x200?text=Imagem+inválida";
-                            }}
-                          />
-                        </div>
-                      )}
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="show_price_on_website">Mostrar Preço no Site</Label>
+                      <Switch
+                        id="show_price_on_website"
+                        checked={newService.show_price_on_website}
+                        onCheckedChange={(checked) => setNewService({ ...newService, show_price_on_website: checked })}
+                      />
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="website_order">Ordem de exibição no site</Label>
+                      <Label htmlFor="website_order">Ordem no Site</Label>
                       <Input
                         id="website_order"
                         type="number"
-                        min="1"
+                        min="0"
                         value={newService.website_order}
-                        onChange={(e) => setNewService({...newService, website_order: parseInt(e.target.value)})}
+                        onChange={(e) => setNewService({ ...newService, website_order: parseInt(e.target.value) || 0 })}
                       />
-                      <p className="text-xs text-gray-500">Números menores aparecem primeiro (prioridade maior)</p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="image_url">URL da Imagem</Label>
+                      <Input
+                        id="image_url"
+                        value={newService.image_url}
+                        onChange={(e) => setNewService({ ...newService, image_url: e.target.value })}
+                        placeholder="https://exemplo.com/imagem.jpg"
+                      />
                     </div>
                   </>
                 )}
               </div>
             </div>
           </div>
-          
+
           <DialogFooter>
             <Button variant="outline" onClick={() => {
               resetForm();
@@ -460,8 +443,12 @@ export default function Services() {
             }}>
               Cancelar
             </Button>
-            <Button onClick={handleCreateService} className="bg-purple-600 hover:bg-purple-700">
-              {isEditing ? "Salvar Alterações" : "Criar Serviço"}
+            <Button 
+              onClick={handleCreateService}
+              className="bg-[#294380] hover:bg-[#0D0F36]"
+              disabled={!newService.name || !newService.category || !newService.duration || newService.price < 0}
+            >
+              {isEditing ? 'Salvar Alterações' : 'Criar Serviço'}
             </Button>
           </DialogFooter>
         </DialogContent>
