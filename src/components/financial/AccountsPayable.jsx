@@ -12,6 +12,7 @@ import { ptBR } from "date-fns/locale";
 import { Plus, Search, AlertCircle, FileText, TrendingDown, CalendarIcon, CheckCircle, XCircle } from "lucide-react";
 import { FinancialTransaction, Supplier } from "@/firebase/entities";
 import RateLimitHandler from '@/components/RateLimitHandler';
+import toast, { Toaster } from 'react-hot-toast';
 
 export default function AccountsPayable() {
   const [transactions, setTransactions] = useState([]);
@@ -19,15 +20,26 @@ export default function AccountsPayable() {
   const [showNewTransactionDialog, setShowNewTransactionDialog] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [dateFilter, setDateFilter] = useState("all"); // all, today, week, month, custom
+  const [customDateRange, setCustomDateRange] = useState({
+    startDate: "",
+    endDate: ""
+  });
   const [newTransaction, setNewTransaction] = useState({
     type: "despesa",
     category: "compra_produto",
     description: "",
-    amount: 0,
+    amount: "",
     payment_method: "transferencia",
     status: "pendente",
     due_date: format(new Date(), "yyyy-MM-dd"),
-    payment_date: null
+    payment_date: "",
+    supplier_id: "",
+    is_recurring: false,
+    recurrence_type: "none",
+    recurrence_count: "0",
+    recurrence_end_date: "",
+    is_auto_recurring: false
   });
 
   useEffect(() => {
@@ -47,26 +59,186 @@ export default function AccountsPayable() {
     }
   };
 
+  const createNextRecurrence = async (transaction) => {
+    const currentDate = new Date(transaction.due_date);
+    const dayOfMonth = currentDate.getDate();
+
+    switch (transaction.recurrence_type) {
+      case "monthly": {
+        currentDate.setMonth(currentDate.getMonth() + 1);
+        const lastDayOfMonth = new Date(
+          currentDate.getFullYear(),
+          currentDate.getMonth() + 1,
+          0
+        ).getDate();
+        currentDate.setDate(Math.min(dayOfMonth, lastDayOfMonth));
+        break;
+      }
+      case "weekly":
+        currentDate.setDate(currentDate.getDate() + 7);
+        break;
+      case "yearly": {
+        currentDate.setFullYear(currentDate.getFullYear() + 1);
+        if (dayOfMonth === 29 && currentDate.getMonth() === 1) {
+          const isLeapYear = new Date(currentDate.getFullYear(), 1, 29).getDate() === 29;
+          if (!isLeapYear) {
+            currentDate.setDate(28);
+          }
+        }
+        break;
+      }
+    }
+
+    if (transaction.recurrence_end_date && currentDate > new Date(transaction.recurrence_end_date)) {
+      return;
+    }
+
+    const nextTransaction = {
+      ...transaction,
+      due_date: format(currentDate, "yyyy-MM-dd"),
+      status: "pendente",
+      payment_date: null,
+      parent_transaction_id: transaction.id
+    };
+
+    await FinancialTransaction.create(nextTransaction);
+  };
+
+  const checkAndCreateRecurrences = async () => {
+    try {
+      const allTransactions = await FinancialTransaction.list();
+      const autoRecurringTransactions = allTransactions.filter(t => 
+        t.is_auto_recurring && 
+        t.status !== "cancelado" &&
+        !t.parent_transaction_id // Apenas transações principais
+      );
+
+      for (const transaction of autoRecurringTransactions) {
+        const lastRecurrence = allTransactions
+          .filter(t => t.parent_transaction_id === transaction.id)
+          .sort((a, b) => new Date(b.due_date) - new Date(a.due_date))[0];
+
+        const lastDueDate = lastRecurrence ? new Date(lastRecurrence.due_date) : new Date(transaction.due_date);
+        const today = new Date();
+        const monthsAhead = 2;
+
+        if (lastDueDate < new Date(today.getFullYear(), today.getMonth() + monthsAhead, today.getDate())) {
+          await createNextRecurrence(lastRecurrence || transaction);
+        }
+      }
+    } catch (error) {
+      console.error("Erro ao criar recorrências automáticas:", error);
+    }
+  };
+
+  useEffect(() => {
+    checkAndCreateRecurrences();
+  }, []);
+
   const handleCreateTransaction = async () => {
     try {
-      await FinancialTransaction.create({
+      const mainTransaction = { 
         ...newTransaction,
-        payment_date: newTransaction.status === 'pago' ? format(new Date(), "yyyy-MM-dd") : null
-      });
+        amount: parseFloat(newTransaction.amount) || 0,
+        recurrence_count: parseInt(newTransaction.recurrence_count),
+        payment_date: newTransaction.payment_date || null,
+        recurrence_end_date: newTransaction.recurrence_end_date || null,
+        is_auto_recurring: newTransaction.is_recurring && 
+                         newTransaction.recurrence_type !== "none" && 
+                         (!newTransaction.recurrence_count || newTransaction.recurrence_count === "0")
+      };
+      
+      delete mainTransaction.recurrence_count;
+      delete mainTransaction.recurrence_end_date;
+      
+      const createdTransaction = await FinancialTransaction.create(mainTransaction);
+
+      if (newTransaction.is_recurring && 
+          newTransaction.recurrence_type !== "none" && 
+          newTransaction.recurrence_count && 
+          newTransaction.recurrence_count !== "0") {
+        const transactions = [];
+        const firstDueDate = new Date(newTransaction.due_date);
+        const dayOfMonth = firstDueDate.getDate();
+        let currentDate = new Date(firstDueDate);
+        let count = parseInt(newTransaction.recurrence_count);
+        
+        while (count > 1) {
+          switch (newTransaction.recurrence_type) {
+            case "monthly": {
+              currentDate.setMonth(currentDate.getMonth() + 1);
+              const lastDayOfMonth = new Date(
+                currentDate.getFullYear(),
+                currentDate.getMonth() + 1,
+                0
+              ).getDate();
+              currentDate.setDate(Math.min(dayOfMonth, lastDayOfMonth));
+              break;
+            }
+            case "weekly":
+              currentDate.setDate(currentDate.getDate() + 7);
+              break;
+            case "yearly": {
+              currentDate.setFullYear(currentDate.getFullYear() + 1);
+              if (dayOfMonth === 29 && currentDate.getMonth() === 1) {
+                const isLeapYear = new Date(currentDate.getFullYear(), 1, 29).getDate() === 29;
+                if (!isLeapYear) {
+                  currentDate.setDate(28);
+                }
+              }
+              break;
+            }
+          }
+
+          if (newTransaction.recurrence_end_date && 
+              currentDate > new Date(newTransaction.recurrence_end_date)) {
+            break;
+          }
+
+          transactions.push({
+            ...mainTransaction,
+            due_date: format(currentDate, "yyyy-MM-dd"),
+            parent_transaction_id: createdTransaction.id
+          });
+
+          count--;
+        }
+
+        await Promise.all(transactions.map(t => FinancialTransaction.create(t)));
+      } else if (mainTransaction.is_auto_recurring) {
+        await createNextRecurrence(createdTransaction);
+        const nextTransaction = await FinancialTransaction.list()
+          .then(transactions => transactions.find(t => t.parent_transaction_id === createdTransaction.id));
+        if (nextTransaction) {
+          await createNextRecurrence(nextTransaction);
+        }
+      }
+
       setShowNewTransactionDialog(false);
+      await loadData();
+      toast.success(mainTransaction.is_auto_recurring 
+        ? "Despesa recorrente criada! Novas parcelas serão geradas automaticamente." 
+        : "Despesa(s) criada(s) com sucesso!");
+
       setNewTransaction({
         type: "despesa",
         category: "compra_produto",
         description: "",
-        amount: 0,
+        amount: "",
         payment_method: "transferencia",
         status: "pendente",
         due_date: format(new Date(), "yyyy-MM-dd"),
-        payment_date: null
+        payment_date: "",
+        supplier_id: "",
+        is_recurring: false,
+        recurrence_type: "none",
+        recurrence_count: "0",
+        recurrence_end_date: "",
+        is_auto_recurring: false
       });
-      loadData();
     } catch (error) {
       console.error("Error creating transaction:", error);
+      toast.error("Erro ao criar despesa");
     }
   };
 
@@ -83,6 +255,40 @@ export default function AccountsPayable() {
     }
   };
 
+  const filterByDate = (transaction) => {
+    const transactionDate = new Date(transaction.due_date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    switch (dateFilter) {
+      case "today":
+        return transactionDate.getTime() === today.getTime();
+      
+      case "week": {
+        const weekStart = new Date(today);
+        weekStart.setDate(today.getDate() - today.getDay());
+        const weekEnd = new Date(today);
+        weekEnd.setDate(weekStart.getDate() + 6);
+        return transactionDate >= weekStart && transactionDate <= weekEnd;
+      }
+      
+      case "month": {
+        return transactionDate.getMonth() === today.getMonth() && 
+               transactionDate.getFullYear() === today.getFullYear();
+      }
+
+      case "custom": {
+        if (!customDateRange.startDate || !customDateRange.endDate) return true;
+        const start = new Date(customDateRange.startDate);
+        const end = new Date(customDateRange.endDate);
+        return transactionDate >= start && transactionDate <= end;
+      }
+
+      default:
+        return true;
+    }
+  };
+
   const filteredTransactions = transactions.filter(transaction => {
     const matchesSearch = 
       transaction.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -90,7 +296,9 @@ export default function AccountsPayable() {
     
     const matchesStatus = filterStatus === "all" || transaction.status === filterStatus;
     
-    return matchesSearch && matchesStatus;
+    const matchesDate = filterByDate(transaction);
+
+    return matchesSearch && matchesStatus && matchesDate;
   });
 
   const groupedTransactions = filteredTransactions.reduce((acc, transaction) => {
@@ -124,6 +332,7 @@ export default function AccountsPayable() {
 
   return (
     <div className="space-y-6">
+      <Toaster />
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h3 className="text-2xl font-bold text-[#0D0F36]">Contas a Pagar</h3>
@@ -138,7 +347,7 @@ export default function AccountsPayable() {
         </Button>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-4">
         <Card className="bg-gradient-to-r from-[#F1F6CE]/50 to-white">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-[#0D0F36]">Total a Pagar</CardTitle>
@@ -185,6 +394,55 @@ export default function AccountsPayable() {
                 <SelectItem value="cancelado">Cancelados</SelectItem>
               </SelectContent>
             </Select>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-r from-[#F1F6CE]/50 to-white">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-[#0D0F36]">Filtro de Período</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Select value={dateFilter} onValueChange={setDateFilter}>
+              <SelectTrigger className="bg-white">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="today">Hoje</SelectItem>
+                <SelectItem value="week">Esta Semana</SelectItem>
+                <SelectItem value="month">Este Mês</SelectItem>
+                <SelectItem value="custom">Período Personalizado</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {dateFilter === "custom" && (
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                <div>
+                  <Label className="text-xs">De</Label>
+                  <Input
+                    type="date"
+                    value={customDateRange.startDate}
+                    onChange={(e) => setCustomDateRange(prev => ({
+                      ...prev,
+                      startDate: e.target.value
+                    }))}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Até</Label>
+                  <Input
+                    type="date"
+                    value={customDateRange.endDate}
+                    onChange={(e) => setCustomDateRange(prev => ({
+                      ...prev,
+                      endDate: e.target.value
+                    }))}
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -340,7 +598,7 @@ export default function AccountsPayable() {
                 <Input
                   type="number"
                   value={newTransaction.amount}
-                  onChange={(e) => setNewTransaction({...newTransaction, amount: parseFloat(e.target.value)})}
+                  onChange={(e) => setNewTransaction({...newTransaction, amount: e.target.value})}
                 />
               </div>
             </div>
@@ -392,6 +650,85 @@ export default function AccountsPayable() {
                 </SelectContent>
               </Select>
             </div>
+
+            <div className="space-y-2">
+              <Label>Recorrência</Label>
+              <Select
+                value={newTransaction.is_recurring}
+                onValueChange={(value) => setNewTransaction({...newTransaction, is_recurring: value})}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={false}>Não</SelectItem>
+                  <SelectItem value={true}>Sim</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {newTransaction.is_recurring && (
+              <div>
+                <div className="space-y-2">
+                  <Label>Tipo de Recorrência</Label>
+                  <Select
+                    value={newTransaction.recurrence_type}
+                    onValueChange={(value) => setNewTransaction({...newTransaction, recurrence_type: value})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Nenhuma</SelectItem>
+                      <SelectItem value="monthly">Mensal</SelectItem>
+                      <SelectItem value="weekly">Semanal</SelectItem>
+                      <SelectItem value="yearly">Anual</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Quantidade de Recorrências (0 para indefinido)</Label>
+                  <div className="text-xs text-gray-500 mb-1">
+                    Digite 0 para criar recorrências indefinidamente até a data final, ou especifique um número fixo de parcelas
+                  </div>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={newTransaction.recurrence_count}
+                    onChange={(e) => setNewTransaction({...newTransaction, recurrence_count: e.target.value})}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Data Final de Recorrência (opcional)</Label>
+                  <div className="text-xs text-gray-500 mb-1">
+                    Se não especificar uma data final e a quantidade for 0, serão criadas 60 recorrências (5 anos)
+                  </div>
+                  <Input
+                    type="date"
+                    value={newTransaction.recurrence_end_date}
+                    onChange={(e) => setNewTransaction({...newTransaction, recurrence_end_date: e.target.value})}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Recorrência Automática</Label>
+                  <Select
+                    value={newTransaction.is_auto_recurring}
+                    onValueChange={(value) => setNewTransaction({...newTransaction, is_auto_recurring: value})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={false}>Não</SelectItem>
+                      <SelectItem value={true}>Sim</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowNewTransactionDialog(false)}>

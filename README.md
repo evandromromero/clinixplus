@@ -260,4 +260,33 @@ Para resolver problemas de limite de taxa (429: Rate limit exceeded) do Base44, 
 
 Esta solução não alterará o layout ou a lógica de negócios existente, apenas otimizará o acesso aos dados.
 
+#### Gift Cards com Nome da Empresa Dinâmico
+1. **Integração com Configurações da Empresa**:
+   - Nome da empresa buscado automaticamente do Firebase
+   - Implementação de cache para otimizar requisições
+   - Suporte a múltiplas instâncias do componente
+   - Estado global para compartilhar dados
+
+2. **Componentes Modificados**:
+   - `GiftCardTemplate.jsx`: 
+     * Cache do nome da empresa
+     * Busca automática das configurações
+     * Fallback para nome padrão
+   - `GiftCards.jsx`:
+     * Integração com configurações da empresa
+     * Preview dinâmico no modal de criação
+     * Reset de formulário mantendo dados da empresa
+
+3. **Melhorias Técnicas**:
+   - Busca dinâmica do primeiro documento de configurações
+   - Eliminação de IDs hardcoded
+   - Otimização de requisições ao Firebase
+   - Melhor gerenciamento de estado
+
+4. **Benefícios**:
+   - Configuração simplificada para novas empresas
+   - Manutenção centralizada do nome da empresa
+   - Melhor performance com sistema de cache
+   - UX consistente em todo o sistema
+
 Para mais informações e suporte, please contact Base44 support at app@base44.com.
