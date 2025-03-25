@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Client, Appointment, Sale, ClientPackage, Package, Service, Contract, ContractTemplate } from "@/firebase/entities";
+import { Client, Appointment, Sale, ClientPackage, Package, Service, Contract, ContractTemplate, AnamneseTemplate } from "@/firebase/entities";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -83,13 +83,9 @@ export default function ClientDetails() {
     address: '',
     skinType: ''
   });
-  const [anamneseData, setAnamneseData] = useState({
-    skin_type: '',
-    allergies: '',
-    health_conditions: '',
-    medications: '',
-    observations: ''
-  });
+  const [anamneseTemplates, setAnamneseTemplates] = useState([]);
+  const [selectedAnamneseTemplate, setSelectedAnamneseTemplate] = useState(null);
+  const [anamneseData, setAnamneseData] = useState({});
   const urlParams = new URLSearchParams(window.location.search);
   const clientId = urlParams.get('id');
 
@@ -145,6 +141,7 @@ export default function ClientDetails() {
       loadPhotos();
       loadObservations();
       loadAnamnese();
+      loadAnamneseTemplates();
     }
   }, [clientId]);
 
@@ -284,15 +281,18 @@ export default function ClientDetails() {
   const loadAnamnese = async () => {
     try {
       const clientAnamnese = await Client.getAnamnese(clientId);
-      setAnamneseData(clientAnamnese || {
-        skin_type: '',
-        allergies: '',
-        health_conditions: '',
-        medications: '',
-        observations: ''
-      });
+      setAnamneseData(clientAnamnese || {});
     } catch (error) {
       console.error('Error loading anamnese:', error);
+    }
+  };
+
+  const loadAnamneseTemplates = async () => {
+    try {
+      const templates = await AnamneseTemplate.list();
+      setAnamneseTemplates(templates);
+    } catch (error) {
+      console.error('Error loading anamnese templates:', error);
     }
   };
 
@@ -540,17 +540,40 @@ export default function ClientDetails() {
     }
   };
 
-  const handleUpdateAnamnese = async () => {
+  const handleAnamneseTemplateChange = (templateId) => {
+    const template = anamneseTemplates.find(t => t.id === templateId);
+    if (template) {
+      setSelectedAnamneseTemplate(template);
+      // Inicializar os campos com valores vazios
+      const initialData = {};
+      template.fields.forEach(field => {
+        initialData[field.id] = '';
+      });
+      setAnamneseData(initialData);
+    }
+  };
+
+  const handleSaveAnamnese = async () => {
+    if (!selectedAnamneseTemplate) {
+      toast.error('Selecione um modelo de anamnese');
+      return;
+    }
+
     try {
-      setIsLoading(true);
-      await Client.updateAnamnese(clientId, anamneseData);
-      
-      toast.success('Anamnese atualizada com sucesso!');
+      // Salvar no Firebase
+      await Client.update(clientId, {
+        anamnese: {
+          template_id: selectedAnamneseTemplate.id,
+          template_name: selectedAnamneseTemplate.name,
+          data: anamneseData,
+          created_at: new Date().toISOString()
+        }
+      });
+
+      toast.success('Anamnese salva com sucesso!');
     } catch (error) {
-      console.error('Erro ao atualizar anamnese:', error);
-      toast.error('Erro ao atualizar anamnese');
-    } finally {
-      setIsLoading(false);
+      console.error('Erro ao salvar anamnese:', error);
+      toast.error('Erro ao salvar anamnese');
     }
   };
 
@@ -1096,87 +1119,88 @@ export default function ClientDetails() {
 
         <TabsContent value="anamnese" className="space-y-6">
           {/* Aba de Anamnese */}
-          <Card>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-xl font-medium text-[#175EA0]">Anamnese</h3>
-                  <Button
-                    onClick={handleUpdateAnamnese}
-                    className="flex items-center gap-2 text-white bg-[#3475B8] hover:bg-[#2C64A0] transition-colors"
-                  >
-                    <Check className="w-4 h-4" />
-                    Salvar Alterações
-                  </Button>
-                </div>
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <h2 className="text-2xl font-bold text-[#3475B8]">Anamnese</h2>
+              <Button
+                onClick={handleSaveAnamnese}
+                className="bg-[#3475B8] hover:bg-[#2C64A0]"
+              >
+                <Check className="w-4 h-4 mr-2" />
+                Salvar Alterações
+              </Button>
+            </div>
 
-                <div className="grid gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="skin_type">Tipo de Pele</Label>
-                    <Select
-                      value={anamneseData.skin_type}
-                      onValueChange={(value) => setAnamneseData({ ...anamneseData, skin_type: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="normal">Normal</SelectItem>
-                        <SelectItem value="seca">Seca</SelectItem>
-                        <SelectItem value="oleosa">Oleosa</SelectItem>
-                        <SelectItem value="mista">Mista</SelectItem>
-                        <SelectItem value="sensível">Sensível</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="allergies">Alergias</Label>
-                    <Textarea
-                      id="allergies"
-                      value={anamneseData.allergies}
-                      onChange={(e) => setAnamneseData({ ...anamneseData, allergies: e.target.value })}
-                      placeholder="Descreva as alergias do cliente..."
-                      className="min-h-[100px]"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="health_conditions">Condições de Saúde</Label>
-                    <Textarea
-                      id="health_conditions"
-                      value={anamneseData.health_conditions}
-                      onChange={(e) => setAnamneseData({ ...anamneseData, health_conditions: e.target.value })}
-                      placeholder="Descreva as condições de saúde do cliente..."
-                      className="min-h-[100px]"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="medications">Medicamentos</Label>
-                    <Textarea
-                      id="medications"
-                      value={anamneseData.medications}
-                      onChange={(e) => setAnamneseData({ ...anamneseData, medications: e.target.value })}
-                      placeholder="Liste os medicamentos que o cliente utiliza..."
-                      className="min-h-[100px]"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="observations">Observações Adicionais</Label>
-                    <Textarea
-                      id="observations"
-                      value={anamneseData.observations}
-                      onChange={(e) => setAnamneseData({ ...anamneseData, observations: e.target.value })}
-                      placeholder="Adicione observações relevantes..."
-                      className="min-h-[100px]"
-                    />
-                  </div>
-                </div>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Selecione o Modelo</Label>
+                <Select
+                  value={selectedAnamneseTemplate?.id || ''}
+                  onValueChange={handleAnamneseTemplateChange}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Escolha um modelo de anamnese" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {anamneseTemplates.map((template) => (
+                      <SelectItem key={template.id} value={template.id}>
+                        {template.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            </CardContent>
-          </Card>
+
+              {selectedAnamneseTemplate && (
+                <div className="space-y-4">
+                  {selectedAnamneseTemplate.fields.map((field) => (
+                    <div key={field.id} className="space-y-2">
+                      <Label htmlFor={field.id}>{field.label}</Label>
+                      {field.type === 'select' ? (
+                        <Select
+                          id={field.id}
+                          value={anamneseData[field.id] || ''}
+                          onValueChange={(value) => setAnamneseData({ ...anamneseData, [field.id]: value })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder={`Selecione ${field.label.toLowerCase()}`} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {field.options.map((option) => (
+                              <SelectItem key={option} value={option}>
+                                {option}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : field.type === 'boolean' ? (
+                        <Select
+                          id={field.id}
+                          value={anamneseData[field.id] || ''}
+                          onValueChange={(value) => setAnamneseData({ ...anamneseData, [field.id]: value })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione uma opção" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="sim">Sim</SelectItem>
+                            <SelectItem value="nao">Não</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Textarea
+                          id={field.id}
+                          value={anamneseData[field.id] || ''}
+                          onChange={(e) => setAnamneseData({ ...anamneseData, [field.id]: e.target.value })}
+                          placeholder={`Digite ${field.label.toLowerCase()}`}
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </TabsContent>
 
         <TabsContent value="contrato" className="space-y-6">
