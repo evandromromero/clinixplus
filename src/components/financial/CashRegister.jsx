@@ -35,6 +35,7 @@ import { FinancialTransaction, User, Client, Employee, Package, ClientPackage } 
 import { InvokeLLM } from "@/api/integrations";
 import { toast } from "@/components/ui/toast";
 import RateLimitHandler from '@/components/RateLimitHandler';
+import html2pdf from 'html2pdf.js';
 
 export default function CashRegister() {
   const [transactions, setTransactions] = useState([]);
@@ -783,127 +784,324 @@ export default function CashRegister() {
     }
   };
 
-  const generateReport = async () => {
-    setIsGeneratingReport(true);
-    try {
-      const reportDate = format(new Date(selectedDate), "dd/MM/yyyy");
-      const dateTransactions = getTransactionsByDate(selectedDate);
-      const { opening, closing } = getCashRegisterByDate(selectedDate);
-      
-      const cashIncome = getPaymentMethodTotal("dinheiro", "receita", selectedDate);
-      const debitCardIncome = getPaymentMethodTotal("cartao_debito", "receita", selectedDate);
-      const creditCardIncome = getPaymentMethodTotal("cartao_credito", "receita", selectedDate);
-      const pixIncome = getPaymentMethodTotal("pix", "receita", selectedDate);
-      
-      const productSales = getCategoryTotal("venda_produto", "receita", selectedDate);
-      const serviceSales = getCategoryTotal("venda_servico", "receita", selectedDate);
-      const packageSales = getCategoryTotal("venda_pacote", "receita", selectedDate);
-      
-      const suppliesExpenses = getCategoryTotal("compra_produto", "despesa", selectedDate);
-      const salaryExpenses = getCategoryTotal("salario", "despesa", selectedDate);
-      const commissionExpenses = getCategoryTotal("comissao", "despesa", selectedDate);
-      const otherExpenses = getExpensesByDate(selectedDate) - suppliesExpenses - salaryExpenses - commissionExpenses;
-      
-      const transactionsDetails = dateTransactions.map(t => ({
-        description: t.description,
-        category: t.category.replace(/_/g, ' '),
-        type: t.type,
-        amount: t.amount,
-        payment_method: t.payment_method === "dinheiro" ? "Dinheiro" :
-                       t.payment_method === "cartao_debito" ? "Cartão de Débito" :
-                       t.payment_method === "cartao_credito" ? "Cartão de Crédito" :
-                       t.payment_method === "pix" ? "PIX" : 
-                       t.payment_method === "transferencia" ? "Transferência" : t.payment_method,
-        client_name: t.client_name || getClientName(t.client_id) || "N/A",
-        time: t.created_date ? format(new Date(t.created_date), "HH:mm") : "N/A"
-      }));
-      
-      const reportPrompt = `
-      Crie um relatório detalhado de caixa em formato HTML para uma clínica de estética usando os dados abaixo.
-      Siga o layout da imagem de exemplo, com cabeçalho mostrando nome da clínica, 
-      detalhamento de abertura/fechamento, totais por método de pagamento 
-      e uma lista detalhada de todas as transações com cliente e método de pagamento.
-      
-      O formato deve ser tabular, com cores de fundo para os cabeçalhos e com boas práticas de design.
-      
-      DADOS DO RELATÓRIO:
-      
-      Data: ${reportDate}
-      Operador: ${user?.full_name || "Não identificado"}
-      
-      ${opening ? `
-      ABERTURA DE CAIXA:
-      - Data/Hora: ${format(new Date(opening.created_date), "dd/MM/yyyy HH:mm")}
-      - Responsável: ${opening.opened_by || "Não informado"}
-      - Valor inicial: R$ ${opening.initial_amount?.toFixed(2) || "0.00"}
-      - Observações: ${opening.notes || "Nenhuma"}
-      ` : "O caixa desta data não foi aberto."}
-      
-      ${closing ? `
-      FECHAMENTO DE CAIXA:
-      - Data/Hora: ${format(new Date(closing.created_date), "dd/MM/yyyy HH:mm")}
-      - Responsável: ${closing.closed_by || "Não informado"}
-      - Dinheiro Esperado: R$ ${closing.expected_cash?.toFixed(2) || "0.00"}
-      - Dinheiro Real: R$ ${closing.actual_cash?.toFixed(2) || "0.00"}
-      - Diferença: R$ ${closing.difference?.toFixed(2) || "0.00"}
-      - Observações: ${closing.notes || "Nenhuma"}
-      ` : "O caixa desta data não foi fechado."}
-      
-      DETALHAMENTO DE ENTRADAS / TOTAL: R$ ${getIncomeByDate(selectedDate).toFixed(2)}
-      
-      TOTAIS POR MÉTODO DE PAGAMENTO:
-      - PIX: R$ ${pixIncome.toFixed(2)}
-      - Dinheiro: R$ ${cashIncome.toFixed(2)}
-      - Cartão de Débito: R$ ${debitCardIncome.toFixed(2)}
-      - Cartão de Crédito: R$ ${creditCardIncome.toFixed(2)}
-      
-      TOTAIS POR CATEGORIA:
-      - Vendas de Produtos: R$ ${productSales.toFixed(2)}
-      - Vendas de Serviços: R$ ${serviceSales.toFixed(2)}
-      - Vendas de Pacotes: R$ ${packageSales.toFixed(2)}
-      
-      DETALHAMENTO DE ENTRADAS:
-      ${JSON.stringify(transactionsDetails.filter(t => t.type === "receita"))}
-      
-      DETALHAMENTO DE SAÍDAS / TOTAL: R$ ${getExpensesByDate(selectedDate).toFixed(2)}
-      
-      TOTAIS DE DESPESAS:
-      - Compra de Produtos: R$ ${suppliesExpenses.toFixed(2)}
-      - Salários: R$ ${salaryExpenses.toFixed(2)}
-      - Comissões: R$ ${commissionExpenses.toFixed(2)}
-      - Outras Despesas: R$ ${otherExpenses.toFixed(2)}
-      
-      DETALHAMENTO DE SAÍDAS:
-      ${JSON.stringify(transactionsDetails.filter(t => t.type === "despesa"))}
-      
-      Apresente os detalhamentos de entradas e saídas em tabelas diferentes e bem formatadas.
-      A tabela de entradas deve ter as colunas: Descrição, Referência (categoria), Valor, Data, Hora, Cliente, Forma de Pagamento.
-      A tabela de saídas deve ter as colunas: Descrição, Referência (categoria), Valor, Data, Hora, Pessoa, Forma Pgto.
-      
-      O relatório deve ter cores suaves, tons de verde para receitas e tons de vermelho para despesas.
-      No cabeçalho, inclua o nome "Estética CRM", logo depois o título "DETALHAMENTO CAIXA", 
-      com data do relatório, operador responsável.
-      
-      No final do relatório, adicione um espaço para assinatura e os dados da clínica (telefone e endereço).
-      Use CSS para fazer tabelas com bordas, cabeçalhos em cinza, alternância de cores nas linhas para facilitar a leitura.
-      Formate os valores monetários sempre com R$ e duas casas decimais.
-      `;
-      
-      const reportResponse = await InvokeLLM({
-        prompt: reportPrompt,
-        response_json_schema: null
+  const getPaymentMethodTotals = (transactions) => {
+    const totals = {
+      pix: 0,
+      dinheiro: 0,
+      cartao_debito: 0,
+      cartao_credito: 0,
+      link: 0
+    };
+
+    transactions.forEach(t => {
+      if (t.type === 'receita') {
+        switch (t.payment_method) {
+          case 'pix':
+            totals.pix += Number(t.amount);
+            break;
+          case 'dinheiro':
+            totals.dinheiro += Number(t.amount);
+            break;
+          case 'cartao_debito':
+            totals.cartao_debito += Number(t.amount);
+            break;
+          case 'cartao_credito':
+            totals.cartao_credito += Number(t.amount);
+            break;
+          case 'link':
+            totals.link += Number(t.amount);
+            break;
+        }
+      }
+    });
+
+    return totals;
+  };
+
+  const generateReportHtml = (cashData, transactions) => {
+    if (!cashData || !transactions) return '';
+    
+    const paymentTotals = getPaymentMethodTotals(transactions);
+    const totalReceitas = transactions.reduce((acc, t) => t.type === 'receita' ? acc + Number(t.amount) : acc, 0);
+    
+    const formatDate = (dateStr) => {
+      if (!dateStr) return '-';
+      try {
+        return format(parseISO(dateStr), "dd/MM/yyyy");
+      } catch (e) {
+        return '-';
+      }
+    };
+
+    const formatTime = (dateStr) => {
+      if (!dateStr) return '-';
+      try {
+        return format(parseISO(dateStr), "HH:mm");
+      } catch (e) {
+        return '-';
+      }
+    };
+    
+    const html = `
+      <div style="font-family: Arial, sans-serif; padding: 20px;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
+          <img src="/logo.png" alt="Logo" style="height: 50px;" />
+          <div style="text-align: right;">
+            <h2>DETALHAMENTO CAIXA</h2>
+            <p>OPERADOR: ${cashData.opened_by || '-'}</p>
+            <p>${format(new Date(), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR }).toUpperCase()}</p>
+          </div>
+        </div>
+
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+          <tr style="background-color: #f0f0f0;">
+            <th style="padding: 8px; border: 1px solid #ddd;">ABERTURA</th>
+            <th style="padding: 8px; border: 1px solid #ddd;">FECHAMENTO</th>
+            <th style="padding: 8px; border: 1px solid #ddd;">R$ ABERTURA</th>
+            <th style="padding: 8px; border: 1px solid #ddd;">R$ FECHAMENTO</th>
+            <th style="padding: 8px; border: 1px solid #ddd;">QUEBRA</th>
+          </tr>
+          <tr>
+            <td style="padding: 8px; border: 1px solid #ddd;">${formatDate(cashData.opened_at)}</td>
+            <td style="padding: 8px; border: 1px solid #ddd;">${formatDate(cashData.closed_at)}</td>
+            <td style="padding: 8px; border: 1px solid #ddd;">R$ ${Number(cashData.initial_amount || 0).toFixed(2)}</td>
+            <td style="padding: 8px; border: 1px solid #ddd;">R$ ${Number(cashData.final_amount || 0).toFixed(2)}</td>
+            <td style="padding: 8px; border: 1px solid #ddd; color: ${Number(cashData.difference || 0) < 0 ? 'red' : 'green'};">
+              R$ ${Number(cashData.difference || 0).toFixed(2)}
+            </td>
+          </tr>
+        </table>
+
+        <div style="margin-bottom: 20px;">
+          <h3 style="margin-bottom: 10px;">DETALHAMENTO DE ENTRADAS / TOTAL: R$ ${totalReceitas.toFixed(2)}</h3>
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr style="background-color: #f0f0f0;">
+              <th style="padding: 8px; border: 1px solid #ddd;">PIX</th>
+              <th style="padding: 8px; border: 1px solid #ddd;">DINHEIRO</th>
+              <th style="padding: 8px; border: 1px solid #ddd;">CARTÃO DE DÉBITO</th>
+              <th style="padding: 8px; border: 1px solid #ddd;">CARTÃO DE CRÉDITO</th>
+              <th style="padding: 8px; border: 1px solid #ddd;">LINK</th>
+            </tr>
+            <tr>
+              <td style="padding: 8px; border: 1px solid #ddd;">R$ ${paymentTotals.pix.toFixed(2)}</td>
+              <td style="padding: 8px; border: 1px solid #ddd;">R$ ${paymentTotals.dinheiro.toFixed(2)}</td>
+              <td style="padding: 8px; border: 1px solid #ddd;">R$ ${paymentTotals.cartao_debito.toFixed(2)}</td>
+              <td style="padding: 8px; border: 1px solid #ddd;">R$ ${paymentTotals.cartao_credito.toFixed(2)}</td>
+              <td style="padding: 8px; border: 1px solid #ddd;">R$ ${paymentTotals.link.toFixed(2)}</td>
+            </tr>
+          </table>
+        </div>
+
+        <table style="width: 100%; border-collapse: collapse;">
+          <tr style="background-color: #f0f0f0;">
+            <th style="padding: 8px; border: 1px solid #ddd;">DESCRIÇÃO</th>
+            <th style="padding: 8px; border: 1px solid #ddd;">REFERÊNCIA</th>
+            <th style="padding: 8px; border: 1px solid #ddd;">VALOR</th>
+            <th style="padding: 8px; border: 1px solid #ddd;">DATA</th>
+            <th style="padding: 8px; border: 1px solid #ddd;">HORA</th>
+            <th style="padding: 8px; border: 1px solid #ddd;">CLIENTE</th>
+            <th style="padding: 8px; border: 1px solid #ddd;">FORMA PGTO</th>
+          </tr>
+          ${transactions.map(t => {
+            const paymentMethodMap = {
+              'pix': 'PIX',
+              'dinheiro': 'DINHEIRO',
+              'cartao_debito': 'CARTÃO DE DÉBITO',
+              'cartao_credito': 'CARTÃO DE CRÉDITO',
+              'link': 'LINK'
+            };
+
+            const categoryMap = {
+              'venda_produto': 'PRODUTO',
+              'venda_servico': 'SERVIÇO',
+              'venda_pacote': 'PACOTE',
+              'venda_gift_card': 'GIFT CARD',
+              'venda_assinatura': 'ASSINATURA'
+            };
+
+            return `
+              <tr>
+                <td style="padding: 8px; border: 1px solid #ddd;">${t.description || '-'}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${categoryMap[t.category] || t.category || '-'}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">R$ ${Number(t.amount || 0).toFixed(2)}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${formatDate(t.payment_date)}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${formatTime(t.created_at)}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${t.client_name || '-'}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${paymentMethodMap[t.payment_method] || t.payment_method || '-'}</td>
+              </tr>
+            `;
+          }).join('')}
+        </table>
+
+        <div style="margin-top: 50px; text-align: center;">
+          <div style="border-top: 1px solid #000; display: inline-block; padding-top: 10px; min-width: 200px;">
+            (Assinatura)
+          </div>
+        </div>
+
+        <div style="margin-top: 30px; font-size: 12px;">
+          <p>MAGNIFIC Telefone:</p>
+          <p>Endereço: Rua Eduardo Santos Pereira, 2221 - Campo Grande MS 79020-170</p>
+        </div>
+      </div>
+    `;
+    return html;
+  };
+
+  const handleOpenReport = () => {
+    if (!cashRegisters || cashRegisters.length === 0) {
+      toast({
+        title: "Erro",
+        description: "Não há dados de caixa disponíveis",
+        type: "error"
       });
-      
-      setReportHtml(reportResponse);
-      setShowReportDialog(true);
+      return;
+    }
+
+    const html = generateReportHtml(cashRegisters[0], transactions);
+    setReportHtml(html);
+    setShowReportDialog(true);
+  };
+
+  const generatePDFReport = async (cashData, transactions) => {
+    const html = `
+      <div style="font-family: Arial, sans-serif; padding: 20px;">
+        <!-- Cabeçalho -->
+        <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
+          <img src="/logo.png" alt="Logo" style="height: 50px;" />
+          <div style="text-align: right;">
+            <h2>DETALHAMENTO CAIXA</h2>
+            <p>OPERADOR: ${cashData.opened_by || '-'}</p>
+            <p>${format(new Date(), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR }).toUpperCase()}</p>
+          </div>
+        </div>
+
+        <!-- Abertura/Fechamento -->
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+          <tr style="background-color: #f0f0f0;">
+            <th style="padding: 8px; border: 1px solid #ddd;">ABERTURA</th>
+            <th style="padding: 8px; border: 1px solid #ddd;">FECHAMENTO</th>
+            <th style="padding: 8px; border: 1px solid #ddd;">R$ ABERTURA</th>
+            <th style="padding: 8px; border: 1px solid #ddd;">R$ FECHAMENTO</th>
+            <th style="padding: 8px; border: 1px solid #ddd;">QUEBRA</th>
+          </tr>
+          <tr>
+            <td style="padding: 8px; border: 1px solid #ddd;">${formatDate(cashData.opened_at)}</td>
+            <td style="padding: 8px; border: 1px solid #ddd;">${formatDate(cashData.closed_at)}</td>
+            <td style="padding: 8px; border: 1px solid #ddd;">R$ ${Number(cashData.initial_amount || 0).toFixed(2)}</td>
+            <td style="padding: 8px; border: 1px solid #ddd;">R$ ${Number(cashData.final_amount || 0).toFixed(2)}</td>
+            <td style="padding: 8px; border: 1px solid #ddd; color: ${Number(cashData.difference || 0) < 0 ? 'red' : 'green'};">
+              R$ ${Number(cashData.difference || 0).toFixed(2)}
+            </td>
+          </tr>
+        </table>
+
+        <!-- Totais por Forma de Pagamento -->
+        <div style="margin-bottom: 20px;">
+          <h3 style="margin-bottom: 10px;">DETALHAMENTO DE ENTRADAS / TOTAL: R$ ${transactions.reduce((acc, t) => t.type === 'receita' ? acc + Number(t.amount) : acc, 0).toFixed(2)}</h3>
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr>
+              <th style="padding: 8px; border: 1px solid #ddd;">PIX</th>
+              <th style="padding: 8px; border: 1px solid #ddd;">DINHEIRO</th>
+              <th style="padding: 8px; border: 1px solid #ddd;">CARTÃO DE DÉBITO</th>
+              <th style="padding: 8px; border: 1px solid #ddd;">CARTÃO DE CRÉDITO</th>
+              <th style="padding: 8px; border: 1px solid #ddd;">LINK</th>
+            </tr>
+            <tr>
+              ${Object.entries(getPaymentMethodTotals(transactions)).map(([method, total]) => `
+                <td style="padding: 8px; border: 1px solid #ddd;">R$ ${Number(total).toFixed(2)}</td>
+              `).join('')}
+            </tr>
+          </table>
+        </div>
+
+        <!-- Transações -->
+        <table style="width: 100%; border-collapse: collapse;">
+          <tr style="background-color: #f0f0f0;">
+            <th style="padding: 8px; border: 1px solid #ddd;">DESCRIÇÃO</th>
+            <th style="padding: 8px; border: 1px solid #ddd;">REFERÊNCIA</th>
+            <th style="padding: 8px; border: 1px solid #ddd;">VALOR</th>
+            <th style="padding: 8px; border: 1px solid #ddd;">DATA</th>
+            <th style="padding: 8px; border: 1px solid #ddd;">HORA</th>
+            <th style="padding: 8px; border: 1px solid #ddd;">CLIENTE</th>
+            <th style="padding: 8px; border: 1px solid #ddd;">FORMA PGTO</th>
+          </tr>
+          ${transactions.map(t => {
+            const paymentMethodMap = {
+              'pix': 'PIX',
+              'dinheiro': 'DINHEIRO',
+              'cartao_debito': 'CARTÃO DE DÉBITO',
+              'cartao_credito': 'CARTÃO DE CRÉDITO',
+              'link': 'LINK'
+            };
+
+            const categoryMap = {
+              'venda_produto': 'PRODUTO',
+              'venda_servico': 'SERVIÇO',
+              'venda_pacote': 'PACOTE',
+              'venda_gift_card': 'GIFT CARD',
+              'venda_assinatura': 'ASSINATURA'
+            };
+
+            return `
+              <tr>
+                <td style="padding: 8px; border: 1px solid #ddd;">${t.description || '-'}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${categoryMap[t.category] || t.category || '-'}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">R$ ${Number(t.amount || 0).toFixed(2)}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${formatDate(t.payment_date)}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${formatTime(t.created_at)}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${t.client_name || '-'}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${paymentMethodMap[t.payment_method] || t.payment_method || '-'}</td>
+              </tr>
+            `;
+          }).join('')}
+        </table>
+
+        <!-- Assinatura -->
+        <div style="margin-top: 50px; text-align: center;">
+          <div style="border-top: 1px solid #000; display: inline-block; padding-top: 10px; min-width: 200px;">
+            (Assinatura)
+          </div>
+        </div>
+
+        <!-- Rodapé -->
+        <div style="margin-top: 30px; font-size: 12px;">
+          <p>MAGNIFIC Telefone:</p>
+          <p>Endereço: Rua Eduardo Santos Pereira, 2221 - Campo Grande MS 79020-170</p>
+        </div>
+      </div>
+    `;
+
+    const element = document.createElement('div');
+    element.innerHTML = html;
+    document.body.appendChild(element);
+
+    const options = {
+      margin: 10,
+      filename: `caixa_${format(new Date(), 'dd-MM-yyyy')}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2 },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    try {
+      const pdf = await html2pdf().from(element).set(options).save();
+      document.body.removeChild(element);
+      toast({
+        title: "Sucesso",
+        description: "Relatório gerado com sucesso!",
+        type: "success"
+      });
     } catch (error) {
-      console.error("Error generating report:", error);
-      toast.error("Erro ao gerar relatório. Tente novamente.");
-    } finally {
-      setIsGeneratingReport(false);
+      console.error('Erro ao gerar PDF:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao gerar relatório PDF",
+        type: "error"
+      });
     }
   };
-  
+
   const printReport = () => {
     const printWindow = window.open('', '_blank');
     printWindow.document.write(reportHtml);
@@ -914,20 +1112,27 @@ export default function CashRegister() {
     }, 500);
   };
   
-  const downloadReport = () => {
-    const element = document.createElement('a');
-    const file = new Blob([reportHtml], {type: 'text/html'});
-    element.href = URL.createObjectURL(file);
-    element.download = `relatorio_caixa_${selectedDate}.html`;
-    document.body.appendChild(element);
-    element.click();
-    document.body.removeChild(element);
+  const handleDownloadReport = async () => {
+    try {
+      setIsGeneratingReport(true);
+      await generatePDFReport(cashRegisters[0], transactions);
+    } catch (error) {
+      console.error('Erro ao gerar relatório:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao gerar relatório",
+        type: "error"
+      });
+    } finally {
+      setIsGeneratingReport(false);
+      setShowReportDialog(false);
+    }
   };
-  
+
   const viewHistoricCash = (date) => {
     setSelectedDate(format(date, "yyyy-MM-dd"));
     setShowHistoricCashDialog(false);
-    generateReport();
+    handleOpenReport();
   };
 
   const getCashRegisterByDate = (date) => {
@@ -1004,7 +1209,7 @@ export default function CashRegister() {
             Fechar Caixa
           </Button>
           <Button 
-            onClick={() => setShowReportDialog(true)}
+            onClick={handleOpenReport}
             variant="outline"
             className="text-[#294380] border-[#294380]"
           >
@@ -1201,7 +1406,7 @@ export default function CashRegister() {
             
             <DialogFooter>
               <div className="flex gap-2">
-                <Button variant="outline" onClick={downloadReport}>
+                <Button variant="outline" onClick={handleDownloadReport}>
                   <Download className="w-4 h-4 mr-2" />
                   Download
                 </Button>
