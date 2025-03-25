@@ -24,7 +24,12 @@ export default function ContractTemplates() {
   const loadTemplates = async () => {
     try {
       const data = await ContractTemplate.list();
-      setTemplates(data);
+      // Mapear os templates para garantir a estrutura correta
+      const mappedTemplates = data.map(template => ({
+        ...template,
+        sections: template.content?.sections || []
+      }));
+      setTemplates(mappedTemplates);
     } catch (error) {
       console.error('Error loading templates:', error);
     }
@@ -35,7 +40,7 @@ export default function ContractTemplates() {
       setFormData({
         name: template.name,
         description: template.description,
-        sections: template.sections
+        sections: template.sections || template.content?.sections || []
       });
       setEditingTemplate(template);
     } else {

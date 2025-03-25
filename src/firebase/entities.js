@@ -158,10 +158,17 @@ export const ContractTemplate = {
 
   create: async function(data) {
     try {
+      // Validar dados obrigatórios
+      if (!data.name || !data.sections) {
+        throw new Error('Nome e seções são obrigatórios');
+      }
+
       const templateData = {
         name: data.name,
-        description: data.description,
-        content: data.content,
+        description: data.description || '',
+        content: {
+          sections: data.sections || []
+        },
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
@@ -214,9 +221,24 @@ export const ContractTemplate = {
 
   update: async function(id, data) {
     try {
+      // Validar dados obrigatórios
+      if (!data.name || !data.sections) {
+        throw new Error('Nome e seções são obrigatórios');
+      }
+
+      const templateData = {
+        name: data.name,
+        description: data.description || '',
+        content: {
+          sections: data.sections || []
+        },
+        updated_at: new Date().toISOString()
+      };
+
       const docRef = doc(db, this.collection, id);
-      await setDoc(docRef, data, { merge: true });
-      return { id, ...data };
+      await setDoc(docRef, templateData, { merge: true });
+
+      return { id, ...templateData };
     } catch (error) {
       console.error('Error updating template:', error);
       throw error;
@@ -328,6 +350,9 @@ export const Contract = {
       if (templateId) {
         // Usar template existente
         const template = await ContractTemplate.get(templateId);
+        if (!template || !template.content) {
+          throw new Error('Template não encontrado ou sem conteúdo definido');
+        }
         content = template.content;
       } else {
         // Template padrão
@@ -349,10 +374,15 @@ export const Contract = {
         };
       }
 
+      // Validação extra para garantir que content não seja undefined
+      if (!content) {
+        throw new Error('Conteúdo do contrato não pode ser vazio');
+      }
+
       const contractData = {
         client_id: clientId,
         template_id: templateId,
-        content,
+        content, // Agora temos certeza que content não é undefined
         status: 'draft',
         issue_date: new Date().toISOString(),
         created_at: new Date().toISOString(),
