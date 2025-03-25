@@ -148,6 +148,40 @@ export const Client = {
       console.error('Error getting client:', error);
       throw error;
     }
+  },
+
+  getAnamnese: async function(clientId) {
+    try {
+      const anamneseRef = doc(db, 'clients', clientId, 'anamnese', 'current');
+      const docSnap = await getDoc(anamneseRef);
+      
+      if (docSnap.exists()) {
+        return {
+          id: docSnap.id,
+          ...docSnap.data()
+        };
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error getting anamnese:', error);
+      throw error;
+    }
+  },
+
+  saveAnamnese: async function(clientId, data) {
+    try {
+      const anamneseRef = doc(db, 'clients', clientId, 'anamnese', 'current');
+      await setDoc(anamneseRef, {
+        ...data,
+        updated_at: new Date().toISOString()
+      }, { merge: true });
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error saving anamnese:', error);
+      throw error;
+    }
   }
 };
 

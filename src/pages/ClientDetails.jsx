@@ -43,6 +43,7 @@ import toast from 'react-hot-toast';
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 
 export default function ClientDetails() {
   const [client, setClient] = useState(null);
@@ -281,7 +282,16 @@ export default function ClientDetails() {
   const loadAnamnese = async () => {
     try {
       const clientAnamnese = await Client.getAnamnese(clientId);
-      setAnamneseData(clientAnamnese || {});
+      if (clientAnamnese) {
+        setAnamneseData(clientAnamnese.data || {});
+        // Se tiver um template associado, selecionar ele
+        if (clientAnamnese.template_id) {
+          const template = anamneseTemplates.find(t => t.id === clientAnamnese.template_id);
+          if (template) {
+            setSelectedAnamneseTemplate(template);
+          }
+        }
+      }
     } catch (error) {
       console.error('Error loading anamnese:', error);
     }
@@ -544,12 +554,14 @@ export default function ClientDetails() {
     const template = anamneseTemplates.find(t => t.id === templateId);
     if (template) {
       setSelectedAnamneseTemplate(template);
-      // Inicializar os campos com valores vazios
-      const initialData = {};
+      // Manter dados existentes se houver, senão inicializar vazios
+      const currentData = { ...anamneseData };
       template.fields.forEach(field => {
-        initialData[field.id] = '';
+        if (!currentData[field.id]) {
+          currentData[field.id] = '';
+        }
       });
-      setAnamneseData(initialData);
+      setAnamneseData(currentData);
     }
   };
 
@@ -560,22 +572,27 @@ export default function ClientDetails() {
     }
 
     try {
-      // Salvar no Firebase
-      await Client.update(clientId, {
-        anamnese: {
-          template_id: selectedAnamneseTemplate.id,
-          template_name: selectedAnamneseTemplate.name,
-          data: anamneseData,
-          created_at: new Date().toISOString()
-        }
+      await Client.saveAnamnese(clientId, {
+        template_id: selectedAnamneseTemplate.id,
+        template_name: selectedAnamneseTemplate.name,
+        data: anamneseData,
+        created_at: new Date().toISOString()
       });
 
-      toast.success('Anamnese salva com sucesso!');
+      toast.success('Anamnese salva com sucesso');
+      loadAnamnese(); // Recarregar dados
     } catch (error) {
-      console.error('Erro ao salvar anamnese:', error);
+      console.error('Error saving anamnese:', error);
       toast.error('Erro ao salvar anamnese');
     }
   };
+
+  // Efeito para carregar anamnese quando o componente montar
+  useEffect(() => {
+    if (clientId && anamneseTemplates.length > 0) {
+      loadAnamnese();
+    }
+  }, [clientId, anamneseTemplates]);
 
   if (!client && !loadError) {
     return (
@@ -1151,53 +1168,32 @@ export default function ClientDetails() {
                 </Select>
               </div>
 
-              {selectedAnamneseTemplate && (
-                <div className="space-y-4">
-                  {selectedAnamneseTemplate.fields.map((field) => (
-                    <div key={field.id} className="space-y-2">
-                      <Label htmlFor={field.id}>{field.label}</Label>
-                      {field.type === 'select' ? (
-                        <Select
-                          id={field.id}
+              {selectedAnamneseTemplate ? (
+                <Card>
+                  <CardContent className="space-y-4 pt-6">
+                    {selectedAnamneseTemplate.fields?.map((field) => (
+                      <div key={field.id} className="space-y-2">
+                        <Label>{field.label}</Label>
+                        <Input
+                          type="text"
                           value={anamneseData[field.id] || ''}
-                          onValueChange={(value) => setAnamneseData({ ...anamneseData, [field.id]: value })}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder={`Selecione ${field.label.toLowerCase()}`} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {field.options.map((option) => (
-                              <SelectItem key={option} value={option}>
-                                {option}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      ) : field.type === 'boolean' ? (
-                        <Select
-                          id={field.id}
-                          value={anamneseData[field.id] || ''}
-                          onValueChange={(value) => setAnamneseData({ ...anamneseData, [field.id]: value })}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecione uma opção" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="sim">Sim</SelectItem>
-                            <SelectItem value="nao">Não</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <Textarea
-                          id={field.id}
-                          value={anamneseData[field.id] || ''}
-                          onChange={(e) => setAnamneseData({ ...anamneseData, [field.id]: e.target.value })}
-                          placeholder={`Digite ${field.label.toLowerCase()}`}
+                          onChange={(e) => setAnamneseData(prev => ({
+                            ...prev,
+                            [field.id]: e.target.value
+                          }))}
                         />
-                      )}
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card>
+                  <CardContent className="py-8">
+                    <div className="text-center text-gray-500">
+                      Selecione um modelo de anamnese para começar
                     </div>
-                  ))}
-                </div>
+                  </CardContent>
+                </Card>
               )}
             </div>
           </div>
