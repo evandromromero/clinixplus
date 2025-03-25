@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { GiftCard, Client, Sale } from '@/firebase/entities';
+import { GiftCard, Client, Sale, CompanySettings } from '@/firebase/entities';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -56,6 +56,8 @@ import { createPageUrl } from "@/utils";
 import { useNavigate } from 'react-router-dom';
 import GiftCardTemplate from '../components/giftcard/GiftCardTemplate';
 import RateLimitHandler from '@/components/RateLimitHandler';
+import { toast } from 'react-hot-toast';
+import { Toaster } from 'react-hot-toast';
 
 export default function GiftCards() {
   const [giftCards, setGiftCards] = useState([]);
@@ -69,6 +71,7 @@ export default function GiftCards() {
   const [redeemCode, setRedeemCode] = useState("");
   const [searchClient, setSearchClient] = useState("");
   const [clientSearchResults, setClientSearchResults] = useState([]);
+  const [companyName, setCompanyName] = useState("");
   
   const navigate = useNavigate();
 
@@ -77,14 +80,37 @@ export default function GiftCards() {
     client_id: "",
     recipient_name: "",
     recipient_email: "",
+    recipient_phone: "",
     message: "",
     expiration_date: format(addMonths(new Date(), 12), 'yyyy-MM-dd'),
-    design_template: "padrao"
+    design_template: "padrao",
+    company_name: ""
   });
 
   useEffect(() => {
     loadData();
+    loadCompanySettings();
   }, []);
+
+  const loadCompanySettings = async () => {
+    try {
+      // Buscar todos os documentos de company_settings
+      const settingsList = await CompanySettings.list();
+      // Usar o primeiro documento encontrado
+      if (settingsList && settingsList.length > 0) {
+        const settings = settingsList[0];
+        if (settings?.name) {
+          setCompanyName(settings.name);
+          setNewGiftCard(prev => ({
+            ...prev,
+            company_name: settings.name
+          }));
+        }
+      }
+    } catch (error) {
+      console.error("Erro ao carregar configurações da empresa:", error);
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -135,41 +161,46 @@ export default function GiftCards() {
   const handleCreateGiftCard = async () => {
     try {
       if (!newGiftCard.client_id) {
-        alert("Selecione um cliente");
+        toast.error("Selecione um cliente");
         return;
       }
 
-      const code = generateRandomCode();
-      const giftCardData = {
-        ...newGiftCard,
-        code,
-        purchase_date: format(new Date(), 'yyyy-MM-dd'),
-        status: "ativo"
-      };
+      if (!newGiftCard.value || newGiftCard.value <= 0) {
+        toast.error("Informe um valor válido");
+        return;
+      }
 
-      const createdGiftCard = await GiftCard.create(giftCardData);
+      const giftCardData = await GiftCard.create(newGiftCard);
       
-      // Redirecionar para a página de vendas com o gift card
-      navigate(createPageUrl(`SalesRegister?type=giftcard&giftcard_id=${createdGiftCard.id}`));
-      
+      // Enviar por WhatsApp se tiver número
+      if (newGiftCard.recipient_phone) {
+        const message = `Olá${newGiftCard.recipient_name ? ' ' + newGiftCard.recipient_name : ''}! Você recebeu um Gift Card da Esthétique no valor de ${formatCurrency(newGiftCard.value)}. Código: ${giftCardData.code}${newGiftCard.message ? '\n\nMensagem: ' + newGiftCard.message : ''}`;
+        const phone = newGiftCard.recipient_phone.replace(/\D/g, '');
+        const whatsappUrl = `https://wa.me/55${phone}?text=${encodeURIComponent(message)}`;
+        window.open(whatsappUrl, '_blank');
+      }
+
+      resetForm();
       setShowCreateDialog(false);
-      resetNewGiftCard();
       await loadData();
+      toast.success("Gift Card criado com sucesso!");
     } catch (error) {
       console.error("Erro ao criar gift card:", error);
-      alert("Não foi possível criar o gift card");
+      toast.error("Erro ao criar gift card");
     }
   };
 
-  const resetNewGiftCard = () => {
+  const resetForm = () => {
     setNewGiftCard({
       value: 100,
       client_id: "",
       recipient_name: "",
       recipient_email: "",
+      recipient_phone: "",
       message: "",
       expiration_date: format(addMonths(new Date(), 12), 'yyyy-MM-dd'),
-      design_template: "padrao"
+      design_template: "padrao",
+      company_name: companyName
     });
     setSearchClient("");
   };
@@ -177,7 +208,7 @@ export default function GiftCards() {
   const handleRedeemGiftCard = async () => {
     try {
       if (!redeemCode.trim()) {
-        alert("Digite o código do gift card");
+        toast.error("Digite o código do gift card");
         return;
       }
 
@@ -186,7 +217,7 @@ export default function GiftCards() {
       );
 
       if (!foundGiftCard) {
-        alert("Gift card não encontrado ou já utilizado");
+        toast.error("Gift card não encontrado ou já utilizado");
         return;
       }
 
@@ -218,7 +249,7 @@ export default function GiftCards() {
 
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text).then(() => {
-      alert("Código copiado para a área de transferência");
+      toast.success("Código copiado para a área de transferência");
     });
   };
 
@@ -271,6 +302,7 @@ export default function GiftCards() {
 
   return (
     <div className="space-y-6">
+      <Toaster />
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <h2 className="text-3xl font-bold text-gray-800">Gift Cards</h2>
         <div className="flex gap-2">
@@ -284,7 +316,7 @@ export default function GiftCards() {
           </Button>
           <Button 
             onClick={() => {
-              resetNewGiftCard();
+              resetForm();
               setShowCreateDialog(true);
             }}
             className="bg-purple-600 hover:bg-purple-700 flex-1 sm:flex-none"
@@ -544,6 +576,19 @@ export default function GiftCards() {
                     recipient_email: e.target.value
                   })}
                   placeholder="Para envio automático"
+                />
+              </div>
+
+              <div>
+                <Label>WhatsApp do Destinatário (opcional)</Label>
+                <Input
+                  type="tel"
+                  value={newGiftCard.recipient_phone}
+                  onChange={(e) => setNewGiftCard({
+                    ...newGiftCard,
+                    recipient_phone: e.target.value
+                  })}
+                  placeholder="Ex: (11) 99999-9999"
                 />
               </div>
 

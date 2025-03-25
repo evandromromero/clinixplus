@@ -1,10 +1,51 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Gift, Sparkles, Calendar } from "lucide-react";
+import { CompanySettings } from "@/firebase/entities";
+
+// Estado global para armazenar o nome da empresa
+let globalCompanyName = "Esthétique";
+let isLoading = false;
+let loadPromise = null;
+
+// Função para carregar as configurações da empresa
+const loadCompanySettings = async () => {
+  if (loadPromise) return loadPromise;
+
+  loadPromise = new Promise(async (resolve) => {
+    if (!isLoading) {
+      isLoading = true;
+      try {
+        const settingsList = await CompanySettings.list();
+        if (settingsList && settingsList.length > 0) {
+          const settings = settingsList[0];
+          if (settings?.name) {
+            globalCompanyName = settings.name;
+          }
+        }
+      } catch (error) {
+        console.error("Erro ao carregar configurações da empresa:", error);
+      } finally {
+        isLoading = false;
+      }
+    }
+    resolve(globalCompanyName);
+  });
+
+  return loadPromise;
+};
 
 export default function GiftCardTemplate({ giftCard, previewMode = false }) {
+  const [companyName, setCompanyName] = useState(globalCompanyName);
+
+  useEffect(() => {
+    loadCompanySettings().then(name => {
+      setCompanyName(name);
+    });
+  }, []);
+
   const templates = {
     padrao: {
       bgColor: "bg-gradient-to-r from-blue-500 to-purple-500",
@@ -42,7 +83,7 @@ export default function GiftCardTemplate({ giftCard, previewMode = false }) {
             <Gift className="h-8 w-8" />
           </div>
           
-          <h3 className="text-xl font-bold">Esthétique Gift Card</h3>
+          <h3 className="text-xl font-bold">{giftCard.company_name || companyName} Gift Card</h3>
           
           <div className="text-3xl font-bold mt-2">
             {new Intl.NumberFormat('pt-BR', { 
