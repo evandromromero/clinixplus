@@ -187,6 +187,59 @@ src/
    - Badges coloridos para status
    - Informações detalhadas por sessão
 
+#### Melhorias no Layout e UX
+1. **Página de Produtos**:
+   - Atualizado layout usando componentes shadcn/ui
+   - Implementada tabela com ordenação e filtragem
+   - Reorganizado modal de adicionar/editar produto
+   - Adicionadas validações e feedback visual
+   - Melhorada UX com grids e espaçamento adequado
+
+2. **Modelos de Anamnese**:
+   - Implementado sistema de campos dinâmicos
+   - Suporte para campos tipo texto, seleção e sim/não
+   - Preview em tempo real dos campos adicionados
+   - Modal com altura máxima e barra de rolagem
+   - Validações e feedback visual aprimorados
+
+3. **Página de Serviços**:
+   - Reorganizado formulário em seções lógicas
+   - Melhorada UX das configurações do site
+   - Implementadas validações mais robustas
+   - Modal com altura controlada e rolagem
+   - Feedback visual para todas as ações
+
+4. **Melhorias Gerais**:
+   - Modais com altura máxima (80vh) e barra de rolagem
+   - Padronização de cores e estilos dos botões
+   - Loading states e toasts para feedback
+   - Campos organizados em grids responsivos
+   - Validações claras e mensagens de erro
+
+#### Desafios e Soluções
+1. **Modais Grandes**
+   - Problema: Modais ocupando toda a tela em formulários longos
+   - Solução: Implementado `max-h-[80vh]` e `overflow-y-auto`
+   - Resultado: Melhor experiência em telas menores
+
+2. **Inconsistência Visual**
+   - Problema: Diferentes estilos entre páginas
+   - Solução: Padronização com shadcn/ui e Tailwind
+   - Resultado: Interface mais coesa e profissional
+
+3. **UX em Formulários**
+   - Problema: Formulários longos e confusos
+   - Solução: Reorganização em seções lógicas
+   - Resultado: Melhor fluxo de preenchimento
+
+#### Padrões Técnicos
+- **Componentes**: shadcn/ui para base consistente
+- **Estilos**: Tailwind CSS para customização
+- **Estado**: React Hooks e Context quando necessário
+- **Feedback**: Sistema de toast notifications
+- **Validação**: Implementada em tempo real
+- **Responsividade**: Layout adaptável em todas as telas
+
 ### Integração com Firebase (Planejamento)
 Para resolver problemas de limite de taxa (429: Rate limit exceeded) do Base44, estamos considerando uma solução híbrida com Firebase. A implementação mais viável seria:
 
