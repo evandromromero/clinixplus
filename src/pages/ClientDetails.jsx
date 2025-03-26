@@ -177,11 +177,13 @@ export default function ClientDetails() {
   const loadData = async () => {
     try {
       // Carregar dados básicos
-      const [clientData, appointmentsData, salesData, servicesData] = await Promise.all([
+      const [clientData, appointmentsData, salesData, servicesData, clientPackagesData, packagesData] = await Promise.all([
         Client.get(clientId),
         Appointment.list(),
         Sale.list(),
-        Service.list()
+        Service.list(),
+        ClientPackage.list(),
+        Package.list()
       ]);
 
       setClient(clientData);
@@ -198,13 +200,55 @@ export default function ClientDetails() {
         .sort((a, b) => new Date(b.date) - new Date(a.date));
       setSales(clientSales);
 
+      // Filtrar e processar pacotes do cliente
+      const activePackages = clientPackagesData
+        .filter(cp => cp.client_id === clientId)
+        .map(cp => {
+          // Encontra o pacote base
+          const basePackage = packagesData.find(p => p.id === cp.package_id);
+          
+          // Encontra os serviços do package_snapshot
+          let services = [];
+          if (cp.package_snapshot?.services) {
+            services = Object.entries(cp.package_snapshot.services).map(([_, serviceData]) => {
+              const service = servicesData.find(s => s.id === serviceData.service_id);
+              return {
+                service_id: serviceData.service_id,
+                name: service?.name || 'Serviço não encontrado',
+                quantity: serviceData.quantity || 0
+              };
+            });
+          }
+          
+          return {
+            ...cp,
+            packageData: basePackage,
+            sessions_used: cp.sessions_used || 0,
+            total_sessions: cp.total_sessions || 0,
+            session_history: cp.session_history || [],
+            services: services
+          };
+        })
+        .filter(cp => cp.packageData)
+        .sort((a, b) => {
+          // Primeiro os ativos, depois por data de validade
+          if (a.status === 'ativo' && b.status !== 'ativo') return -1;
+          if (a.status !== 'ativo' && b.status === 'ativo') return 1;
+          
+          const dateA = new Date(a.purchase_date || a.created_date || 0);
+          const dateB = new Date(b.purchase_date || b.created_date || 0);
+          return dateB - dateA;
+        });
+      
+      setClientPackages(activePackages);
+      setPackages(packagesData);
+
       // Carregar serviços pendentes do cliente
       const pendingServicesData = await PendingService.filter({ 
         client_id: clientId,
         status: 'pendente'
       });
       setPendingServices(pendingServicesData);
-
       setServices(servicesData);
     } catch (error) {
       console.error(error);
