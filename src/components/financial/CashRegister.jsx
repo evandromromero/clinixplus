@@ -863,30 +863,30 @@ export default function CashRegister() {
     };
     
     const html = `
-      <div style="font-family: Arial, sans-serif; padding: 20px;">
-        <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
+      <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
           <img src="/logo.png" alt="Logo" style="height: 50px;" />
           <div style="text-align: right;">
-            <h2>DETALHAMENTO CAIXA</h2>
-            <p>OPERADOR: ${cashData.opened_by || '-'}</p>
-            <p>${format(new Date(), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR }).toUpperCase()}</p>
+            <h2 style="margin: 0 0 10px 0;">DETALHAMENTO CAIXA</h2>
+            <p style="margin: 0;">OPERADOR: ${cashData.opened_by || '-'}</p>
+            <p style="margin: 0;">${format(new Date(), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR }).toUpperCase()}</p>
           </div>
         </div>
 
-        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; table-layout: fixed;">
           <tr style="background-color: #f0f0f0;">
-            <th style="padding: 8px; border: 1px solid #ddd;">ABERTURA</th>
-            <th style="padding: 8px; border: 1px solid #ddd;">FECHAMENTO</th>
-            <th style="padding: 8px; border: 1px solid #ddd;">R$ ABERTURA</th>
-            <th style="padding: 8px; border: 1px solid #ddd;">R$ FECHAMENTO</th>
-            <th style="padding: 8px; border: 1px solid #ddd;">QUEBRA</th>
+            <th style="padding: 8px; border: 1px solid #ddd; width: 20%;">ABERTURA</th>
+            <th style="padding: 8px; border: 1px solid #ddd; width: 20%;">FECHAMENTO</th>
+            <th style="padding: 8px; border: 1px solid #ddd; width: 20%;">R$ ABERTURA</th>
+            <th style="padding: 8px; border: 1px solid #ddd; width: 20%;">R$ FECHAMENTO</th>
+            <th style="padding: 8px; border: 1px solid #ddd; width: 20%;">QUEBRA</th>
           </tr>
           <tr>
-            <td style="padding: 8px; border: 1px solid #ddd;">${formatDate(cashData.opened_at)}</td>
-            <td style="padding: 8px; border: 1px solid #ddd;">${formatDate(cashData.closed_at)}</td>
-            <td style="padding: 8px; border: 1px solid #ddd;">R$ ${Number(cashData.initial_amount || 0).toFixed(2)}</td>
-            <td style="padding: 8px; border: 1px solid #ddd;">R$ ${Number(cashData.final_amount || 0).toFixed(2)}</td>
-            <td style="padding: 8px; border: 1px solid #ddd; color: ${Number(cashData.difference || 0) < 0 ? 'red' : 'green'};">
+            <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${formatDate(cashData.opened_at)}</td>
+            <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${formatDate(cashData.closed_at)}</td>
+            <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">R$ ${Number(cashData.initial_amount || 0).toFixed(2)}</td>
+            <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">R$ ${Number(cashData.final_amount || 0).toFixed(2)}</td>
+            <td style="padding: 8px; border: 1px solid #ddd; text-align: center; color: ${Number(cashData.difference || 0) < 0 ? 'red' : 'green'};">
               R$ ${Number(cashData.difference || 0).toFixed(2)}
             </td>
           </tr>
@@ -894,40 +894,40 @@ export default function CashRegister() {
 
         <div style="margin-bottom: 20px;">
           <h3 style="margin-bottom: 10px;">DETALHAMENTO DE ENTRADAS / TOTAL: R$ ${totalReceitas.toFixed(2)}</h3>
-          <table style="width: 100%; border-collapse: collapse;">
+          <table style="width: 100%; border-collapse: collapse; table-layout: fixed;">
             <tr style="background-color: #f0f0f0;">
-              <th style="padding: 8px; border: 1px solid #ddd;">PIX</th>
-              <th style="padding: 8px; border: 1px solid #ddd;">DINHEIRO</th>
-              <th style="padding: 8px; border: 1px solid #ddd;">CARTÃO DE DÉBITO</th>
-              <th style="padding: 8px; border: 1px solid #ddd;">CARTÃO DE CRÉDITO</th>
-              <th style="padding: 8px; border: 1px solid #ddd;">LINK</th>
+              <th style="padding: 8px; border: 1px solid #ddd; width: 20%;">PIX</th>
+              <th style="padding: 8px; border: 1px solid #ddd; width: 20%;">DINHEIRO</th>
+              <th style="padding: 8px; border: 1px solid #ddd; width: 20%;">DÉBITO</th>
+              <th style="padding: 8px; border: 1px solid #ddd; width: 20%;">CRÉDITO</th>
+              <th style="padding: 8px; border: 1px solid #ddd; width: 20%;">LINK</th>
             </tr>
             <tr>
-              <td style="padding: 8px; border: 1px solid #ddd;">R$ ${paymentTotals.pix.toFixed(2)}</td>
-              <td style="padding: 8px; border: 1px solid #ddd;">R$ ${paymentTotals.dinheiro.toFixed(2)}</td>
-              <td style="padding: 8px; border: 1px solid #ddd;">R$ ${paymentTotals.cartao_debito.toFixed(2)}</td>
-              <td style="padding: 8px; border: 1px solid #ddd;">R$ ${paymentTotals.cartao_credito.toFixed(2)}</td>
-              <td style="padding: 8px; border: 1px solid #ddd;">R$ ${paymentTotals.link.toFixed(2)}</td>
+              <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">R$ ${paymentTotals.pix.toFixed(2)}</td>
+              <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">R$ ${paymentTotals.dinheiro.toFixed(2)}</td>
+              <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">R$ ${paymentTotals.cartao_debito.toFixed(2)}</td>
+              <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">R$ ${paymentTotals.cartao_credito.toFixed(2)}</td>
+              <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">R$ ${paymentTotals.link.toFixed(2)}</td>
             </tr>
           </table>
         </div>
 
-        <table style="width: 100%; border-collapse: collapse;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
           <tr style="background-color: #f0f0f0;">
-            <th style="padding: 8px; border: 1px solid #ddd;">DESCRIÇÃO</th>
-            <th style="padding: 8px; border: 1px solid #ddd;">REFERÊNCIA</th>
-            <th style="padding: 8px; border: 1px solid #ddd;">VALOR</th>
-            <th style="padding: 8px; border: 1px solid #ddd;">DATA</th>
-            <th style="padding: 8px; border: 1px solid #ddd;">HORA</th>
-            <th style="padding: 8px; border: 1px solid #ddd;">CLIENTE</th>
-            <th style="padding: 8px; border: 1px solid #ddd;">FORMA PGTO</th>
+            <th style="padding: 8px; border: 1px solid #ddd; width: 25%;">DESCRIÇÃO</th>
+            <th style="padding: 8px; border: 1px solid #ddd; width: 10%;">REF.</th>
+            <th style="padding: 8px; border: 1px solid #ddd; width: 10%;">VALOR</th>
+            <th style="padding: 8px; border: 1px solid #ddd; width: 15%;">DATA</th>
+            <th style="padding: 8px; border: 1px solid #ddd; width: 10%;">HORA</th>
+            <th style="padding: 8px; border: 1px solid #ddd; width: 15%;">CLIENTE</th>
+            <th style="padding: 8px; border: 1px solid #ddd; width: 15%;">FORMA PGTO</th>
           </tr>
           ${transactions.map(t => {
             const paymentMethodMap = {
               'pix': 'PIX',
               'dinheiro': 'DINHEIRO',
-              'cartao_debito': 'CARTÃO DE DÉBITO',
-              'cartao_credito': 'CARTÃO DE CRÉDITO',
+              'cartao_debito': 'DÉBITO',
+              'cartao_credito': 'CRÉDITO',
               'link': 'LINK'
             };
 
@@ -936,18 +936,20 @@ export default function CashRegister() {
               'venda_servico': 'SERVIÇO',
               'venda_pacote': 'PACOTE',
               'venda_gift_card': 'GIFT CARD',
-              'venda_assinatura': 'ASSINATURA'
+              'venda_assinatura': 'ASSINATURA',
+              'abertura_caixa': 'ABERTURA',
+              'venda': 'VENDA'
             };
 
             return `
               <tr>
                 <td style="padding: 8px; border: 1px solid #ddd;">${t.description || '-'}</td>
-                <td style="padding: 8px; border: 1px solid #ddd;">${categoryMap[t.category] || t.category || '-'}</td>
-                <td style="padding: 8px; border: 1px solid #ddd;">R$ ${Number(t.amount || 0).toFixed(2)}</td>
-                <td style="padding: 8px; border: 1px solid #ddd;">${formatDate(t.payment_date)}</td>
-                <td style="padding: 8px; border: 1px solid #ddd;">${formatTime(t.created_at)}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${categoryMap[t.category] || t.category || '-'}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">R$ ${Number(t.amount || 0).toFixed(2)}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${formatDate(t.payment_date)}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${formatTime(t.created_at)}</td>
                 <td style="padding: 8px; border: 1px solid #ddd;">${t.client_name || '-'}</td>
-                <td style="padding: 8px; border: 1px solid #ddd;">${paymentMethodMap[t.payment_method] || t.payment_method || '-'}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${paymentMethodMap[t.payment_method] || t.payment_method || '-'}</td>
               </tr>
             `;
           }).join('')}
@@ -959,9 +961,9 @@ export default function CashRegister() {
           </div>
         </div>
 
-        <div style="margin-top: 30px; font-size: 12px;">
-          <p>MAGNIFIC Telefone:</p>
-          <p>Endereço: Rua Eduardo Santos Pereira, 2221 - Campo Grande MS 79020-170</p>
+        <div style="margin-top: 30px; font-size: 12px; text-align: center;">
+          <p style="margin: 5px 0;">MAGNIFIC</p>
+          <p style="margin: 5px 0;">Rua Eduardo Santos Pereira, 2221 - Campo Grande MS 79020-170</p>
         </div>
       </div>
     `;
@@ -985,32 +987,32 @@ export default function CashRegister() {
 
   const generatePDFReport = async (cashData, transactions) => {
     const html = `
-      <div style="font-family: Arial, sans-serif; padding: 20px;">
+      <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px;">
         <!-- Cabeçalho -->
-        <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
           <img src="/logo.png" alt="Logo" style="height: 50px;" />
           <div style="text-align: right;">
-            <h2>DETALHAMENTO CAIXA</h2>
-            <p>OPERADOR: ${cashData.opened_by || '-'}</p>
-            <p>${format(new Date(), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR }).toUpperCase()}</p>
+            <h2 style="margin: 0 0 10px 0;">DETALHAMENTO CAIXA</h2>
+            <p style="margin: 0;">OPERADOR: ${cashData.opened_by || '-'}</p>
+            <p style="margin: 0;">${format(new Date(), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR }).toUpperCase()}</p>
           </div>
         </div>
 
         <!-- Abertura/Fechamento -->
-        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; table-layout: fixed;">
           <tr style="background-color: #f0f0f0;">
-            <th style="padding: 8px; border: 1px solid #ddd;">ABERTURA</th>
-            <th style="padding: 8px; border: 1px solid #ddd;">FECHAMENTO</th>
-            <th style="padding: 8px; border: 1px solid #ddd;">R$ ABERTURA</th>
-            <th style="padding: 8px; border: 1px solid #ddd;">R$ FECHAMENTO</th>
-            <th style="padding: 8px; border: 1px solid #ddd;">QUEBRA</th>
+            <th style="padding: 8px; border: 1px solid #ddd; width: 20%;">ABERTURA</th>
+            <th style="padding: 8px; border: 1px solid #ddd; width: 20%;">FECHAMENTO</th>
+            <th style="padding: 8px; border: 1px solid #ddd; width: 20%;">R$ ABERTURA</th>
+            <th style="padding: 8px; border: 1px solid #ddd; width: 20%;">R$ FECHAMENTO</th>
+            <th style="padding: 8px; border: 1px solid #ddd; width: 20%;">QUEBRA</th>
           </tr>
           <tr>
-            <td style="padding: 8px; border: 1px solid #ddd;">${formatDate(cashData.opened_at)}</td>
-            <td style="padding: 8px; border: 1px solid #ddd;">${formatDate(cashData.closed_at)}</td>
-            <td style="padding: 8px; border: 1px solid #ddd;">R$ ${Number(cashData.initial_amount || 0).toFixed(2)}</td>
-            <td style="padding: 8px; border: 1px solid #ddd;">R$ ${Number(cashData.final_amount || 0).toFixed(2)}</td>
-            <td style="padding: 8px; border: 1px solid #ddd; color: ${Number(cashData.difference || 0) < 0 ? 'red' : 'green'};">
+            <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${formatDate(cashData.opened_at)}</td>
+            <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${formatDate(cashData.closed_at)}</td>
+            <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">R$ ${Number(cashData.initial_amount || 0).toFixed(2)}</td>
+            <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">R$ ${Number(cashData.final_amount || 0).toFixed(2)}</td>
+            <td style="padding: 8px; border: 1px solid #ddd; text-align: center; color: ${Number(cashData.difference || 0) < 0 ? 'red' : 'green'};">
               R$ ${Number(cashData.difference || 0).toFixed(2)}
             </td>
           </tr>
@@ -1019,39 +1021,39 @@ export default function CashRegister() {
         <!-- Totais por Forma de Pagamento -->
         <div style="margin-bottom: 20px;">
           <h3 style="margin-bottom: 10px;">DETALHAMENTO DE ENTRADAS / TOTAL: R$ ${transactions.reduce((acc, t) => t.type === 'receita' ? acc + Number(t.amount) : acc, 0).toFixed(2)}</h3>
-          <table style="width: 100%; border-collapse: collapse;">
+          <table style="width: 100%; border-collapse: collapse; table-layout: fixed;">
             <tr>
-              <th style="padding: 8px; border: 1px solid #ddd;">PIX</th>
-              <th style="padding: 8px; border: 1px solid #ddd;">DINHEIRO</th>
-              <th style="padding: 8px; border: 1px solid #ddd;">CARTÃO DE DÉBITO</th>
-              <th style="padding: 8px; border: 1px solid #ddd;">CARTÃO DE CRÉDITO</th>
-              <th style="padding: 8px; border: 1px solid #ddd;">LINK</th>
+              <th style="padding: 8px; border: 1px solid #ddd; width: 20%;">PIX</th>
+              <th style="padding: 8px; border: 1px solid #ddd; width: 20%;">DINHEIRO</th>
+              <th style="padding: 8px; border: 1px solid #ddd; width: 20%;">DÉBITO</th>
+              <th style="padding: 8px; border: 1px solid #ddd; width: 20%;">CRÉDITO</th>
+              <th style="padding: 8px; border: 1px solid #ddd; width: 20%;">LINK</th>
             </tr>
             <tr>
               ${Object.entries(getPaymentMethodTotals(transactions)).map(([method, total]) => `
-                <td style="padding: 8px; border: 1px solid #ddd;">R$ ${Number(total).toFixed(2)}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">R$ ${Number(total).toFixed(2)}</td>
               `).join('')}
             </tr>
           </table>
         </div>
 
         <!-- Transações -->
-        <table style="width: 100%; border-collapse: collapse;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
           <tr style="background-color: #f0f0f0;">
-            <th style="padding: 8px; border: 1px solid #ddd;">DESCRIÇÃO</th>
-            <th style="padding: 8px; border: 1px solid #ddd;">REFERÊNCIA</th>
-            <th style="padding: 8px; border: 1px solid #ddd;">VALOR</th>
-            <th style="padding: 8px; border: 1px solid #ddd;">DATA</th>
-            <th style="padding: 8px; border: 1px solid #ddd;">HORA</th>
-            <th style="padding: 8px; border: 1px solid #ddd;">CLIENTE</th>
-            <th style="padding: 8px; border: 1px solid #ddd;">FORMA PGTO</th>
+            <th style="padding: 8px; border: 1px solid #ddd; width: 25%;">DESCRIÇÃO</th>
+            <th style="padding: 8px; border: 1px solid #ddd; width: 10%;">REF.</th>
+            <th style="padding: 8px; border: 1px solid #ddd; width: 10%;">VALOR</th>
+            <th style="padding: 8px; border: 1px solid #ddd; width: 15%;">DATA</th>
+            <th style="padding: 8px; border: 1px solid #ddd; width: 10%;">HORA</th>
+            <th style="padding: 8px; border: 1px solid #ddd; width: 15%;">CLIENTE</th>
+            <th style="padding: 8px; border: 1px solid #ddd; width: 15%;">FORMA PGTO</th>
           </tr>
           ${transactions.map(t => {
             const paymentMethodMap = {
               'pix': 'PIX',
               'dinheiro': 'DINHEIRO',
-              'cartao_debito': 'CARTÃO DE DÉBITO',
-              'cartao_credito': 'CARTÃO DE CRÉDITO',
+              'cartao_debito': 'DÉBITO',
+              'cartao_credito': 'CRÉDITO',
               'link': 'LINK'
             };
 
@@ -1066,12 +1068,12 @@ export default function CashRegister() {
             return `
               <tr>
                 <td style="padding: 8px; border: 1px solid #ddd;">${t.description || '-'}</td>
-                <td style="padding: 8px; border: 1px solid #ddd;">${categoryMap[t.category] || t.category || '-'}</td>
-                <td style="padding: 8px; border: 1px solid #ddd;">R$ ${Number(t.amount || 0).toFixed(2)}</td>
-                <td style="padding: 8px; border: 1px solid #ddd;">${formatDate(t.payment_date)}</td>
-                <td style="padding: 8px; border: 1px solid #ddd;">${formatTime(t.created_at)}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${categoryMap[t.category] || t.category || '-'}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">R$ ${Number(t.amount || 0).toFixed(2)}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${formatDate(t.payment_date)}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${formatTime(t.created_at)}</td>
                 <td style="padding: 8px; border: 1px solid #ddd;">${t.client_name || '-'}</td>
-                <td style="padding: 8px; border: 1px solid #ddd;">${paymentMethodMap[t.payment_method] || t.payment_method || '-'}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${paymentMethodMap[t.payment_method] || t.payment_method || '-'}</td>
               </tr>
             `;
           }).join('')}
@@ -1085,9 +1087,9 @@ export default function CashRegister() {
         </div>
 
         <!-- Rodapé -->
-        <div style="margin-top: 30px; font-size: 12px;">
-          <p>MAGNIFIC Telefone:</p>
-          <p>Endereço: Rua Eduardo Santos Pereira, 2221 - Campo Grande MS 79020-170</p>
+        <div style="margin-top: 30px; font-size: 12px; text-align: center;">
+          <p style="margin: 5px 0;">MAGNIFIC Telefone:</p>
+          <p style="margin: 5px 0;">Endereço: Rua Eduardo Santos Pereira, 2221 - Campo Grande MS 79020-170</p>
         </div>
       </div>
     `;
