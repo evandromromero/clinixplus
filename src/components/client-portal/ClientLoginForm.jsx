@@ -30,11 +30,26 @@ export default function ClientLoginForm({ onSuccess }) {
 
     setLoading(true);
     try {
-      // Buscar clientes para encontrar correspondência com telefone
+      // Normalizar o telefone digitado (remover todos os caracteres não numéricos)
+      const normalizedInputPhone = phone.replace(/\D/g, '');
+      console.log('Telefone normalizado digitado:', normalizedInputPhone);
+      
+      // Buscar clientes do Firebase
       const clients = await Client.list();
-      const matchingClient = clients.find(client => 
-        client.phone && client.phone.replace(/\D/g, '') === phone.replace(/\D/g, '')
-      );
+      console.log('Clientes encontrados:', clients);
+      
+      const matchingClient = clients.find(client => {
+        // Normalizar o telefone do cliente da mesma forma
+        const normalizedClientPhone = client.phone ? client.phone.replace(/\D/g, '') : '';
+        console.log('Comparando:', {
+          normalizedInputPhone,
+          normalizedClientPhone,
+          original: client.phone
+        });
+        return normalizedClientPhone === normalizedInputPhone;
+      });
+
+      console.log('Cliente encontrado:', matchingClient);
 
       if (!matchingClient) {
         setError("Telefone não encontrado. Verifique o número ou entre em contato.");
@@ -46,14 +61,25 @@ export default function ClientLoginForm({ onSuccess }) {
 
       // Verificar se cliente já tem autenticação
       const authRecords = await ClientAuth.list();
-      let clientAuth = authRecords.find(auth => 
-        auth.phone === phone && auth.client_id === matchingClient.id
-      );
+      console.log('Registros de autenticação:', authRecords);
+      
+      let clientAuth = authRecords.find(auth => {
+        // Normalizar o telefone da autenticação também
+        const normalizedAuthPhone = auth.phone ? auth.phone.replace(/\D/g, '') : '';
+        console.log('Comparando auth:', {
+          normalizedInputPhone,
+          normalizedAuthPhone,
+          original: auth.phone
+        });
+        return normalizedAuthPhone === normalizedInputPhone && auth.client_id === matchingClient.id;
+      });
+      
+      console.log('Auth encontrado:', clientAuth);
       
       if (!clientAuth) {
         // Primeiro acesso - criar registro de autenticação
         clientAuth = await ClientAuth.create({
-          phone,
+          phone: normalizedInputPhone, // Salvar o telefone já normalizado
           client_id: matchingClient.id,
           first_access: true,
           verified: false

@@ -1,8 +1,10 @@
 import { base44 } from './base44Client';
-import { Sale as FirebaseSale, UnfinishedSale as FirebaseUnfinishedSale } from '../firebase/entities';
+import { Sale as FirebaseSale, UnfinishedSale as FirebaseUnfinishedSale, Client as FirebaseClient } from '../firebase/entities';
+
+// Entidades do Firebase
+export const Client = FirebaseClient;
 
 // Entidades do Base44
-export const Client = base44.entities.Client;
 export const Appointment = base44.entities.Appointment;
 export const FinancialTransaction = base44.entities.FinancialTransaction;
 export const CompanySettings = base44.entities.CompanySettings;

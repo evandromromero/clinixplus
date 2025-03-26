@@ -189,51 +189,81 @@ export default function CashRegister() {
     try {
       console.log("[CashRegister] Verificando status do caixa...");
       
-      const today = format(new Date(), "yyyy-MM-dd");
-      
-      // Buscar todas as transações do dia primeiro
-      const todayTransactions = await FinancialTransaction.filter({
-        payment_date: today
+      // Buscar a última transação de abertura que não tem fechamento
+      const openRegisters = await FinancialTransaction.filter({
+        category: "abertura_caixa"
       }, true);
       
-      if (todayTransactions && Array.isArray(todayTransactions)) {
-        console.log(`[CashRegister] ${todayTransactions.length} transações encontradas para hoje`);
-        
-        // Filtrar manualmente as transações de abertura e fechamento
-        const openingTransaction = todayTransactions.find(
-          t => t.category === "abertura_caixa" && t.payment_date.split('T')[0] === today
+      if (openRegisters && Array.isArray(openRegisters)) {
+        // Ordenar por data mais recente primeiro
+        const sortedRegisters = openRegisters.sort((a, b) => 
+          new Date(b.payment_date) - new Date(a.payment_date)
         );
         
-        const closingTransaction = todayTransactions.find(
-          t => t.category === "fechamento_caixa" && t.payment_date.split('T')[0] === today
-        );
-        
-        console.log("[CashRegister] Transação de abertura:", openingTransaction);
-        console.log("[CashRegister] Transação de fechamento:", closingTransaction);
-        
-        const isOpen = !!openingTransaction && !closingTransaction;
-        console.log(`[CashRegister] Status do caixa: ${isOpen ? 'Aberto' : 'Fechado'}`);
-        
-        if (openingTransaction) {
-          const initialAmount = parseFloat(openingTransaction.amount) || 0;
-          console.log(`[CashRegister] Valor inicial do caixa: R$ ${initialAmount.toFixed(2)}`);
+        // Procurar o último registro de abertura que não tem fechamento
+        for (const openReg of sortedRegisters) {
+          const openDate = openReg.payment_date.split('T')[0];
           
-          setInitialAmount(initialAmount);
-          setDailyBalance(initialAmount);
-          setExpectedCashAmount(initialAmount);
+          // Buscar se existe fechamento após esta abertura
+          const closeAfterOpen = await FinancialTransaction.filter({
+            category: "fechamento_caixa",
+            payment_date_after: openDate
+          }, true);
           
-          // Atualizar estado para refletir que o caixa está aberto
-          setCashIsOpen(true);
-        } else {
-          console.log(`[CashRegister] Nenhuma transação de abertura encontrada para hoje`);
-          setCashIsOpen(false);
-          setInitialAmount(0);
-          setDailyBalance(0);
-          setExpectedCashAmount(0);
+          // Se não encontrou fechamento, este é o caixa aberto atual
+          if (!closeAfterOpen || closeAfterOpen.length === 0) {
+            console.log(`[CashRegister] Encontrado caixa aberto desde: ${openDate}`);
+            
+            const initialAmount = parseFloat(openReg.amount) || 0;
+            setInitialAmount(initialAmount);
+            setDailyBalance(initialAmount);
+            setExpectedCashAmount(initialAmount);
+            setCashIsOpen(true);
+            
+            // Carregar todas as transações desde a abertura do caixa
+            await loadTransactionsSinceDate(openDate);
+            return;
+          }
         }
       }
+      
+      // Se chegou aqui, não há caixa aberto
+      console.log("[CashRegister] Nenhum caixa aberto encontrado");
+      setCashIsOpen(false);
+      setInitialAmount(0);
+      setDailyBalance(0);
+      setExpectedCashAmount(0);
+      
     } catch (error) {
       console.error("[CashRegister] Erro ao verificar status do caixa:", error);
+    }
+  };
+
+  const loadTransactionsSinceDate = async (startDate) => {
+    try {
+      setIsLoading(true);
+      setErrorMessage("");
+      
+      console.log(`[CashRegister] Buscando transações desde: ${startDate}`);
+      
+      // Buscar transações desde a data de abertura
+      const transactions = await FinancialTransaction.filter({
+        payment_date_after: startDate
+      }, true);
+      
+      if (transactions && Array.isArray(transactions)) {
+        setTransactions(transactions);
+        processTransactions(transactions);
+        return transactions;
+      }
+      
+      throw new Error("Dados inválidos retornados pelo Firebase");
+    } catch (error) {
+      console.error("[CashRegister] Erro ao carregar transações:", error);
+      setErrorMessage("Erro ao carregar transações. Usando dados temporários.");
+      loadSimulatedData();
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -285,9 +315,6 @@ export default function CashRegister() {
 
   const processTransactions = (transactions) => {
     try {
-      const today = format(new Date(), "yyyy-MM-dd");
-      console.log("Data de hoje em processTransactions:", today);
-      
       if (!transactions || !Array.isArray(transactions)) {
         console.log("Nenhuma transação para processar");
         return;
@@ -300,38 +327,38 @@ export default function CashRegister() {
       
       console.log(`Total de transações: ${transactions.length}, Ativas: ${activeTransactions.length}`);
       
-      // Filtrar transações de hoje
-      const todayTransactions = activeTransactions.filter(transaction => {
-        const transactionDate = transaction.payment_date ? transaction.payment_date.split('T')[0] : null;
-        const isToday = transactionDate === today;
-        console.log(`Comparando datas: transação [${transactionDate}] vs hoje [${today}] ${isToday}`);
-        return isToday;
-      });
+      // Encontrar a última transação de abertura (a mais recente)
+      const lastOpeningTransaction = activeTransactions
+        .filter(t => t.category === "abertura_caixa")
+        .sort((a, b) => new Date(b.payment_date) - new Date(a.payment_date))[0];
       
-      console.log("Transações filtradas para hoje:", todayTransactions);
-      console.log("Número de transações de hoje:", todayTransactions.length);
-      
-      // Verificar se há transação de abertura
-      const openingTransaction = todayTransactions.find(t => t.category === "abertura_caixa");
-      
-      if (openingTransaction) {
-        console.log("Transação de abertura encontrada:", openingTransaction);
+      if (lastOpeningTransaction) {
+        console.log("Última transação de abertura encontrada:", lastOpeningTransaction);
         
         // Valor inicial do caixa
-        const initialAmountValue = parseFloat(openingTransaction.amount) || 0;
+        const initialAmountValue = parseFloat(lastOpeningTransaction.amount) || 0;
         console.log(`Valor inicial do caixa: R$ ${initialAmountValue.toFixed(2)}`);
         
         // Atualizar o valor inicial
         setInitialAmount(initialAmountValue);
         
+        // Data de abertura do caixa
+        const openingDate = lastOpeningTransaction.payment_date.split('T')[0];
+        
+        // Filtrar transações após a abertura do caixa
+        const transactionsAfterOpening = activeTransactions.filter(t => {
+          const transactionDate = t.payment_date.split('T')[0];
+          return transactionDate >= openingDate;
+        });
+        
         // Filtrar transações de receita e despesa (excluindo abertura e fechamento)
-        const receiptTransactions = todayTransactions.filter(t => 
+        const receiptTransactions = transactionsAfterOpening.filter(t => 
           t.type === "receita" && 
           t.category !== "abertura_caixa" && 
           t.category !== "fechamento_caixa"
         );
         
-        const expenseTransactions = todayTransactions.filter(t => 
+        const expenseTransactions = transactionsAfterOpening.filter(t => 
           t.type === "despesa" && 
           t.category !== "abertura_caixa" && 
           t.category !== "fechamento_caixa"
@@ -361,15 +388,13 @@ export default function CashRegister() {
         console.log(`Saldo em dinheiro: ${initialAmountValue} (inicial) + ${cashReceipts} (receitas em dinheiro) - ${cashExpenses} (despesas em dinheiro) = ${expectedCash}`);
         setExpectedCashAmount(expectedCash);
         
-        // Verificar se há transação de fechamento
-        const closingTransaction = todayTransactions.find(t => t.category === "fechamento_caixa");
+        // Verificar se há transação de fechamento após a abertura
+        const closingTransaction = transactionsAfterOpening.find(t => t.category === "fechamento_caixa");
         
         // Atualizar o status do caixa
-        const isOpen = !!openingTransaction && !closingTransaction;
-        console.log(`Status do caixa após processamento: ${isOpen ? 'Aberto' : 'Fechado'}`);
-        setCashIsOpen(isOpen);
+        setCashIsOpen(!closingTransaction);
       } else {
-        console.log("Nenhuma transação de abertura encontrada para hoje");
+        console.log("Nenhuma transação de abertura encontrada");
         setCashIsOpen(false);
         setInitialAmount(0);
         setDailyReceipts(0);
