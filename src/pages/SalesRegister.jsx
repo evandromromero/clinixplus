@@ -6,7 +6,7 @@ import {
   Client, Sale, FinancialTransaction, Product, Service, 
   Employee, PaymentMethod, Package, ClientPackage, 
   GiftCard, SubscriptionPlan, ClientSubscription, 
-  UnfinishedSale, Inventory 
+  UnfinishedSale, Inventory, PendingService 
 } from "@/firebase/entities";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -208,48 +208,49 @@ export default function SalesRegister() {
     setSearchResults(results);
   };
 
-  // Função para adicionar um item ao carrinho
-  const addItemToCart = (item, itemType) => {
-    // Verifica se o item já está no carrinho
-    const existingItemIndex = cartItems.findIndex(cartItem => 
-      cartItem.item_id === item.id && cartItem.type === itemType
-    );
-
-    if (existingItemIndex !== -1) {
-      // Se já existe, aumenta a quantidade
-      const updatedCartItems = [...cartItems];
-      updatedCartItems[existingItemIndex].quantity += 1;
-      setCartItems(updatedCartItems);
-    } else {
-      // Se não existe, adiciona novo item
-      const newCartItem = {
-        item_id: item.id,
-        type: itemType,
-        name: item.name,
-        quantity: 1,
-        price: itemType === "pacote" ? item.total_price : 
-               (itemType === "giftcard" ? item.value : 
-               (itemType === "assinatura" ? item.monthly_price : item.price)),
-        discount: 0,
-        employee_id: itemType === "serviço" ? "" : undefined
-      };
-
-      setCartItems([...cartItems, newCartItem]);
-    }
-
-    // Atualiza o valor total no método de pagamento
-    if (paymentMethods.length === 1 && paymentMethods[0].amount === 0) {
-      const itemPrice = itemType === "pacote" ? item.total_price : 
-                        (itemType === "giftcard" ? item.value : 
-                        (itemType === "assinatura" ? item.monthly_price : item.price));
-      const updatedPaymentMethods = [...paymentMethods];
-      updatedPaymentMethods[0].amount = itemPrice;
-      setPaymentMethods(updatedPaymentMethods);
-    }
-
-    // Limpa os resultados de pesquisa
+  // Função para adicionar item ao carrinho
+  const handleAddToCart = (item) => {
+    console.log("[SalesRegister] Adicionando item ao carrinho:", item);
+    const cartItem = {
+      id: item.id,
+      item_id: item.id,
+      name: item.name,
+      type: saleType,
+      price: parseFloat(item.price),
+      quantity: 1,
+      discount: 0,
+      unit_price: parseFloat(item.price)
+    };
+    
+    console.log("[SalesRegister] Item formatado para o carrinho:", cartItem);
+    setCartItems([...cartItems, cartItem]);
     setSearchTerm("");
     setSearchResults([]);
+  };
+
+  // Função para remover item do carrinho
+  const handleRemoveFromCart = (index) => {
+    setCartItems(cartItems.filter((_, i) => i !== index));
+  };
+
+  // Função para atualizar quantidade
+  const handleQuantityChange = (index, value) => {
+    const newCartItems = [...cartItems];
+    newCartItems[index] = {
+      ...newCartItems[index],
+      quantity: value
+    };
+    setCartItems(newCartItems);
+  };
+
+  // Função para atualizar desconto
+  const handleDiscountChange = (index, value) => {
+    const newCartItems = [...cartItems];
+    newCartItems[index] = {
+      ...newCartItems[index],
+      discount: value
+    };
+    setCartItems(newCartItems);
   };
 
   // Função para calcular o subtotal de um item
@@ -257,45 +258,6 @@ export default function SalesRegister() {
     const itemTotal = item.price * item.quantity;
     const discountAmount = itemTotal * (item.discount / 100);
     return itemTotal - discountAmount;
-  };
-
-  // Função para atualizar a quantidade de um item no carrinho
-  const updateCartItemQuantity = (index, quantity) => {
-    if (quantity < 1) return;
-    
-    const updatedCartItems = [...cartItems];
-    updatedCartItems[index].quantity = quantity;
-    setCartItems(updatedCartItems);
-  };
-
-  // Função para atualizar o desconto de um item no carrinho
-  const updateCartItemDiscount = (index, discount) => {
-    if (discount < 0 || discount > 100) return;
-    
-    const updatedCartItems = [...cartItems];
-    updatedCartItems[index].discount = discount;
-    setCartItems(updatedCartItems);
-  };
-
-  // Função para atualizar o funcionário associado a um serviço
-  const updateCartItemEmployee = (index, employeeId) => {
-    const updatedCartItems = [...cartItems];
-    updatedCartItems[index].employee_id = employeeId;
-    setCartItems(updatedCartItems);
-  };
-
-  // Função para remover um item do carrinho
-  const removeFromCart = (index) => {
-    const updatedCartItems = [...cartItems];
-    updatedCartItems.splice(index, 1);
-    setCartItems(updatedCartItems);
-    
-    // Se o carrinho ficar vazio, zera o valor no método de pagamento
-    if (updatedCartItems.length === 0 && paymentMethods.length === 1) {
-      const updatedPaymentMethods = [...paymentMethods];
-      updatedPaymentMethods[0].amount = 0;
-      setPaymentMethods(updatedPaymentMethods);
-    }
   };
 
   // Função para adicionar um método de pagamento
@@ -429,15 +391,6 @@ export default function SalesRegister() {
       return;
     }
     
-    if (cartItems.some(item => item.type === "serviço" && !item.employee_id)) {
-      toast({
-        title: "Erro",
-        description: "Selecione um profissional para cada serviço",
-        variant: "destructive"
-      });
-      return;
-    }
-    
     if (!salesEmployee) {
       toast({
         title: "Erro",
@@ -548,9 +501,6 @@ export default function SalesRegister() {
       const createdSale = await Sale.create(saleData);
 
       // Se veio de uma venda não finalizada, atualizar o status
-      const params = new URLSearchParams(window.location.search);
-      const unfinishedSaleId = params.get('unfinished_sale_id');
-      
       if (unfinishedSaleId) {
         console.log('Atualizando venda não finalizada:', unfinishedSaleId);
         await UnfinishedSale.update(unfinishedSaleId, {
@@ -584,6 +534,36 @@ export default function SalesRegister() {
         });
       }
       
+      // Criar serviços pendentes para cada serviço vendido
+      for (const item of cartItems) {
+        if (item.type === "serviço") {
+          console.log("[SalesRegister] Processando serviço para criar pendente:", item);
+          
+          const serviceId = item.id || item.item_id;
+          if (!serviceId) {
+            console.error("[SalesRegister] Serviço sem ID:", item);
+            continue;
+          }
+
+          try {
+            const pendingService = await PendingService.create({
+              client_id: selectedClient.id,
+              service_id: serviceId,
+              sale_id: createdSale.id,
+              quantity: parseInt(item.quantity) || 1,
+              status: "pendente",
+              created_date: new Date().toISOString(),
+              expiration_date: null,
+              notes: `Serviço vendido em ${format(new Date(), "dd/MM/yyyy", { locale: ptBR })}`
+            });
+            console.log("[SalesRegister] Serviço pendente criado:", pendingService);
+          } catch (error) {
+            console.error("[SalesRegister] Erro ao criar serviço pendente:", error);
+            throw error;
+          }
+        }
+      }
+      
       // Limpar o estado e manter na página de vendas
       setCartItems([]);
       setSelectedClient(null);
@@ -602,7 +582,7 @@ export default function SalesRegister() {
       // Recarregar os dados
       await loadDataWithRetry();
     } catch (error) {
-      console.error("Erro ao confirmar venda:", error);
+      console.error("[SalesRegister] Erro ao confirmar venda:", error);
       toast({
         title: "Erro",
         description: "Erro ao registrar a venda. Tente novamente.",
@@ -900,7 +880,7 @@ export default function SalesRegister() {
                             <div
                               key={item.id}
                               className="p-3 hover:bg-gray-50 cursor-pointer border-b flex justify-between items-center"
-                              onClick={() => addItemToCart(item, saleType)}
+                              onClick={() => handleAddToCart(item)}
                             >
                               <div>
                                 <div className="font-medium">{item.name}</div>
@@ -936,22 +916,19 @@ export default function SalesRegister() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead className="w-[220px]">Item</TableHead>
+                          <TableHead>Item</TableHead>
                           <TableHead>Tipo</TableHead>
-                          <TableHead className="text-right">Qtd</TableHead>
-                          <TableHead className="text-right">Preço</TableHead>
-                          <TableHead className="text-right">Desconto</TableHead>
-                          {cartItems.some(item => item.type === "serviço") && (
-                            <TableHead>Profissional</TableHead>
-                          )}
-                          <TableHead className="text-right">Subtotal</TableHead>
-                          <TableHead className="w-[50px]"></TableHead>
+                          <TableHead>Qtd</TableHead>
+                          <TableHead>Preço</TableHead>
+                          <TableHead>Desconto</TableHead>
+                          <TableHead>Subtotal</TableHead>
+                          <TableHead></TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {cartItems.map((item, index) => (
                           <TableRow key={index}>
-                            <TableCell className="font-medium">{item.name}</TableCell>
+                            <TableCell>{item.name}</TableCell>
                             <TableCell>
                               <Badge variant="outline" className={
                                 item.type === "produto" 
@@ -967,22 +944,22 @@ export default function SalesRegister() {
                                 {item.type.charAt(0).toUpperCase() + item.type.slice(1)}
                               </Badge>
                             </TableCell>
-                            <TableCell className="text-right">
+                            <TableCell>
                               <Input
                                 type="number"
                                 value={item.quantity}
-                                onChange={(e) => updateCartItemQuantity(index, parseInt(e.target.value))}
+                                onChange={(e) => handleQuantityChange(index, parseInt(e.target.value))}
                                 className="w-16 text-right"
                                 min={1}
                               />
                             </TableCell>
-                            <TableCell className="text-right">{formatCurrency(item.price)}</TableCell>
-                            <TableCell className="text-right">
+                            <TableCell>{formatCurrency(item.price)}</TableCell>
+                            <TableCell>
                               <div className="flex items-center justify-end">
                                 <Input
                                   type="number"
                                   value={item.discount}
-                                  onChange={(e) => updateCartItemDiscount(index, parseFloat(e.target.value))}
+                                  onChange={(e) => handleDiscountChange(index, parseFloat(e.target.value))}
                                   className="w-16 text-right"
                                   min={0}
                                   max={100}
@@ -990,36 +967,13 @@ export default function SalesRegister() {
                                 <span className="ml-1">%</span>
                               </div>
                             </TableCell>
-                            {cartItems.some(item => item.type === "serviço") && (
-                              <TableCell>
-                                {item.type === "serviço" ? (
-                                  <Select
-                                    value={item.employee_id || ""}
-                                    onValueChange={(value) => updateCartItemEmployee(index, value)}
-                                  >
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="Selecione" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {employees.map(employee => (
-                                        <SelectItem key={employee.id} value={employee.id}>
-                                          {employee.name}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                ) : null}
-                              </TableCell>
-                            )}
-                            <TableCell className="text-right font-medium">
-                              {formatCurrency(getSubtotal(item))}
-                            </TableCell>
+                            <TableCell>{formatCurrency(getSubtotal(item))}</TableCell>
                             <TableCell>
                               <Button
                                 variant="ghost"
                                 size="icon"
                                 className="h-8 w-8 text-red-500"
-                                onClick={() => removeFromCart(index)}
+                                onClick={() => handleRemoveFromCart(index)}
                               >
                                 <X className="h-4 w-4" />
                               </Button>

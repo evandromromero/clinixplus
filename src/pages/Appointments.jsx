@@ -37,7 +37,8 @@ import {
   Service, 
   Package, 
   ClientPackage, 
-  FinancialTransaction 
+  FinancialTransaction, 
+  PendingService 
 } from "@/firebase/entities";
 import { Calendar } from "@/components/ui/calendar"; 
 import {
@@ -46,9 +47,10 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
-import { toast } from "@/components/ui/toast"; // Import the toast component
+import { useToast } from "@/components/ui/use-toast"; // Import the useToast hook
 
 export default function Appointments() {
+  const { toast } = useToast(); // Get the toast function from the hook
   const [date, setDate] = useState(new Date());
   const [appointments, setAppointments] = useState([]);
   const [showNewAppointmentDialog, setShowNewAppointmentDialog] = useState(false);
@@ -75,6 +77,7 @@ export default function Appointments() {
   const [selectedPackageId, setSelectedPackageId] = useState("");
   const [packages, setPackages] = useState([]);
   const [availableHours, setAvailableHours] = useState([]);
+  const [pendingServices, setPendingServices] = useState([]);
 
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [showMoveDialog, setShowMoveDialog] = useState(false);
@@ -182,6 +185,15 @@ export default function Appointments() {
         });
       }
 
+      // Se veio de um serviço pendente, atualizar o status
+      const pendingService = pendingServices.find(ps => ps.service_id === newAppointment.service_id);
+      if (pendingService) {
+        await PendingService.update(pendingService.id, {
+          status: "agendado",
+          appointment_id: createdAppointment.id
+        });
+      }
+
       if (selectedClientPackage) {
         try {
           const currentPackage = await ClientPackage.get(selectedClientPackage.id);
@@ -199,74 +211,39 @@ export default function Appointments() {
             appointment_id: createdAppointment.id,
             service_id: appointmentData.service_id,
             service_name: services.find(s => s.id === appointmentData.service_id)?.name || "",
-            status: appointmentData.status || "agendado",
+            status: "agendado",
             notes: appointmentData.notes || ""
           };
 
-          // Garantir que todos os campos necessários existam com valores válidos
-          const updatedPackage = {
-            sessions_used: parseInt(currentPackage.sessions_used || 0),
-            total_sessions: parseInt(currentPackage.total_sessions || 0),
-            package_id: currentPackage.package_id,
-            client_id: currentPackage.client_id,
-            status: currentPackage.status || 'ativo',
-            session_history: []
-          };
+          const currentSessionHistory = Array.isArray(currentPackage.session_history) 
+            ? currentPackage.session_history 
+            : [];
 
-          // Garantir que o histórico de sessões seja um array válido
-          if (Array.isArray(currentPackage.session_history)) {
-            updatedPackage.session_history = [...currentPackage.session_history];
-          }
-
-          // Adicionar a nova sessão ao histórico
-          updatedPackage.session_history.push(sessionHistoryEntry);
-          
-          // Se o status for concluído, incrementa as sessões usadas
-          if (appointmentData.status === 'concluido') {
-            updatedPackage.sessions_used += 1;
-          }
-          
-          // Atualiza o status do pacote se necessário
-          if (updatedPackage.sessions_used >= updatedPackage.total_sessions) {
-            updatedPackage.status = 'finalizado';
-          }
-
-          // Adicionar datas apenas se existirem no pacote atual
-          if (currentPackage.purchase_date) {
-            updatedPackage.purchase_date = currentPackage.purchase_date;
-          }
-          if (currentPackage.expiration_date) {
-            updatedPackage.expiration_date = currentPackage.expiration_date;
-          }
-
-          console.log("Dados do pacote a serem atualizados:", updatedPackage);
-          
-          await ClientPackage.update(selectedClientPackage.id, updatedPackage);
+          await ClientPackage.update(selectedClientPackage.id, {
+            session_history: [...currentSessionHistory, sessionHistoryEntry],
+            sessions_used: (currentPackage.sessions_used || 0) + 1
+          });
         } catch (error) {
-          console.error("Erro ao atualizar pacote do cliente:", error);
+          console.error("[Appointments] Erro ao atualizar pacote:", error);
         }
       }
 
-      setNewAppointment({
-        client_id: "",
-        employee_id: newAppointment.employee_id,
-        service_id: "",
-        date: newAppointment.date,
-        status: "agendado",
-        notes: "",
-        original_appointment_id: null
-      });
-
-      setSelectedClientPackage(null);
-      setSelectedPackageId("");
-      setSearchTerm("");
-      await loadData();
-      
-      console.log("Agendamento criado com sucesso");
-      
       setShowNewAppointmentDialog(false);
+      clearNewAppointmentForm();
+      await loadData();
+
+      toast({
+        title: "Sucesso",
+        description: "Agendamento criado com sucesso!",
+        variant: "success"
+      });
     } catch (error) {
-      console.error("Erro ao criar agendamento:", error);
+      console.error("[Appointments] Erro ao criar agendamento:", error);
+      toast({
+        title: "Erro",
+        description: "Erro ao criar agendamento",
+        variant: "destructive"
+      });
     }
   };
 
@@ -419,6 +396,7 @@ export default function Appointments() {
     setShowSearch(false);
     
     try {
+      // Carregar pacotes do cliente
       const clientPackagesData = await ClientPackage.filter({ 
         client_id: clientId, 
         status: 'ativo'
@@ -426,10 +404,24 @@ export default function Appointments() {
       setClientPackages(clientPackagesData);
       setFilteredPackages(clientPackagesData);
       
+      // Carregar serviços pendentes
+      console.log("[Appointments] Buscando serviços pendentes para cliente:", clientId);
+      const pendingServicesData = await PendingService.filter({
+        client_id: clientId,
+        status: "pendente"
+      });
+      console.log("[Appointments] Serviços pendentes encontrados:", pendingServicesData);
+      setPendingServices(pendingServicesData);
+      
       setSelectedPackageId("");
       setSelectedClientPackage(null);
     } catch (error) {
-      console.error("Erro ao carregar pacotes do cliente:", error);
+      console.error("[Appointments] Erro ao carregar dados do cliente:", error);
+      toast({
+        title: "Erro",
+        description: "Erro ao carregar dados do cliente",
+        variant: "destructive"
+      });
     }
   };
 
@@ -782,6 +774,48 @@ export default function Appointments() {
     setNewAppointment({...newAppointment, date: newDate});
   };
 
+  useEffect(() => {
+    const loadPendingServices = async () => {
+      if (!newAppointment.client_id) {
+        setPendingServices([]);
+        return;
+      }
+
+      try {
+        const pendingServicesData = await PendingService.filter({
+          client_id: newAppointment.client_id,
+          status: "pendente"
+        });
+
+        // Remove duplicatas baseado no service_id
+        const uniquePendingServices = pendingServicesData.reduce((acc, current) => {
+          const x = acc.find(item => item.service_id === current.service_id);
+          if (!x) {
+            return acc.concat([current]);
+          }
+          return acc;
+        }, []);
+
+        console.log("[Appointments] Serviços pendentes carregados:", uniquePendingServices);
+        setPendingServices(uniquePendingServices);
+      } catch (error) {
+        console.error("[Appointments] Erro ao carregar serviços pendentes:", error);
+        toast.error("Erro ao carregar serviços pendentes");
+      }
+    };
+
+    loadPendingServices();
+  }, [newAppointment.client_id]);
+
+  const clearNewAppointmentForm = () => {
+    setSelectedClient(null);
+    setSelectedService(null);
+    setSelectedEmployee(null);
+    setSelectedDate(new Date());
+    setSelectedTime("");
+    setNotes("");
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -1079,6 +1113,48 @@ export default function Appointments() {
               </div>
             )}
 
+            {newAppointment.client_id && pendingServices.length > 0 && (
+              <div className="space-y-2">
+                <Label>Serviços Pendentes</Label>
+                <Select
+                  value={newAppointment.service_id}
+                  onValueChange={(value) => {
+                    const pendingService = pendingServices.find(ps => ps.service_id === value);
+                    const service = services.find(s => s.id === value);
+                    if (pendingService && service) {
+                      setNewAppointment({
+                        ...newAppointment,
+                        service_id: value,
+                        duration: service.duration || 60
+                      });
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione um serviço pendente..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {pendingServices.map((ps, index) => {
+                      const service = services.find(s => s.id === ps.service_id);
+                      if (!service) return null;
+                      
+                      const key = `${ps.id}-${ps.service_id}-${index}`;
+                      const purchaseDate = format(new Date(ps.created_date), "dd/MM/yyyy");
+                      
+                      return (
+                        <SelectItem 
+                          key={key}
+                          value={ps.service_id}
+                        >
+                          {service.name} - {purchaseDate}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             <div className="space-y-2">
               <Label>Serviço</Label>
               <Select
@@ -1155,17 +1231,22 @@ export default function Appointments() {
               </div>
 
               <div className="space-y-2">
-                <Label>Hora</Label>
+                <Label>Horário</Label>
                 <Select
-                  value={String(newAppointment.date.getHours() + (newAppointment.date.getMinutes() / 60)).padStart(5, '0')}
-                  onValueChange={handleTimeSelection}
+                  value={newAppointment.date ? format(newAppointment.date, 'HH:mm') : ''}
+                  onValueChange={(value) => {
+                    const [hours, minutes] = value.split(':').map(Number);
+                    const newDate = new Date(newAppointment.date);
+                    newDate.setHours(hours, minutes, 0, 0);
+                    setNewAppointment({...newAppointment, date: newDate});
+                  }}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Horário..." />
+                    <SelectValue placeholder="Selecione o horário..." />
                   </SelectTrigger>
                   <SelectContent>
                     {availableHours.map((hour) => (
-                      <SelectItem key={hour} value={String(hour)}>
+                      <SelectItem key={hour} value={formatHour(hour)}>
                         {formatHour(hour)}
                       </SelectItem>
                     ))}

@@ -2,7 +2,7 @@
 import { base44 } from '../api/base44Client';
 import { createEnhancedEntity } from './enhancedEntities';
 import { db } from './config';
-import { collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where, orderBy, addDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where, orderBy, addDoc, updateDoc } from 'firebase/firestore';
 
 // Criar as versões base das entidades
 const baseClient = createEnhancedEntity('clients', base44.entities.Client);
@@ -505,6 +505,67 @@ export const Contract = {
   }
 };
 
+// Entidade para serviços pendentes de agendamento
+const PendingServiceBase = {
+  collection: 'pending_services',
+  schema: {
+    client_id: { type: 'string', required: true },
+    service_id: { type: 'string', required: true },
+    sale_id: { type: 'string', required: true },
+    quantity: { type: 'number', required: true },
+    status: { type: 'string', required: true }, // pendente, agendado, cancelado
+    created_date: { type: 'string', required: true },
+    expiration_date: { type: 'string', required: false },
+    appointment_id: { type: 'string', required: false },
+    notes: { type: 'string', required: false }
+  },
+  create: async (data) => {
+    const docRef = await addDoc(collection(db, 'pending_services'), data);
+    return { id: docRef.id, ...data };
+  },
+  update: async (id, data) => {
+    const docRef = doc(db, 'pending_services', id);
+    await updateDoc(docRef, data);
+    return { id, ...data };
+  },
+  delete: async (id) => {
+    const docRef = doc(db, 'pending_services', id);
+    await deleteDoc(docRef);
+  },
+  get: async (id) => {
+    const docRef = doc(db, 'pending_services', id);
+    const docSnap = await getDoc(docRef);
+    if (!docSnap.exists()) return null;
+    return { id: docSnap.id, ...docSnap.data() };
+  },
+  list: async () => {
+    const querySnapshot = await getDocs(collection(db, 'pending_services'));
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+  },
+  filter: async (filters) => {
+    try {
+      const querySnapshot = await getDocs(query(
+        collection(db, 'pending_services'),
+        where('client_id', '==', filters.client_id),
+        where('status', '==', filters.status)
+      ));
+      
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('[PendingService] Erro ao filtrar serviços pendentes:', error);
+      throw error;
+    }
+  }
+};
+
+export const PendingService = createEnhancedEntity('pending_services', PendingServiceBase);
+
 // Exportar outras entidades
 export const Appointment = createEnhancedEntity('appointments', base44.entities.Appointment);
 export const Sale = createEnhancedEntity('sales', null); 
@@ -575,5 +636,6 @@ export const FIREBASE_ONLY_ENTITIES = [
   'products',
   'anamnesis',
   'anamnese_templates',
-  'client_packages'
+  'client_packages',
+  'pending_services'
 ];

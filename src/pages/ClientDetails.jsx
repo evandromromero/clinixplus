@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Client, Appointment, Sale, ClientPackage, Package, Service, Contract, ContractTemplate, AnamneseTemplate } from "@/firebase/entities";
+import { Client, Appointment, Sale, ClientPackage, Package, Service, Contract, ContractTemplate, AnamneseTemplate, PendingService } from "@/firebase/entities";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -51,6 +51,7 @@ export default function ClientDetails() {
   const [sales, setSales] = useState([]);
   const [clientPackages, setClientPackages] = useState([]);
   const [packages, setPackages] = useState([]);
+  const [pendingServices, setPendingServices] = useState([]);
   const [services, setServices] = useState([]);
   const [showDependentForm, setShowDependentForm] = useState(false);
   const [editingDependent, setEditingDependent] = useState(null);
@@ -175,75 +176,35 @@ export default function ClientDetails() {
 
   const loadData = async () => {
     try {
-      const [clientData, appointmentsData, salesData, clientPackagesData, packagesData, servicesData] = await Promise.all([
-        Client.list(),
+      // Carregar dados básicos
+      const [clientData, appointmentsData, salesData, servicesData] = await Promise.all([
+        Client.get(clientId),
         Appointment.list(),
         Sale.list(),
-        ClientPackage.list(),
-        Package.list(),
         Service.list()
       ]);
 
-      const client = clientData.find(c => c.id === clientId);
-      setClient(client);
+      setClient(clientData);
 
+      // Filtrar agendamentos do cliente
       const clientAppointments = appointmentsData
         .filter(a => a.client_id === clientId)
         .sort((a, b) => new Date(b.date) - new Date(a.date));
       setAppointments(clientAppointments);
 
+      // Filtrar vendas do cliente
       const clientSales = salesData
         .filter(s => s.client_id === clientId)
         .sort((a, b) => new Date(b.date) - new Date(a.date));
       setSales(clientSales);
 
-      // Filtra pacotes do cliente
-      const activePackages = clientPackagesData
-        .filter(cp => cp.client_id === clientId)
-        .map(cp => {
-          // Encontra o pacote base
-          const basePackage = packagesData.find(p => p.id === cp.package_id);
-          
-          // Encontra os serviços do package_snapshot
-          let services = [];
-          if (cp.package_snapshot?.services) {
-            services = Object.entries(cp.package_snapshot.services).map(([_, serviceData]) => {
-              const service = servicesData.find(s => s.id === serviceData.service_id);
-              return {
-                service_id: serviceData.service_id,
-                name: service?.name || 'Serviço não encontrado',
-                quantity: serviceData.quantity || 0
-              };
-            });
-          }
-          
-          // Log para debug
-          console.log('Package:', cp.id);
-          console.log('Package snapshot:', cp.package_snapshot);
-          console.log('Services:', services);
-          
-          return {
-            ...cp,
-            packageData: basePackage,
-            sessions_used: cp.sessions_used || 0,
-            total_sessions: cp.total_sessions || 0,
-            session_history: cp.session_history || [],
-            services: services
-          };
-        })
-        .filter(cp => cp.packageData)
-        .sort((a, b) => {
-          // Primeiro os ativos, depois por data de validade
-          if (a.status === 'ativo' && b.status !== 'ativo') return -1;
-          if (a.status !== 'ativo' && b.status === 'ativo') return 1;
-          
-          const dateA = new Date(a.purchase_date || a.created_date || 0);
-          const dateB = new Date(b.purchase_date || b.created_date || 0);
-          return dateB - dateA;
-        });
-      
-      setClientPackages(activePackages);
-      setPackages(packagesData);
+      // Carregar serviços pendentes do cliente
+      const pendingServicesData = await PendingService.filter({ 
+        client_id: clientId,
+        status: 'pendente'
+      });
+      setPendingServices(pendingServicesData);
+
       setServices(servicesData);
     } catch (error) {
       console.error(error);
@@ -783,13 +744,35 @@ export default function ClientDetails() {
 
       {/* Tabs Content */}
       <Tabs defaultValue="historico" className="space-y-4">
-        <TabsList className="grid grid-cols-6 gap-4">
-          <TabsTrigger value="historico">Histórico</TabsTrigger>
-          <TabsTrigger value="pacotes">Pacotes</TabsTrigger>
-          <TabsTrigger value="dependentes">Dependentes</TabsTrigger>
-          <TabsTrigger value="anamnese">Anamnese</TabsTrigger>
-          <TabsTrigger value="contrato">Contrato</TabsTrigger>
-          <TabsTrigger value="fotos">Fotos</TabsTrigger>
+        <TabsList className="w-full border-b flex items-center justify-start gap-2 overflow-x-auto">
+          <TabsTrigger value="historico" className="data-[state=active]:bg-[#8BBAFF]/10 data-[state=active]:text-[#175EA0]">
+            <CalendarDays className="w-4 h-4 mr-2" />
+            Histórico
+          </TabsTrigger>
+          <TabsTrigger value="pending" className="data-[state=active]:bg-[#8BBAFF]/10 data-[state=active]:text-[#175EA0]">
+            <Clock className="w-4 h-4 mr-2" />
+            Serviços Pendentes
+          </TabsTrigger>
+          <TabsTrigger value="pacotes" className="data-[state=active]:bg-[#8BBAFF]/10 data-[state=active]:text-[#175EA0]">
+            <PackageIcon className="w-4 h-4 mr-2" />
+            Pacotes
+          </TabsTrigger>
+          <TabsTrigger value="fotos" className="data-[state=active]:bg-[#8BBAFF]/10 data-[state=active]:text-[#175EA0]">
+            <Camera className="w-4 h-4 mr-2" />
+            Fotos
+          </TabsTrigger>
+          <TabsTrigger value="anamnese" className="data-[state=active]:bg-[#8BBAFF]/10 data-[state=active]:text-[#175EA0]">
+            <FileText className="w-4 h-4 mr-2" />
+            Anamnese
+          </TabsTrigger>
+          <TabsTrigger value="contrato" className="data-[state=active]:bg-[#8BBAFF]/10 data-[state=active]:text-[#175EA0]">
+            <FileText className="w-4 h-4 mr-2" />
+            Contrato
+          </TabsTrigger>
+          <TabsTrigger value="dependentes" className="data-[state=active]:bg-[#8BBAFF]/10 data-[state=active]:text-[#175EA0]">
+            <User className="w-4 h-4 mr-2" />
+            Dependentes
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="historico" className="space-y-6">
@@ -889,6 +872,43 @@ export default function ClientDetails() {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        <TabsContent value="pending" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg font-medium">Serviços Pendentes para Agendamento</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {pendingServices.length > 0 ? (
+                <div className="space-y-4">
+                  {pendingServices.map((ps) => {
+                    const service = services.find(s => s.id === ps.service_id);
+                    if (!service) return null;
+                    
+                    return (
+                      <div key={ps.id} className="flex items-center justify-between p-4 border rounded-lg">
+                        <div>
+                          <h4 className="font-medium">{service.name}</h4>
+                          <p className="text-sm text-gray-500">
+                            Comprado em {format(new Date(ps.created_date), "dd/MM/yyyy")}
+                          </p>
+                        </div>
+                        <Link to={createPageUrl("Appointments", { client_id: clientId, pending_service_id: ps.id })}>
+                          <Button variant="outline" size="sm" className="bg-[#8BBAFF]/10 border-[#6EA3E7] text-[#175EA0] hover:bg-[#8BBAFF]/20">
+                            <Plus className="w-4 h-4" />
+                            Agendar
+                          </Button>
+                        </Link>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-gray-500 text-sm">Nenhum serviço pendente para agendamento</p>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="pacotes" className="space-y-6">
@@ -1036,7 +1056,7 @@ export default function ClientDetails() {
                         {pkg.status === 'ativo' && pkg.sessions_used < pkg.total_sessions && (
                           <Link to={createPageUrl("Appointments", { client_id: clientId, package_id: pkg.id })}>
                             <Button variant="outline" size="sm" className="bg-[#8BBAFF]/10 border-[#6EA3E7] text-[#175EA0] hover:bg-[#8BBAFF]/20 hover:text-[#175EA0]">
-                              <Plus className="w-4 h-4 mr-2" />
+                              <Plus className="w-4 h-4" />
                               Agendar Sessão
                             </Button>
                           </Link>
@@ -1051,7 +1071,7 @@ export default function ClientDetails() {
                   <p className="text-gray-500 text-sm mb-4">Nenhum pacote encontrado para este cliente</p>
                   <Link to={createPageUrl("ClientPackages", { client_id: clientId })}>
                     <Button variant="outline" size="sm">
-                      <Plus className="w-4 h-4 mr-2" />
+                      <Plus className="w-4 h-4" />
                       Adicionar Pacote
                     </Button>
                   </Link>
@@ -1061,77 +1081,215 @@ export default function ClientDetails() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="dependentes" className="space-y-6">
-          {/* Aba de Dependentes */}
-          <Card>
-            <CardContent>
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-xl font-medium text-[#175EA0]">Dependentes</h3>
-                <Button
-                  onClick={() => {
-                    setEditingDependent(null);
-                    setShowDependentForm(true);
-                  }}
-                  className="flex items-center gap-2 text-white bg-[#3475B8] hover:bg-[#2C64A0] transition-colors"
+        <TabsContent value="fotos" className="space-y-6">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xl font-medium text-gray-800">Fotos do Cliente</h3>
+              <div className="flex gap-2">
+                <button
+                  onClick={showCamera ? stopCamera : startCamera}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#3475B8] rounded-md hover:bg-[#2C64A0] transition-colors"
                 >
-                  <Plus className="w-4 h-4" />
-                  Adicionar Dependente
-                </Button>
+                  <Camera className="w-4 h-4" />
+                  Tirar Foto
+                </button>
+                <button
+                  onClick={() => setShowUploadDialog(true)}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#22C55E] rounded-md hover:bg-[#16A34A] transition-colors"
+                >
+                  <Upload className="w-4 h-4" />
+                  Enviar Fotos
+                </button>
               </div>
-              
-              <DependentList
-                dependents={client?.dependents || []}
-                onEdit={(dependent, index) => {
-                  setEditingDependent({ dependent, index });
-                  setShowDependentForm(true);
-                }}
-                onDelete={async (index) => {
-                  if (!window.confirm('Tem certeza que deseja remover este dependente?')) {
-                    return;
-                  }
-                  const newDependents = [...(client.dependents || [])];
-                  newDependents.splice(index, 1);
-                  await Client.update(client.id, {
-                    ...client,
-                    dependents: newDependents
-                  });
-                  loadData();
-                }}
-              />
-            </CardContent>
-          </Card>
+            </div>
 
-          <Dialog open={showDependentForm} onOpenChange={setShowDependentForm}>
-            <DialogContent className="sm:max-w-[600px]">
-              <DialogHeader>
-                <DialogTitle>
-                  {editingDependent ? "Editar" : "Adicionar"} Dependente
-                </DialogTitle>
-              </DialogHeader>
-              <DependentForm
-                dependent={editingDependent?.dependent}
-                onSubmit={async (data) => {
-                  const newDependents = [...(client?.dependents || [])];
-                  if (editingDependent) {
-                    newDependents[editingDependent.index] = data;
-                  } else {
-                    newDependents.push(data);
-                  }
-                  await Client.update(client.id, {
-                    ...client,
-                    dependents: newDependents
-                  });
-                  setShowDependentForm(false);
-                  setEditingDependent(null);
-                  loadData();
-                }}
-                onCancel={() => {
-                  setShowDependentForm(false);
-                  setEditingDependent(null);
-                }}
-              />
-            </DialogContent>
-          </Dialog>
+            {/* Preview da câmera */}
+            {showCamera && (
+              <div className="relative mb-6">
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  className="w-full max-h-[400px] object-cover rounded-lg"
+                />
+                <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2">
+                  <button
+                    onClick={takePhoto}
+                    disabled={isLoading}
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#3475B8] rounded-md hover:bg-[#2C64A0] transition-colors"
+                  >
+                    {isLoading ? (
+                      <span className="animate-spin">⏳</span>
+                    ) : (
+                      <>
+                        <Camera className="w-4 h-4" />
+                        {isCapturingBefore ? 'Capturar Foto "Antes"' : 'Capturar Foto "Depois"'}
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={stopCamera}
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-600 border border-red-600 rounded-md hover:bg-red-600 hover:text-white transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Preview das fotos capturadas */}
+            {(previewBefore || previewAfter) && (
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                <div>
+                  <h3 className="text-sm font-medium text-gray-700 mb-2">Antes</h3>
+                  {previewBefore && (
+                    <img
+                      src={previewBefore}
+                      alt="Preview antes"
+                      className="w-full h-48 object-cover rounded-lg border border-gray-200"
+                    />
+                  )}
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium text-gray-700 mb-2">Depois</h3>
+                  {previewAfter && (
+                    <img
+                      src={previewAfter}
+                      alt="Preview depois"
+                      className="w-full h-48 object-cover rounded-lg border border-gray-200"
+                    />
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Grid de fotos */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              {photos.map((photo) => (
+                <div key={photo.id} className="border border-gray-200 rounded-lg p-4">
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-700 mb-2">Antes</h3>
+                      <img
+                        src={photo.before}
+                        alt="Foto antes"
+                        className="w-full h-48 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-90 transition-opacity"
+                        onClick={() => openImageModal(photo.before)}
+                      />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-700 mb-2">Depois</h3>
+                      <img
+                        src={photo.after}
+                        alt="Foto depois"
+                        className="w-full h-48 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-90 transition-opacity"
+                        onClick={() => openImageModal(photo.after)}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-500">
+                      {new Date(photo.uploadedAt).toLocaleDateString()} - {photo.type === 'camera' ? 'Câmera' : 'Upload'}
+                    </span>
+                    <button
+                      onClick={() => deletePhoto(photo.id)}
+                      className="text-red-600 hover:text-red-700 transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Excluir
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Modal de visualização da imagem */}
+            {selectedImage && (
+              <div 
+                className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+                onClick={closeImageModal}
+              >
+                <div className="relative max-w-4xl w-full h-full flex items-center justify-center">
+                  <button
+                    onClick={closeImageModal}
+                    className="absolute top-2 right-2 text-white hover:text-gray-300 transition-colors"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                  <img
+                    src={selectedImage}
+                    alt="Imagem ampliada"
+                    className="max-w-full max-h-[90vh] object-contain rounded-lg"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Diálogo de upload */}
+            {showUploadDialog && (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="bg-white p-6 rounded-lg shadow-xl max-w-lg w-full">
+                  <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-lg font-medium">Enviar Fotos</h2>
+                    <button
+                      onClick={() => setShowUploadDialog(false)}
+                      className="text-gray-400 hover:text-gray-600"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Foto Antes
+                      </label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => setBeforePhoto(e.target.files[0])}
+                        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-[#3475B8] file:text-white hover:file:bg-[#2C64A0]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Foto Depois
+                      </label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => setAfterPhoto(e.target.files[0])}
+                        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-[#3475B8] file:text-white hover:file:bg-[#2C64A0]"
+                      />
+                    </div>
+                    <div className="flex justify-end gap-4 mt-6">
+                      <button
+                        onClick={() => setShowUploadDialog(false)}
+                        className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        onClick={() => handleFileUpload(beforePhoto, afterPhoto)}
+                        disabled={isLoading}
+                        className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#3475B8] rounded-md hover:bg-[#2C64A0] transition-colors disabled:opacity-50"
+                      >
+                        {isLoading ? (
+                          <span className="animate-spin">⏳</span>
+                        ) : (
+                          <>
+                            <FileUp className="w-4 h-4" />
+                            Enviar
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </TabsContent>
 
         <TabsContent value="anamnese" className="space-y-6">
@@ -1306,215 +1464,77 @@ export default function ClientDetails() {
           </Dialog>
         </TabsContent>
 
-        <TabsContent value="fotos">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xl font-medium text-gray-800">Fotos do Cliente</h3>
-              <div className="flex gap-2">
-                <button
-                  onClick={showCamera ? stopCamera : startCamera}
-                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#3475B8] rounded-md hover:bg-[#2C64A0] transition-colors"
+        <TabsContent value="dependentes" className="space-y-6">
+          {/* Aba de Dependentes */}
+          <Card>
+            <CardContent>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-medium text-[#175EA0]">Dependentes</h3>
+                <Button
+                  onClick={() => {
+                    setEditingDependent(null);
+                    setShowDependentForm(true);
+                  }}
+                  className="flex items-center gap-2 text-white bg-[#3475B8] hover:bg-[#2C64A0] transition-colors"
                 >
-                  <Camera className="w-4 h-4" />
-                  Tirar Foto
-                </button>
-                <button
-                  onClick={() => setShowUploadDialog(true)}
-                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#22C55E] rounded-md hover:bg-[#16A34A] transition-colors"
-                >
-                  <Upload className="w-4 h-4" />
-                  Enviar Fotos
-                </button>
+                  <Plus className="w-4 h-4" />
+                  Adicionar Dependente
+                </Button>
               </div>
-            </div>
+              
+              <DependentList
+                dependents={client?.dependents || []}
+                onEdit={(dependent, index) => {
+                  setEditingDependent({ dependent, index });
+                  setShowDependentForm(true);
+                }}
+                onDelete={async (index) => {
+                  if (!window.confirm('Tem certeza que deseja remover este dependente?')) {
+                    return;
+                  }
+                  const newDependents = [...(client.dependents || [])];
+                  newDependents.splice(index, 1);
+                  await Client.update(client.id, {
+                    ...client,
+                    dependents: newDependents
+                  });
+                  loadData();
+                }}
+              />
+            </CardContent>
+          </Card>
 
-            {/* Preview da câmera */}
-            {showCamera && (
-              <div className="relative mb-6">
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  className="w-full max-h-[400px] object-cover rounded-lg"
-                />
-                <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2">
-                  <button
-                    onClick={takePhoto}
-                    disabled={isLoading}
-                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#3475B8] rounded-md hover:bg-[#2C64A0] transition-colors"
-                  >
-                    {isLoading ? (
-                      <span className="animate-spin">⏳</span>
-                    ) : (
-                      <>
-                        <Camera className="w-4 h-4" />
-                        {isCapturingBefore ? 'Capturar Foto "Antes"' : 'Capturar Foto "Depois"'}
-                      </>
-                    )}
-                  </button>
-                  <button
-                    onClick={stopCamera}
-                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-600 border border-red-600 rounded-md hover:bg-red-600 hover:text-white transition-colors"
-                  >
-                    <X className="w-4 h-4" />
-                    Cancelar
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Preview das fotos capturadas */}
-            {(previewBefore || previewAfter) && (
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                <div>
-                  <h3 className="text-sm font-medium text-gray-700 mb-2">Antes</h3>
-                  {previewBefore && (
-                    <img
-                      src={previewBefore}
-                      alt="Preview antes"
-                      className="w-full h-48 object-cover rounded-lg border border-gray-200"
-                    />
-                  )}
-                </div>
-                <div>
-                  <h3 className="text-sm font-medium text-gray-700 mb-2">Depois</h3>
-                  {previewAfter && (
-                    <img
-                      src={previewAfter}
-                      alt="Preview depois"
-                      className="w-full h-48 object-cover rounded-lg border border-gray-200"
-                    />
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Grid de fotos */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              {photos.map((photo) => (
-                <div key={photo.id} className="border border-gray-200 rounded-lg p-4">
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div>
-                      <h3 className="text-sm font-medium text-gray-700 mb-2">Antes</h3>
-                      <img
-                        src={photo.before}
-                        alt="Foto antes"
-                        className="w-full h-48 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-90 transition-opacity"
-                        onClick={() => openImageModal(photo.before)}
-                      />
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-medium text-gray-700 mb-2">Depois</h3>
-                      <img
-                        src={photo.after}
-                        alt="Foto depois"
-                        className="w-full h-48 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-90 transition-opacity"
-                        onClick={() => openImageModal(photo.after)}
-                      />
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-500">
-                      {new Date(photo.uploadedAt).toLocaleDateString()} - {photo.type === 'camera' ? 'Câmera' : 'Upload'}
-                    </span>
-                    <button
-                      onClick={() => deletePhoto(photo.id)}
-                      className="flex items-center gap-2 px-3 py-1 text-sm text-red-600 hover:text-red-700 transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      Excluir
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Modal de visualização da imagem */}
-            {selectedImage && (
-              <div 
-                className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-                onClick={closeImageModal}
-              >
-                <div className="relative max-w-4xl w-full h-full flex items-center justify-center">
-                  <button
-                    onClick={closeImageModal}
-                    className="absolute top-2 right-2 text-white hover:text-gray-300 transition-colors"
-                  >
-                    <X className="w-6 h-6" />
-                  </button>
-                  <img
-                    src={selectedImage}
-                    alt="Imagem ampliada"
-                    className="max-w-full max-h-[90vh] object-contain rounded-lg"
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Diálogo de upload */}
-            {showUploadDialog && (
-              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                <div className="bg-white p-6 rounded-lg shadow-xl max-w-lg w-full">
-                  <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-lg font-medium">Enviar Fotos</h2>
-                    <button
-                      onClick={() => setShowUploadDialog(false)}
-                      className="text-gray-400 hover:text-gray-600"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Foto Antes
-                      </label>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => setBeforePhoto(e.target.files[0])}
-                        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-[#3475B8] file:text-white hover:file:bg-[#2C64A0]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Foto Depois
-                      </label>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => setAfterPhoto(e.target.files[0])}
-                        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-[#3475B8] file:text-white hover:file:bg-[#2C64A0]"
-                      />
-                    </div>
-                    <div className="flex justify-end gap-4 mt-6">
-                      <button
-                        onClick={() => setShowUploadDialog(false)}
-                        className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
-                      >
-                        Cancelar
-                      </button>
-                      <button
-                        onClick={() => handleFileUpload(beforePhoto, afterPhoto)}
-                        disabled={isLoading}
-                        className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#3475B8] rounded-md hover:bg-[#2C64A0] transition-colors disabled:opacity-50"
-                      >
-                        {isLoading ? (
-                          <span className="animate-spin">⏳</span>
-                        ) : (
-                          <>
-                            <FileUp className="w-4 h-4" />
-                            Enviar
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+          <Dialog open={showDependentForm} onOpenChange={setShowDependentForm}>
+            <DialogContent className="sm:max-w-[600px]">
+              <DialogHeader>
+                <DialogTitle>
+                  {editingDependent ? "Editar" : "Adicionar"} Dependente
+                </DialogTitle>
+              </DialogHeader>
+              <DependentForm
+                dependent={editingDependent?.dependent}
+                onSubmit={async (data) => {
+                  const newDependents = [...(client?.dependents || [])];
+                  if (editingDependent) {
+                    newDependents[editingDependent.index] = data;
+                  } else {
+                    newDependents.push(data);
+                  }
+                  await Client.update(client.id, {
+                    ...client,
+                    dependents: newDependents
+                  });
+                  setShowDependentForm(false);
+                  setEditingDependent(null);
+                  loadData();
+                }}
+                onCancel={() => {
+                  setShowDependentForm(false);
+                  setEditingDependent(null);
+                }}
+              />
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
         <TabsContent value="observacoes">
