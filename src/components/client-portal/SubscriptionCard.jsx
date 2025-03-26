@@ -1,9 +1,14 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Clock3, Calendar, CheckCircle, Package } from "lucide-react";
+import { Clock3, Calendar, CheckCircle, Package, ChevronLeft, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export default function SubscriptionCard({ subscriptions = [], services = [] }) {
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
+  const totalPages = Math.ceil(subscriptions.length / ITEMS_PER_PAGE);
+
   if (!subscriptions || subscriptions.length === 0) {
     return (
       <div className="bg-white p-4 rounded-lg shadow-sm text-center py-10">
@@ -11,6 +16,14 @@ export default function SubscriptionCard({ subscriptions = [], services = [] }) 
       </div>
     );
   }
+
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const displayedSubscriptions = subscriptions.slice(startIndex, endIndex);
+
+  const handlePageChange = (page) => {
+    setCurrentPage(page);
+  };
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -39,7 +52,7 @@ export default function SubscriptionCard({ subscriptions = [], services = [] }) 
       </div>
       
       <div className="divide-y">
-        {subscriptions.map((subscription) => (
+        {displayedSubscriptions.map((subscription) => (
           <div key={subscription.id} className="p-4">
             <div className="flex items-start justify-between mb-4">
               <div>
@@ -88,9 +101,37 @@ export default function SubscriptionCard({ subscriptions = [], services = [] }) 
         ))}
       </div>
       
-      {subscriptions.length === 0 && (
-        <div className="p-8 text-center">
-          <p className="text-gray-500">Você não possui assinaturas.</p>
+      {totalPages > 1 && (
+        <div className="p-4 flex items-center justify-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handlePageChange(currentPage - 1)}
+            disabled={currentPage === 1}
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+          
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+            <Button
+              key={page}
+              variant={currentPage === page ? "default" : "outline"}
+              size="sm"
+              onClick={() => handlePageChange(page)}
+              className={currentPage === page ? "bg-[#3475B8] text-white" : ""}
+            >
+              {page}
+            </Button>
+          ))}
+          
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handlePageChange(currentPage + 1)}
+            disabled={currentPage === totalPages}
+          >
+            <ChevronRight className="w-4 h-4" />
+          </Button>
         </div>
       )}
     </div>

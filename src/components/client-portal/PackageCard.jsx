@@ -1,10 +1,15 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Package, Calendar, CheckCircle } from "lucide-react";
+import { Package, Calendar, CheckCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
 
 export default function PackageCard({ packages = [], services = [] }) {
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
+  const totalPages = Math.ceil(packages.length / ITEMS_PER_PAGE);
+
   if (!packages || packages.length === 0) {
     return (
       <div className="bg-white p-4 rounded-lg shadow-sm text-center py-10">
@@ -12,6 +17,14 @@ export default function PackageCard({ packages = [], services = [] }) {
       </div>
     );
   }
+
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const displayedPackages = packages.slice(startIndex, endIndex);
+
+  const handlePageChange = (page) => {
+    setCurrentPage(page);
+  };
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -40,13 +53,13 @@ export default function PackageCard({ packages = [], services = [] }) {
       </div>
       
       <div className="divide-y">
-        {packages.map((packageData) => (
+        {displayedPackages.map((packageData) => (
           <div key={packageData.id} className="p-4">
             <div className="flex items-start justify-between mb-4">
               <div>
-                <h3 className="font-medium text-[#294380]">
-                  {packageData.package_snapshot?.name || "Pacote"}
-                </h3>
+                <h4 className="font-medium text-[#294380]">
+                  {packageData.package_snapshot?.name || "Pacote de serviços"}
+                </h4>
                 <p className="text-sm text-gray-600">
                   {packageData.purchase_date ? 
                     format(new Date(packageData.purchase_date), "dd/MM/yyyy", { locale: ptBR })
@@ -92,9 +105,37 @@ export default function PackageCard({ packages = [], services = [] }) {
         ))}
       </div>
       
-      {packages.length === 0 && (
-        <div className="p-8 text-center">
-          <p className="text-gray-500">Você não possui pacotes.</p>
+      {totalPages > 1 && (
+        <div className="p-4 flex items-center justify-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handlePageChange(currentPage - 1)}
+            disabled={currentPage === 1}
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+          
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+            <Button
+              key={page}
+              variant={currentPage === page ? "default" : "outline"}
+              size="sm"
+              onClick={() => handlePageChange(page)}
+              className={currentPage === page ? "bg-[#3475B8] text-white" : ""}
+            >
+              {page}
+            </Button>
+          ))}
+          
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handlePageChange(currentPage + 1)}
+            disabled={currentPage === totalPages}
+          >
+            <ChevronRight className="w-4 h-4" />
+          </Button>
         </div>
       )}
     </div>

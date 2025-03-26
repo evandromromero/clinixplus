@@ -1,9 +1,14 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { CalendarCheck, Clock, User } from "lucide-react";
+import { CalendarCheck, Clock, User, ChevronLeft, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export default function AppointmentCard({ appointments = [] }) {
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
+  const totalPages = Math.ceil(appointments.length / ITEMS_PER_PAGE);
+
   if (!appointments || appointments.length === 0) {
     return (
       <div className="bg-white p-4 rounded-lg shadow-sm text-center py-10">
@@ -11,6 +16,10 @@ export default function AppointmentCard({ appointments = [] }) {
       </div>
     );
   }
+
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const displayedAppointments = appointments.slice(startIndex, endIndex);
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -27,6 +36,10 @@ export default function AppointmentCard({ appointments = [] }) {
     }
   };
 
+  const handlePageChange = (page) => {
+    setCurrentPage(page);
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-sm">
       <div className="p-4 border-b">
@@ -34,7 +47,7 @@ export default function AppointmentCard({ appointments = [] }) {
       </div>
       
       <div className="divide-y">
-        {appointments.map((appointment) => (
+        {displayedAppointments.map((appointment) => (
           <div key={appointment.id} className="p-4">
             <div className="flex flex-col md:flex-row md:items-center justify-between">
               <div>
@@ -66,9 +79,37 @@ export default function AppointmentCard({ appointments = [] }) {
         ))}
       </div>
       
-      {appointments.length === 0 && (
-        <div className="p-8 text-center">
-          <p className="text-gray-500">Você não possui agendamentos.</p>
+      {totalPages > 1 && (
+        <div className="p-4 flex items-center justify-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handlePageChange(currentPage - 1)}
+            disabled={currentPage === 1}
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+          
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+            <Button
+              key={page}
+              variant={currentPage === page ? "default" : "outline"}
+              size="sm"
+              onClick={() => handlePageChange(page)}
+              className={currentPage === page ? "bg-[#3475B8] text-white" : ""}
+            >
+              {page}
+            </Button>
+          ))}
+          
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handlePageChange(currentPage + 1)}
+            disabled={currentPage === totalPages}
+          >
+            <ChevronRight className="w-4 h-4" />
+          </Button>
         </div>
       )}
     </div>
