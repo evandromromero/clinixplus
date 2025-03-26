@@ -31,7 +31,7 @@ import {
   RefreshCcw,
   Trash2
 } from "lucide-react";
-import { FinancialTransaction, User, Client, Employee, Package, ClientPackage } from "@/firebase/entities";
+import { FinancialTransaction, User, Client, Employee, Package, ClientPackage, Service } from "@/firebase/entities";
 import { InvokeLLM } from "@/api/integrations";
 import { toast } from "@/components/ui/toast";
 import RateLimitHandler from '@/components/RateLimitHandler';
@@ -98,14 +98,18 @@ export default function CashRegister() {
   const [initialAmountValue, setInitialAmountValue] = useState("");
   const [openingNotes, setOpeningNotes] = useState("");
 
+  // Efeito inicial para carregar dados
   useEffect(() => {
     const loadInitialData = async () => {
       try {
+        setIsLoading(true);
         await loadCashRegisters();
         await loadTransactions();
         await checkCashStatus();
       } catch (error) {
         console.error("[CashRegister] Erro ao carregar dados iniciais:", error);
+      } finally {
+        setIsLoading(false);
       }
     };
 
@@ -124,24 +128,27 @@ export default function CashRegister() {
     return () => {
       clearInterval(updateInterval);
     };
-  }, []);
+  }, []); // Sem dependências, roda apenas uma vez
 
+  // Efeito para logging de mudanças
   useEffect(() => {
     console.log("[CashRegister] Status do caixa alterado:", cashIsOpen ? "Aberto" : "Fechado");
     console.log("[CashRegister] Valor inicial:", initialAmount);
     console.log("[CashRegister] Saldo do dia:", dailyBalance);
-    
-    // Forçar atualização dos dados quando o status mudar
-    if (cashIsOpen) {
-      loadTransactions();
-    }
-  }, [cashIsOpen, initialAmount, dailyBalance]);
+  }, [cashIsOpen, initialAmount, dailyBalance]); // Removido o loadTransactions daqui
 
+  // Efeito para processar transações apenas quando necessário
   useEffect(() => {
-    if (transactions && Array.isArray(transactions) && transactions.length > 0) {
+    const shouldProcessTransactions = 
+      transactions && 
+      Array.isArray(transactions) && 
+      transactions.length > 0 &&
+      !isLoading; // Não processa durante o carregamento
+
+    if (shouldProcessTransactions) {
       processTransactions(transactions);
     }
-  }, [transactions]);
+  }, [transactions, isLoading]); // Adicionado isLoading como dependência
 
   const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -188,48 +195,55 @@ export default function CashRegister() {
   const checkCashStatus = async () => {
     console.log("[CashRegister] Verificando status do caixa...");
     try {
+      const today = format(new Date(), "yyyy-MM-dd");
+      console.log("[CashRegister] Verificando transações para a data:", today);
+
       // Buscar todas as transações de abertura e fechamento
-      const transactions = await FinancialTransaction.list({
-        type: 'receita',
-        category: ['abertura_caixa', 'fechamento_caixa']
-      });
+      const transactions = await FinancialTransaction.list();
       
-      console.log("[CashRegister] Transações de abertura/fechamento:", transactions);
+      // Filtrar apenas transações do dia atual
+      const todayTransactions = transactions.filter(t => {
+        const transactionDate = t.payment_date.split('T')[0];
+        return transactionDate === today;
+      });
+
+      // Filtrar por categoria
+      const cashTransactions = todayTransactions.filter(t => 
+        t.category === 'abertura_caixa' || t.category === 'fechamento_caixa'
+      );
+      
+      console.log("[CashRegister] Transações de caixa do dia:", cashTransactions);
 
       // Ordenar por data de criação (mais recente primeiro)
-      const sortedTransactions = transactions.sort((a, b) => 
-        new Date(b.created_date) - new Date(a.created_date)
+      const sortedTransactions = cashTransactions.sort((a, b) => 
+        new Date(b.created_date || b.created_at) - new Date(a.created_date || a.created_at)
       );
 
-      // Encontrar a última transação (seja abertura ou fechamento)
+      // Verificar última transação
       const lastTransaction = sortedTransactions[0];
-      console.log("[CashRegister] Última transação encontrada:", lastTransaction);
-
       if (lastTransaction) {
-        // Se a última transação é uma abertura, o caixa está aberto
-        if (lastTransaction.category === 'abertura_caixa') {
-          console.log("[CashRegister] Última transação é uma abertura, caixa está aberto");
-          setInitialAmount(lastTransaction.amount);
-          setCashIsOpen(true);
-          // Carregar transações desde a abertura
-          await loadTransactionsSinceDate(lastTransaction.payment_date);
-        } else {
+        console.log("[CashRegister] Última transação do dia encontrada:", lastTransaction);
+
+        // Se a última transação for de fechamento, o caixa está fechado
+        if (lastTransaction.category === 'fechamento_caixa') {
           console.log("[CashRegister] Última transação é um fechamento, caixa está fechado");
-          setInitialAmount(0);
           setCashIsOpen(false);
+          setInitialAmount(0);
+        }
+        // Se a última transação for de abertura, o caixa está aberto
+        else if (lastTransaction.category === 'abertura_caixa') {
+          console.log("[CashRegister] Última transação é uma abertura, caixa está aberto");
+          setCashIsOpen(true);
+          setInitialAmount(parseFloat(lastTransaction.amount) || 0);
         }
       } else {
-        console.log("[CashRegister] Nenhuma transação encontrada, caixa está fechado");
-        setInitialAmount(0);
+        console.log("[CashRegister] Nenhuma transação de caixa encontrada para hoje");
         setCashIsOpen(false);
+        setInitialAmount(0);
       }
+
     } catch (error) {
       console.error("[CashRegister] Erro ao verificar status do caixa:", error);
-      toast({
-        title: "Erro ao verificar status do caixa",
-        description: "Por favor, tente novamente.",
-        variant: "destructive",
-      });
     }
   };
 
@@ -291,7 +305,6 @@ export default function CashRegister() {
       if (todayTransactions && Array.isArray(todayTransactions)) {
         // Atualizar o estado das transações antes de processá-las
         setTransactions(todayTransactions);
-        processTransactions(todayTransactions);
         return todayTransactions;
       }
       
@@ -306,101 +319,56 @@ export default function CashRegister() {
   };
 
   // Alias para manter compatibilidade com o código existente
-  const loadTransactions = loadTransactionsWithRetry;
-
-  const processTransactions = (transactions) => {
+  const loadTransactions = async () => {
     try {
-      if (!transactions || !Array.isArray(transactions)) {
-        console.log("Nenhuma transação para processar");
-        return;
-      }
+      setIsLoading(true);
+      setErrorMessage("");
       
-      // Filtrar transações excluídas
-      const activeTransactions = transactions.filter(transaction => 
-        transaction.status !== "excluido" && transaction.deleted !== true
-      );
+      const today = format(new Date(), "yyyy-MM-dd");
+      console.log("[CashRegister] Data de hoje formatada:", today);
       
-      console.log(`Total de transações: ${transactions.length}, Ativas: ${activeTransactions.length}`);
+      // Buscar transações e dados relacionados
+      const [transactionsData, services] = await Promise.all([
+        FinancialTransaction.list(),
+        Service.list()
+      ]);
       
-      // Encontrar a última transação de abertura (a mais recente)
-      const lastOpeningTransaction = activeTransactions
-        .filter(t => t.category === "abertura_caixa")
-        .sort((a, b) => new Date(b.payment_date) - new Date(a.payment_date))[0];
+      // Processar transações
+      const processedTransactions = transactionsData.map(t => {
+        // Encontrar o serviço relacionado
+        const service = services.find(s => s.id === t.service_id);
+        
+        return {
+          ...t,
+          description: service ? service.name : t.description, // Use o nome do serviço se disponível
+          created_at: t.created_at || t.created_date, // Garante que temos a hora
+          client_name: t.client_name || 'Cliente não identificado', // Nome do cliente
+          payment_method: t.payment_method || 'Não especificado' // Forma de pagamento
+        };
+      });
+
+      console.log("[CashRegister] Transações processadas:", processedTransactions);
       
-      if (lastOpeningTransaction) {
-        console.log("Última transação de abertura encontrada:", lastOpeningTransaction);
-        
-        // Valor inicial do caixa
-        const initialAmountValue = parseFloat(lastOpeningTransaction.amount) || 0;
-        console.log(`Valor inicial do caixa: R$ ${initialAmountValue.toFixed(2)}`);
-        
-        // Atualizar o valor inicial
-        setInitialAmount(initialAmountValue);
-        
-        // Data de abertura do caixa
-        const openingDate = lastOpeningTransaction.payment_date.split('T')[0];
-        
-        // Filtrar transações após a abertura do caixa
-        const transactionsAfterOpening = activeTransactions.filter(t => {
-          const transactionDate = t.payment_date.split('T')[0];
-          return transactionDate >= openingDate;
-        });
-        
-        // Filtrar transações de receita e despesa (excluindo abertura e fechamento)
-        const receiptTransactions = transactionsAfterOpening.filter(t => 
-          t.type === "receita" && 
-          t.category !== "abertura_caixa" && 
-          t.category !== "fechamento_caixa"
-        );
-        
-        const expenseTransactions = transactionsAfterOpening.filter(t => 
-          t.type === "despesa" && 
-          t.category !== "abertura_caixa" && 
-          t.category !== "fechamento_caixa"
-        );
-        
-        // Calcular totais
-        const totalReceipts = receiptTransactions.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
-        const totalExpenses = expenseTransactions.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
-        
-        // Atualizar os estados
-        setDailyReceipts(totalReceipts);
-        setDailyExpenses(totalExpenses);
-        
-        // Calcular saldo
-        const balance = initialAmountValue + totalReceipts - totalExpenses;
-        console.log(`Cálculo do saldo: ${initialAmountValue} (inicial) + ${totalReceipts} (receitas) - ${totalExpenses} (despesas) = ${balance}`);
-        setDailyBalance(balance);
-        
-        // Calcular saldo em dinheiro
-        const cashReceiptTransactions = receiptTransactions.filter(t => t.payment_method === "dinheiro");
-        const cashExpenseTransactions = expenseTransactions.filter(t => t.payment_method === "dinheiro");
-        
-        const cashReceipts = cashReceiptTransactions.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
-        const cashExpenses = cashExpenseTransactions.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
-        
-        const expectedCash = initialAmountValue + cashReceipts - cashExpenses;
-        console.log(`Saldo em dinheiro: ${initialAmountValue} (inicial) + ${cashReceipts} (receitas em dinheiro) - ${cashExpenses} (despesas em dinheiro) = ${expectedCash}`);
-        setExpectedCashAmount(expectedCash);
-        
-        // Verificar se há transação de fechamento após a abertura
-        const closingTransaction = transactionsAfterOpening.find(t => t.category === "fechamento_caixa");
-        
-        // Atualizar o status do caixa
-        setCashIsOpen(!closingTransaction);
-      } else {
-        console.log("Nenhuma transação de abertura encontrada");
-        setCashIsOpen(false);
-        setInitialAmount(0);
-        setDailyReceipts(0);
-        setDailyExpenses(0);
-        setDailyBalance(0);
-        setExpectedCashAmount(0);
-      }
+      setTransactions(processedTransactions);
+      
     } catch (error) {
-      console.error("Erro ao processar transações:", error);
+      console.error("[CashRegister] Erro ao carregar transações:", error);
+      setErrorMessage("Erro ao carregar transações. Usando dados temporários.");
+      loadSimulatedData();
+    } finally {
+      setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadTransactions();
+  }, []); // Sem dependências, só roda uma vez ao montar
+
+  useEffect(() => {
+    if (transactions.length > 0) {
+      processTransactions(transactions);
+    }
+  }, [transactions]); // Só roda quando as transações mudam
 
   const generateSimulatedData = () => {
     const today = format(new Date(), "yyyy-MM-dd");
@@ -1062,7 +1030,9 @@ export default function CashRegister() {
               'venda_servico': 'SERVIÇO',
               'venda_pacote': 'PACOTE',
               'venda_gift_card': 'GIFT CARD',
-              'venda_assinatura': 'ASSINATURA'
+              'venda_assinatura': 'ASSINATURA',
+              'abertura_caixa': 'ABERTURA',
+              'venda': 'VENDA'
             };
 
             return `
@@ -1167,6 +1137,126 @@ export default function CashRegister() {
       r.payment_date === date
     );
     return { opening, closing };
+  };
+
+  const processTransactions = (transactions) => {
+    try {
+      if (!transactions || !Array.isArray(transactions)) {
+        console.log("Nenhuma transação para processar");
+        return;
+      }
+      
+      // Filtrar transações excluídas
+      const activeTransactions = transactions.filter(transaction => 
+        transaction.status !== "excluido" && transaction.deleted !== true
+      );
+      
+      console.log(`Total de transações: ${transactions.length}, Ativas: ${activeTransactions.length}`);
+      
+      // Encontrar a última transação de abertura (a mais recente)
+      const lastOpeningTransaction = activeTransactions
+        .filter(t => t.category === "abertura_caixa")
+        .sort((a, b) => new Date(b.payment_date) - new Date(a.payment_date))[0];
+      
+      if (lastOpeningTransaction) {
+        console.log("Última transação de abertura encontrada:", lastOpeningTransaction);
+        
+        // Valor inicial do caixa
+        const initialAmountValue = parseFloat(lastOpeningTransaction.amount) || 0;
+        console.log(`Valor inicial do caixa: R$ ${initialAmountValue.toFixed(2)}`);
+        
+        // Atualizar o valor inicial (apenas se diferente)
+        if (initialAmount !== initialAmountValue) {
+          setInitialAmount(initialAmountValue);
+        }
+        
+        // Data de abertura do caixa
+        const openingDate = lastOpeningTransaction.payment_date.split('T')[0];
+        
+        // Filtrar transações após a abertura do caixa
+        const transactionsAfterOpening = activeTransactions.filter(t => {
+          const transactionDate = t.payment_date.split('T')[0];
+          return transactionDate >= openingDate;
+        });
+        
+        // Filtrar transações de receita e despesa (excluindo abertura e fechamento)
+        const receiptTransactions = transactionsAfterOpening.filter(t => 
+          t.type === "receita" && 
+          t.category !== "abertura_caixa" && 
+          t.category !== "fechamento_caixa"
+        );
+        
+        const expenseTransactions = transactionsAfterOpening.filter(t => 
+          t.type === "despesa" && 
+          t.category !== "abertura_caixa" && 
+          t.category !== "fechamento_caixa"
+        );
+        
+        // Calcular totais
+        const totalReceipts = receiptTransactions.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+        const totalExpenses = expenseTransactions.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+        
+        // Atualizar os estados (apenas se diferentes)
+        if (dailyReceipts !== totalReceipts) {
+          setDailyReceipts(totalReceipts);
+        }
+        if (dailyExpenses !== totalExpenses) {
+          setDailyExpenses(totalExpenses);
+        }
+        
+        // Calcular saldo
+        const balance = initialAmountValue + totalReceipts - totalExpenses;
+        console.log(`Cálculo do saldo: ${initialAmountValue} (inicial) + ${totalReceipts} (receitas) - ${totalExpenses} (despesas) = ${balance}`);
+        if (dailyBalance !== balance) {
+          setDailyBalance(balance);
+        }
+        
+        // Calcular saldo em dinheiro
+        const cashReceiptTransactions = receiptTransactions.filter(t => t.payment_method === "dinheiro");
+        const cashExpenseTransactions = expenseTransactions.filter(t => t.payment_method === "dinheiro");
+        
+        const cashReceipts = cashReceiptTransactions.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+        const cashExpenses = cashExpenseTransactions.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+        
+        const expectedCash = initialAmountValue + cashReceipts - cashExpenses;
+        console.log(`Saldo em dinheiro: ${initialAmountValue} (inicial) + ${cashReceipts} (receitas em dinheiro) - ${cashExpenses} (despesas em dinheiro) = ${expectedCash}`);
+        if (expectedCashAmount !== expectedCash) {
+          setExpectedCashAmount(expectedCash);
+        }
+        
+        // Verificar se há transação de fechamento após a abertura
+        const closingTransaction = transactionsAfterOpening.find(t => t.category === "fechamento_caixa");
+        
+        // Atualizar o status do caixa (apenas se diferente)
+        const newCashStatus = !closingTransaction;
+        if (cashIsOpen !== newCashStatus) {
+          setCashIsOpen(newCashStatus);
+        }
+      } else {
+        console.log("Nenhuma transação de abertura encontrada");
+        if (cashIsOpen) {
+          setCashIsOpen(false);
+        }
+        if (initialAmount !== 0) {
+          setInitialAmount(0);
+        }
+        if (dailyReceipts !== 0) {
+          setDailyReceipts(0);
+        }
+        if (dailyExpenses !== 0) {
+          setDailyExpenses(0);
+        }
+        if (dailyBalance !== 0) {
+          setDailyBalance(0);
+        }
+        if (expectedCashAmount !== 0) {
+          setExpectedCashAmount(0);
+        }
+      }
+
+    } catch (error) {
+      console.error("Erro ao processar transações:", error);
+    }
   };
 
   return (
