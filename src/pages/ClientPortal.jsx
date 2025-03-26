@@ -2,22 +2,23 @@ import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CalendarDays, Package, Gift, Clock, LogOut, User, Calendar, ShoppingBag, Receipt } from "lucide-react";
+import { CalendarDays, Package as PackageIcon, Gift, Clock, LogOut, User, Calendar, ShoppingBag, Receipt } from "lucide-react";
 import ClientLoginForm from "../components/client-portal/ClientLoginForm";
 import AppointmentCard from "../components/client-portal/AppointmentCard";
 import PackageCard from "../components/client-portal/PackageCard";
 import SubscriptionCard from "../components/client-portal/SubscriptionCard";
 import GiftCardCard from "../components/client-portal/GiftCardCard";
 import HistoryCard from "../components/client-portal/HistoryCard";
-import { Client } from "@/api/entities";
-import { Appointment } from "@/api/entities";
-import { ClientPackage } from "@/api/entities";
-import { ClientSubscription } from "@/api/entities";
-import { GiftCard } from "@/api/entities";
-import { Sale } from "@/api/entities";
-import { CompanySettings } from "@/api/entities";
-import { Service } from "@/api/entities";
-import { Employee } from "@/api/entities";
+import { Client } from "@/firebase/entities";
+import { Appointment } from "@/firebase/entities";
+import { ClientPackage } from "@/firebase/entities";
+import { Package } from "@/firebase/entities";
+import { ClientSubscription } from "@/firebase/entities";
+import { GiftCard } from "@/firebase/entities";
+import { Sale } from "@/firebase/entities";
+import { CompanySettings } from "@/firebase/entities";
+import { Service } from "@/firebase/entities";
+import { Employee } from "@/firebase/entities";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -38,8 +39,9 @@ export default function ClientPortal() {
     setCurrentClient(clientData.client);
     
     try {
-      const [appointmentsData, packagesData, subscriptionsData, giftCardsData, salesData, companyData, servicesData, employeesData] = await Promise.all([
+      const [appointmentsData, packagesData, clientPackagesData, subscriptionsData, giftCardsData, salesData, companyData, servicesData, employeesData] = await Promise.all([
         Appointment.list(),
+        Package.list(),
         ClientPackage.list(),
         ClientSubscription.list(),
         GiftCard.list(),
@@ -68,25 +70,54 @@ export default function ClientPortal() {
         
       setAppointments(clientAppointments);
       
-      const formattedPackages = packagesData
-        .filter(pkg => pkg.client_id === clientId)
-        .sort((a, b) => new Date(b.purchase_date || 0) - new Date(a.purchase_date || 0))
-        .map(pkg => {
+      // Filtrar e processar pacotes do cliente
+      const activePackages = clientPackagesData
+        .filter(cp => cp.client_id === clientId)
+        .map(cp => {
+          // Encontra o pacote base
+          const basePackage = packagesData.find(p => p.id === cp.package_id);
+          
+          // Encontra os serviços do package_snapshot
+          let services = [];
+          if (cp.package_snapshot?.services) {
+            services = Object.entries(cp.package_snapshot.services).map(([_, serviceData]) => {
+              const service = servicesData.find(s => s.id === serviceData.service_id);
+              return {
+                service_id: serviceData.service_id,
+                name: service?.name || 'Serviço não encontrado',
+                quantity: serviceData.quantity || 0
+              };
+            });
+          }
+          
           return {
-            ...pkg,
-            sessions_used: pkg.sessions_used || 0,
-            total_sessions: pkg.total_sessions || 0,
-            status: pkg.status || 'ativo',
-            purchase_date: pkg.purchase_date || new Date().toISOString(),
-            expiration_date: pkg.expiration_date || new Date().toISOString(),
-            package_snapshot: pkg.package_snapshot || {
-              name: "Pacote de serviços",
-              services: []
+            ...cp,
+            packageData: basePackage,
+            sessions_used: cp.sessions_used || 0,
+            total_sessions: cp.total_sessions || 0,
+            session_history: cp.session_history || [],
+            services: services,
+            status: cp.status || 'ativo',
+            purchase_date: cp.purchase_date || new Date().toISOString(),
+            expiration_date: cp.expiration_date || new Date().toISOString(),
+            package_snapshot: cp.package_snapshot || {
+              name: basePackage?.name || "Pacote de serviços",
+              services: services
             }
           };
+        })
+        .filter(cp => cp.packageData) // Filtra apenas pacotes que têm dados base
+        .sort((a, b) => {
+          // Primeiro os ativos, depois por data de validade
+          if (a.status === 'ativo' && b.status !== 'ativo') return -1;
+          if (a.status !== 'ativo' && b.status === 'ativo') return 1;
+          
+          const dateA = new Date(a.purchase_date || 0);
+          const dateB = new Date(b.purchase_date || 0);
+          return dateB - dateA;
         });
       
-      setClientPackages(formattedPackages);
+      setClientPackages(activePackages);
       
       const formattedSubscriptions = subscriptionsData
         .filter(sub => sub.client_id === clientId)
@@ -208,7 +239,7 @@ export default function ClientPortal() {
 
                 <div className="space-y-2 p-4 rounded-lg bg-gradient-to-br from-blue-50 to-blue-100 hover:from-blue-100 hover:to-blue-200 transition-colors">
                   <p className="text-sm text-gray-600 flex items-center">
-                    <Package className="w-4 h-4 mr-2 text-blue-600" />
+                    <PackageIcon className="w-4 h-4 mr-2 text-blue-600" />
                     Pacotes ativos
                   </p>
                   <p className="font-medium text-[#294380]">
@@ -247,7 +278,7 @@ export default function ClientPortal() {
               Agendamentos
             </TabsTrigger>
             <TabsTrigger value="packages" className="data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700">
-              <Package className="w-4 h-4 mr-2" />
+              <PackageIcon className="w-4 h-4 mr-2" />
               Pacotes
             </TabsTrigger>
             <TabsTrigger value="subscriptions" className="data-[state=active]:bg-green-100 data-[state=active]:text-green-700">
@@ -269,7 +300,7 @@ export default function ClientPortal() {
           </TabsContent>
 
           <TabsContent value="packages" className="space-y-4">
-            <PackageCard packages={clientPackages} />
+            <PackageCard packages={clientPackages} services={services} />
           </TabsContent>
 
           <TabsContent value="subscriptions" className="space-y-4">
