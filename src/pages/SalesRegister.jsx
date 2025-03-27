@@ -1159,7 +1159,11 @@ export default function SalesRegister() {
                   <Button
                     onClick={handleFinishSale}
                     className="bg-green-600 hover:bg-green-700"
-                    disabled={paymentMethods.length === 0 || paymentMethods.some(pm => pm.amount <= 0)}
+                    disabled={
+                      paymentMethods.length === 0 || 
+                      paymentMethods.some(pm => pm.amount <= 0) || 
+                      !salesEmployee
+                    }
                   >
                     Finalizar Venda
                   </Button>
