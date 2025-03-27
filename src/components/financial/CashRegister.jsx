@@ -31,7 +31,7 @@ import {
   RefreshCcw,
   Trash2
 } from "lucide-react";
-import { FinancialTransaction, User, Client, Employee, Package, ClientPackage, Service, PaymentMethod } from "@/firebase/entities";
+import { FinancialTransaction, User, Client, Employee, Package, ClientPackage, Service, PaymentMethod, Sale } from "@/firebase/entities";
 import { InvokeLLM } from "@/api/integrations";
 import { toast } from "@/components/ui/toast";
 import RateLimitHandler from '@/components/RateLimitHandler';
@@ -329,21 +329,87 @@ export default function CashRegister() {
       console.log("[CashRegister] Data de hoje formatada:", today);
       
       // Buscar transações e dados relacionados
-      const [transactionsData, services] = await Promise.all([
+      const [transactionsData, services, salesData, clientsData] = await Promise.all([
         FinancialTransaction.list(),
-        Service.list()
+        Service.list(),
+        Sale.list(),
+        Client.list()
       ]);
+      
+      console.log("[CashRegister] Dados carregados:", {
+        transacoes: transactionsData.length,
+        servicos: services.length,
+        vendas: salesData.length,
+        clientes: clientsData.length
+      });
+      
+      // Mapeamento de vendas por ID para facilitar o acesso
+      const salesMap = salesData.reduce((acc, sale) => {
+        acc[sale.id] = sale;
+        return acc;
+      }, {});
+      
+      // Mapeamento de clientes por ID para facilitar o acesso
+      const clientsMap = clientsData.reduce((acc, client) => {
+        acc[client.id] = client;
+        return acc;
+      }, {});
       
       // Processar transações
       const processedTransactions = transactionsData.map(t => {
         // Encontrar o serviço relacionado
         const service = services.find(s => s.id === t.service_id);
+        // Encontrar a venda relacionada
+        const sale = salesMap[t.sale_id];
+        // Encontrar o cliente relacionado
+        const client = clientsMap[t.client_id];
+        
+        // Formatar a descrição da transação
+        let formattedDescription = t.description;
+        
+        // Se for uma venda e tiver itens, mostrar informações detalhadas
+        if (t.category === 'venda' && sale && sale.items && sale.items.length > 0) {
+          const firstItem = sale.items[0];
+          const itemName = firstItem.name || 'Item sem nome';
+          const itemType = firstItem.type || '';
+          
+          // Formatar o tipo do item para exibição
+          let typeDisplay = '';
+          switch (itemType.toLowerCase()) {
+            case 'produto':
+              typeDisplay = 'Produto';
+              break;
+            case 'serviço':
+            case 'servico':
+              typeDisplay = 'Serviço';
+              break;
+            case 'pacote':
+              typeDisplay = 'Pacote';
+              break;
+            case 'gift_card':
+              typeDisplay = 'Gift Card';
+              break;
+            case 'assinatura':
+              typeDisplay = 'Assinatura';
+              break;
+            default:
+              typeDisplay = itemType;
+          }
+          
+          // Se tiver mais de um item, indica a quantidade total
+          let additionalItems = '';
+          if (sale.items.length > 1) {
+            additionalItems = ` + ${sale.items.length - 1} item(s)`;
+          }
+          
+          formattedDescription = `${typeDisplay}: ${itemName}${additionalItems}`;
+        }
         
         return {
           ...t,
-          description: service ? service.name : t.description, // Use o nome do serviço se disponível
+          description: formattedDescription, // Descrição formatada
           created_at: t.created_at || t.created_date, // Garante que temos a hora
-          client_name: t.client_name || 'Cliente não identificado', // Nome do cliente
+          client_name: client ? client.name : 'Cliente não identificado', // Nome do cliente
           payment_method: t.payment_method || 'Não especificado' // Forma de pagamento
         };
       });
@@ -1645,7 +1711,7 @@ export default function CashRegister() {
                         {transaction.payment_method === "transferencia" && "Transferência"}
                       </TableCell>
                       <TableCell>
-                        {getClientName(transaction.client_id) || "-"}
+                        {transaction.client_name}
                       </TableCell>
                       <TableCell className={`text-right font-medium ${transaction.type === "receita" ? "text-green-500" : "text-red-500"}`}>
                         {transaction.type === "receita" ? "+" : "-"}
