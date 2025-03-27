@@ -534,6 +534,8 @@ export default function SalesRegister() {
           sale_id: createdSale.id,
           client_id: selectedClient.id,
           employee_id: salesEmployee,
+          is_installment: payment.installments > 1,
+          installments: payment.installments > 1 ? payment.installments : null,
           notes: ""
         });
       }

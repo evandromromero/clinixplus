@@ -20,7 +20,7 @@ import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Search, Filter, ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
-import { FinancialTransaction, Client } from "@/firebase/entities";
+import { FinancialTransaction, Client, PaymentMethod, Sale } from "@/firebase/entities";
 import RateLimitHandler from '@/components/RateLimitHandler';
 import { toast } from "@/components/ui/use-toast";
 
@@ -36,10 +36,25 @@ export default function AccountsReceivable() {
   const [error, setError] = useState(null);
   const [sortField, setSortField] = useState("due_date");
   const [sortDirection, setSortDirection] = useState("asc");
+  const [paymentMethods, setPaymentMethods] = useState([]);
+  const [sales, setSales] = useState([]);
 
   useEffect(() => {
     loadData();
   }, []);
+
+  const loadPaymentMethods = async () => {
+    try {
+      console.log('[AccountsReceivable] Carregando métodos de pagamento...');
+      const methods = await PaymentMethod.list();
+      console.log(`[AccountsReceivable] ${methods.length} métodos de pagamento carregados`);
+      setPaymentMethods(methods);
+      return methods;
+    } catch (error) {
+      console.error('[AccountsReceivable] Erro ao carregar métodos de pagamento:', error);
+      return [];
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -58,32 +73,108 @@ export default function AccountsReceivable() {
       console.log(`[AccountsReceivable] ${clientsData.length} clientes encontrados`);
       setClients(clientsData);
       
+      // Carrega os métodos de pagamento
+      console.log('[AccountsReceivable] Buscando métodos de pagamento...');
+      const paymentMethodsData = await PaymentMethod.list();
+      console.log(`[AccountsReceivable] ${paymentMethodsData.length} métodos de pagamento encontrados`);
+      setPaymentMethods(paymentMethodsData);
+      
+      // Carrega as vendas para enriquecer as transações com informações detalhadas
+      console.log('[AccountsReceivable] Buscando vendas...');
+      const salesData = await Sale.list();
+      console.log(`[AccountsReceivable] ${salesData.length} vendas encontradas`);
+      setSales(salesData);
+      
       // Mapeamento de clientes por ID para facilitar o acesso
       const clientsMap = clientsData.reduce((acc, client) => {
         acc[client.id] = client;
         return acc;
       }, {});
       
+      // Mapeamento de vendas por ID para facilitar o acesso
+      const salesMap = salesData.reduce((acc, sale) => {
+        acc[sale.id] = sale;
+        return acc;
+      }, {});
+      
+      // Criar um mapa de métodos de pagamento para facilitar a busca
+      const paymentMethodsMap = paymentMethodsData.reduce((acc, method) => {
+        acc[method.id] = method;
+        return acc;
+      }, {});
+      
+      console.log('[AccountsReceivable] Mapa de métodos de pagamento:', paymentMethodsMap);
+      
       // Processa as transações para exibição
+      console.log('[AccountsReceivable] Processando transações para exibição...');
+      
+      // Log de todas as transações antes do filtro
+      console.log('[AccountsReceivable] Todas as transações:', transactionsData.map(t => ({
+        id: t.id,
+        type: t.type,
+        status: t.status,
+        payment_method: t.payment_method,
+        is_installment: t.is_installment,
+        amount: t.amount,
+        sale_id: t.sale_id
+      })));
+      
       const processedTransactions = transactionsData
         .filter(transaction => {
-          // Filtra apenas transações a receber (não pagas ou parcialmente pagas)
-          return transaction.status !== 'pago' && transaction.type === 'receita';
+          // Filtra transações a receber:
+          // 1. Transações do tipo receita que não estão pagas
+          // 2. Transações com cartão de crédito (que são a prazo)
+          // 3. Transações marcadas como parceladas (is_installment)
+          // 4. TODAS as transações do tipo receita (para mostrar histórico)
+          // 5. Excluir aberturas de caixa
+          const paymentMethodId = transaction.payment_method || '';
+          const paymentMethod = paymentMethodsMap[paymentMethodId];
+          
+          // Verifica se é um cartão de crédito baseado no método de pagamento do Firebase
+          const isCredit = paymentMethod ? 
+            (paymentMethod.name && (
+              paymentMethod.name.toLowerCase().includes('crédito') || 
+              paymentMethod.name.toLowerCase().includes('credito')
+            )) : false;
+          
+          // Mostra todas as transações do tipo receita, exceto aberturas de caixa
+          const isOpeningTransaction = transaction.category === 'abertura_caixa';
+          const shouldInclude = transaction.type === 'receita' && !isOpeningTransaction;
+          
+          // Log para cada transação avaliada
+          console.log(`[AccountsReceivable] Avaliando transação ${transaction.id}:`, {
+            type: transaction.type,
+            status: transaction.status,
+            payment_method: paymentMethodId,
+            payment_method_name: paymentMethod ? paymentMethod.name : 'Desconhecido',
+            isCredit,
+            is_installment: transaction.is_installment,
+            shouldInclude
+          });
+          
+          return shouldInclude;
         })
         .map(transaction => {
           // Enriquece a transação com dados do cliente
           const client = clientsMap[transaction.client_id] || { name: 'Cliente não encontrado' };
+          const sale = salesMap[transaction.sale_id] || { items: [] };
           
           return {
             ...transaction,
             client_name: client.name,
+            sale_items: sale.items,
             formatted_amount: formatCurrency(transaction.amount),
             formatted_due_date: transaction.due_date 
               ? format(new Date(transaction.due_date), 'dd/MM/yyyy', { locale: ptBR })
               : 'Sem data',
-            status_class: getStatusClass(transaction.status)
+            status_class: getStatusClass(transaction.status),
+            // Formata a descrição para mostrar informações mais úteis
+            formatted_description: formatTransactionDescription(transaction, sale)
           };
         });
+      
+      // Log após o processamento
+      console.log('[AccountsReceivable] Transações processadas:', processedTransactions.length);
       
       setTransactions(processedTransactions);
       setFilteredTransactions(processedTransactions);
@@ -105,75 +196,80 @@ export default function AccountsReceivable() {
   };
 
   useEffect(() => {
-    applyFilters();
-  }, [statusFilter, dateFilter, searchTerm, clientFilter, transactions, sortField, sortDirection]);
-
-  const applyFilters = () => {
-    // Se não há transações, não faz nada
-    if (transactions.length === 0) {
-      setFilteredTransactions([]);
-      return;
-    }
+    // Aplicar filtros quando os critérios mudarem
+    if (!transactions.length) return;
+    
+    console.log('[AccountsReceivable] Aplicando filtros...');
+    console.log('[AccountsReceivable] Filtros atuais:', { statusFilter, dateFilter, clientFilter, searchTerm });
+    console.log('[AccountsReceivable] Total de transações antes do filtro:', transactions.length);
     
     let filtered = [...transactions];
     
-    if (statusFilter !== "all") {
+    // Filtro de status
+    if (statusFilter !== 'all') {
       filtered = filtered.filter(t => t.status === statusFilter);
     }
     
-    const today = new Date();
-    if (dateFilter === "today") {
-      filtered = filtered.filter(t => {
-        if (!t.due_date) return false;
-        const dueDate = new Date(t.due_date);
-        return dueDate.toDateString() === today.toDateString();
-      });
-    } else if (dateFilter === "thisWeek") {
-      const startOfWeek = new Date(today);
-      startOfWeek.setDate(today.getDate() - today.getDay());
-      const endOfWeek = new Date(startOfWeek);
-      endOfWeek.setDate(startOfWeek.getDate() + 6);
+    // Filtro de data
+    if (dateFilter !== 'all') {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const thisWeekStart = new Date(today);
+      thisWeekStart.setDate(today.getDate() - today.getDay()); // Domingo
+      
+      const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
       
       filtered = filtered.filter(t => {
         if (!t.due_date) return false;
+        
         const dueDate = new Date(t.due_date);
-        return dueDate >= startOfWeek && dueDate <= endOfWeek;
-      });
-    } else if (dateFilter === "thisMonth") {
-      filtered = filtered.filter(t => {
-        if (!t.due_date) return false;
-        const dueDate = new Date(t.due_date);
-        return (
-          dueDate.getMonth() === today.getMonth() && 
-          dueDate.getFullYear() === today.getFullYear()
-        );
-      });
-    } else if (dateFilter === "overdue") {
-      filtered = filtered.filter(t => {
-        if (!t.due_date) return false;
-        const dueDate = new Date(t.due_date);
-        return dueDate < today && t.status === "pendente";
+        dueDate.setHours(0, 0, 0, 0);
+        
+        switch (dateFilter) {
+          case 'today':
+            return dueDate.getTime() === today.getTime();
+          case 'thisWeek':
+            return dueDate >= thisWeekStart && dueDate <= today;
+          case 'thisMonth':
+            return dueDate >= thisMonthStart && dueDate <= today;
+          case 'overdue':
+            return dueDate < today;
+          default:
+            return true;
+        }
       });
     }
     
-    if (clientFilter !== "all") {
+    // Filtro de cliente
+    if (clientFilter !== 'all') {
       filtered = filtered.filter(t => t.client_id === clientFilter);
     }
     
+    // Filtro de busca
     if (searchTerm) {
-      const search = searchTerm.toLowerCase();
+      const term = searchTerm.toLowerCase();
       filtered = filtered.filter(t => 
-        (t.description?.toLowerCase().includes(search)) ||
-        (t.client_name?.toLowerCase().includes(search))
+        (t.description && t.description.toLowerCase().includes(term)) ||
+        (t.client_name && t.client_name.toLowerCase().includes(term))
       );
     }
     
+    // Ordenação - Modificando para ordenar por data mais recente primeiro
     filtered.sort((a, b) => {
       let aValue, bValue;
       
       if (sortField === "due_date") {
+        // Para datas, invertemos a comparação para mostrar as mais recentes primeiro
         aValue = a.due_date ? new Date(a.due_date) : new Date(0);
         bValue = b.due_date ? new Date(b.due_date) : new Date(0);
+        
+        // Inverte a ordenação para mostrar as datas mais recentes primeiro
+        if (sortDirection === "asc") {
+          return bValue - aValue; // Mais recentes primeiro
+        } else {
+          return aValue - bValue; // Mais antigas primeiro
+        }
       } else if (sortField === "amount") {
         aValue = a.amount || 0;
         bValue = b.amount || 0;
@@ -192,8 +288,13 @@ export default function AccountsReceivable() {
       }
     });
     
+    console.log('[AccountsReceivable] Total de transações após aplicar filtros:', filtered.length);
     setFilteredTransactions(filtered);
-  };
+  }, [transactions, statusFilter, dateFilter, clientFilter, searchTerm, sortField, sortDirection]);
+
+  useEffect(() => {
+    loadPaymentMethods();
+  }, []);
 
   const toggleSort = (field) => {
     if (sortField === field) {
@@ -225,6 +326,64 @@ export default function AccountsReceivable() {
       case "cancelado": return "Cancelado";
       default: return status;
     }
+  };
+
+  const getStatusClass = (status) => {
+    switch (status) {
+      case "pendente": return "bg-yellow-100 text-yellow-800";
+      case "pago": return "bg-green-100 text-green-800";
+      case "cancelado": return "bg-red-100 text-red-800";
+      default: return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  const formatTransactionDescription = (transaction, sale) => {
+    // Se não tiver venda associada ou não for do tipo venda
+    if (!transaction.sale_id || transaction.category !== 'venda') {
+      return transaction.description || 'Transação sem descrição';
+    }
+    
+    // Se não tiver itens na venda
+    if (!sale || !sale.items || sale.items.length === 0) {
+      return transaction.description || 'Venda sem itens';
+    }
+    
+    // Pega o primeiro item da venda para exibir na descrição
+    const firstItem = sale.items[0];
+    const itemName = firstItem.name || 'Item sem nome';
+    const itemType = firstItem.type || '';
+    
+    // Formata o tipo do item para exibição
+    let typeDisplay = '';
+    switch (itemType.toLowerCase()) {
+      case 'produto':
+        typeDisplay = 'Produto';
+        break;
+      case 'serviço':
+      case 'servico':
+        typeDisplay = 'Serviço';
+        break;
+      case 'pacote':
+        typeDisplay = 'Pacote';
+        break;
+      case 'gift_card':
+        typeDisplay = 'Gift Card';
+        break;
+      case 'assinatura':
+        typeDisplay = 'Assinatura';
+        break;
+      default:
+        typeDisplay = itemType;
+    }
+    
+    // Se tiver mais de um item, indica a quantidade total
+    let additionalItems = '';
+    if (sale.items.length > 1) {
+      additionalItems = ` + ${sale.items.length - 1} item(s)`;
+    }
+    
+    // Retorna a descrição formatada
+    return `${typeDisplay}: ${itemName}${additionalItems}`;
   };
 
   const refreshFromSource = async () => {
@@ -426,7 +585,7 @@ export default function AccountsReceivable() {
                 filteredTransactions.map((transaction) => (
                   <TableRow key={transaction.id}>
                     <TableCell className="font-medium">
-                      {transaction.description}
+                      {transaction.formatted_description}
                     </TableCell>
                     <TableCell>{transaction.client_name}</TableCell>
                     <TableCell>
