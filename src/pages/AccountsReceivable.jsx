@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,13 +16,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Search, Filter, ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
+import { Search, Filter, ChevronDown, ChevronUp, RefreshCw, FileText, Download, Printer } from "lucide-react";
 import { FinancialTransaction, Client, PaymentMethod, Sale } from "@/firebase/entities";
 import RateLimitHandler from '@/components/RateLimitHandler';
 import { toast } from "@/components/ui/use-toast";
+import html2pdf from 'html2pdf.js';
 
 export default function AccountsReceivable() {
   const [transactions, setTransactions] = useState([]);
@@ -38,6 +40,12 @@ export default function AccountsReceivable() {
   const [sortDirection, setSortDirection] = useState("asc");
   const [paymentMethods, setPaymentMethods] = useState([]);
   const [sales, setSales] = useState([]);
+
+  // Estado para o diálogo de detalhes
+  const [showDetailsDialog, setShowDetailsDialog] = useState(false);
+  const [selectedTransaction, setSelectedTransaction] = useState(null);
+  const [receiptHtml, setReceiptHtml] = useState('');
+  const receiptRef = useRef(null);
 
   useEffect(() => {
     loadData();
@@ -420,6 +428,131 @@ export default function AccountsReceivable() {
     }
   };
 
+  const generateReceipt = async (transaction) => {
+    try {
+      // Buscar a venda relacionada à transação
+      const sale = sales.find(s => s.id === transaction.sale_id);
+      if (!sale) {
+        toast({
+          title: "Erro",
+          description: "Não foi possível encontrar os detalhes da venda.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Buscar o método de pagamento
+      const paymentMethod = paymentMethods.find(m => m.id === transaction.payment_method);
+      const paymentMethodName = paymentMethod ? paymentMethod.name : 'Método não identificado';
+
+      // Calcular o total dos itens
+      const totalItems = sale.items.reduce((total, item) => {
+        return total + (parseFloat(item.price) * (parseInt(item.quantity) || 1));
+      }, 0);
+
+      // Gerar o HTML do recibo
+      const receiptHtml = `
+        <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <div>
+              <h2 style="margin: 0;">MAGNIFIC</h2>
+              <p style="margin: 5px 0; font-size: 14px;">Rua Eduardo Santos Pereira, 2221</p>
+              <p style="margin: 5px 0; font-size: 14px;">Campo Grande MS 79020-170</p>
+            </div>
+            <div style="text-align: right;">
+              <h2 style="margin: 0;">RECIBO DE VENDA</h2>
+              <p style="margin: 5px 0; font-size: 14px;">Nº ${transaction.sale_id}</p>
+              <p style="margin: 5px 0; font-size: 14px;">Data: ${format(new Date(transaction.payment_date || transaction.due_date), 'dd/MM/yyyy', { locale: ptBR })}</p>
+            </div>
+          </div>
+
+          <div style="border: 1px solid #ddd; padding: 10px; margin-bottom: 20px;">
+            <h3 style="margin-top: 0;">CLIENTE</h3>
+            <p style="margin: 5px 0;"><strong>Nome:</strong> ${transaction.client_name}</p>
+          </div>
+
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+            <thead>
+              <tr style="background-color: #f2f2f2;">
+                <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Item</th>
+                <th style="padding: 10px; border: 1px solid #ddd; text-align: center;">Qtd</th>
+                <th style="padding: 10px; border: 1px solid #ddd; text-align: right;">Valor Unit.</th>
+                <th style="padding: 10px; border: 1px solid #ddd; text-align: right;">Subtotal</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${sale.items.map(item => `
+                <tr>
+                  <td style="padding: 10px; border: 1px solid #ddd;">${item.name}</td>
+                  <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">${item.quantity || 1}</td>
+                  <td style="padding: 10px; border: 1px solid #ddd; text-align: right;">R$ ${parseFloat(item.price).toFixed(2)}</td>
+                  <td style="padding: 10px; border: 1px solid #ddd; text-align: right;">R$ ${(parseFloat(item.price) * (parseInt(item.quantity) || 1)).toFixed(2)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+            <tfoot>
+              <tr style="background-color: #f9f9f9;">
+                <td colspan="3" style="padding: 10px; border: 1px solid #ddd; text-align: right;"><strong>TOTAL</strong></td>
+                <td style="padding: 10px; border: 1px solid #ddd; text-align: right;"><strong>R$ ${parseFloat(transaction.amount).toFixed(2)}</strong></td>
+              </tr>
+            </tfoot>
+          </table>
+
+          <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
+            <div style="width: 48%;">
+              <h3 style="margin-top: 0;">FORMA DE PAGAMENTO</h3>
+              <p><strong>${paymentMethodName}</strong></p>
+              ${transaction.is_installment ? `<p>Parcelado em ${transaction.installments}x</p>` : ''}
+              <p><strong>Status:</strong> ${formatStatus(transaction.status)}</p>
+            </div>
+            <div style="width: 48%;">
+              <h3 style="margin-top: 0;">INFORMAÇÕES ADICIONAIS</h3>
+              <p><strong>Vendedor:</strong> ${transaction.employee_id || 'Não informado'}</p>
+              <p><strong>Observações:</strong> ${transaction.notes || 'Nenhuma observação'}</p>
+            </div>
+          </div>
+
+          <div style="margin-top: 40px; text-align: center; border-top: 1px solid #ddd; padding-top: 20px;">
+            <p>Este documento não possui valor fiscal</p>
+            <p>MAGNIFIC - Todos os direitos reservados</p>
+          </div>
+        </div>
+      `;
+
+      setReceiptHtml(receiptHtml);
+    } catch (error) {
+      console.error("[AccountsReceivable] Erro ao gerar recibo:", error);
+      toast({
+        title: "Erro",
+        description: "Ocorreu um erro ao gerar o recibo. Tente novamente.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleDownloadReceipt = () => {
+    if (!receiptRef.current) return;
+
+    const opt = {
+      margin: 1,
+      filename: `recibo_${selectedTransaction.id}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2 },
+      jsPDF: { unit: 'in', format: 'A4', orientation: 'portrait' }
+    };
+
+    html2pdf().from(receiptRef.current).set(opt).save();
+  };
+
+  const handlePrintReceipt = () => {
+    if (!receiptRef.current) return;
+
+    const printWindow = window.open('', '_blank', 'width=800,height=600');
+    printWindow.document.write(receiptRef.current.outerHTML);
+    printWindow.print();
+    printWindow.close();
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -431,6 +564,19 @@ export default function AccountsReceivable() {
 
   return (
     <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-3xl font-bold tracking-tight">Contas a Receber</h2>
+        <Button 
+          variant="outline" 
+          onClick={loadData}
+          disabled={isLoading}
+          className="flex items-center gap-2"
+        >
+          <RefreshCw className="h-4 w-4 mr-2" />
+          Atualizar
+        </Button>
+      </div>
+
       {error && (
         <RateLimitHandler error={error} onRetry={loadData}>
           <Card className="bg-yellow-50 border-yellow-200 mb-4">
@@ -443,19 +589,6 @@ export default function AccountsReceivable() {
         </RateLimitHandler>
       )}
 
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Contas a Receber</h1>
-        <Button 
-          variant="outline" 
-          onClick={loadData}
-          disabled={isLoading}
-          className="flex items-center gap-2"
-        >
-          <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-          Atualizar
-        </Button>
-      </div>
-      
       <Card>
         <CardHeader>
           <CardTitle>Filtros</CardTitle>
@@ -606,7 +739,10 @@ export default function AccountsReceivable() {
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-2">
-                        <Button variant="outline" size="sm">
+                        <Button variant="outline" size="sm" onClick={() => {
+                          setSelectedTransaction(transaction);
+                          setShowDetailsDialog(true);
+                        }}>
                           Detalhes
                         </Button>
                         {transaction.status === 'pendente' && (
@@ -627,6 +763,100 @@ export default function AccountsReceivable() {
           </Table>
         </CardContent>
       </Card>
+      
+      {/* Diálogo de Detalhes da Transação */}
+      <Dialog open={showDetailsDialog} onOpenChange={setShowDetailsDialog}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Detalhes da Transação</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {selectedTransaction && (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <h3 className="text-sm font-medium mb-1">Descrição</h3>
+                    <p>{selectedTransaction.formatted_description}</p>
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-medium mb-1">Cliente</h3>
+                    <p>{selectedTransaction.client_name}</p>
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-medium mb-1">Valor</h3>
+                    <p>{formatCurrency(selectedTransaction.amount)}</p>
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-medium mb-1">Status</h3>
+                    <span 
+                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                        ${selectedTransaction.status === 'pago' ? 'bg-green-100 text-green-800' : 
+                          selectedTransaction.status === 'pendente' ? 'bg-yellow-100 text-yellow-800' : 
+                          'bg-red-100 text-red-800'}`}
+                    >
+                      {formatStatus(selectedTransaction.status)}
+                    </span>
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-medium mb-1">Data de Vencimento</h3>
+                    <p>{selectedTransaction.formatted_due_date}</p>
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-medium mb-1">Data de Pagamento</h3>
+                    <p>
+                      {selectedTransaction.payment_date 
+                        ? format(new Date(selectedTransaction.payment_date), "dd/MM/yyyy")
+                        : 'Não pago'}
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="flex justify-end gap-2 mt-4">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => generateReceipt(selectedTransaction)}
+                    disabled={!selectedTransaction.sale_id}
+                  >
+                    <FileText className="h-4 w-4 mr-2" />
+                    Gerar Recibo
+                  </Button>
+                </div>
+                
+                {receiptHtml && (
+                  <div className="mt-6 border rounded-md p-4">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-lg font-semibold">Recibo da Venda</h3>
+                      <div className="flex gap-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={handleDownloadReceipt}
+                        >
+                          <Download className="h-4 w-4 mr-2" />
+                          Download
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={handlePrintReceipt}
+                        >
+                          <Printer className="h-4 w-4 mr-2" />
+                          Imprimir
+                        </Button>
+                      </div>
+                    </div>
+                    <div 
+                      ref={receiptRef}
+                      className="max-h-[60vh] overflow-y-auto"
+                      dangerouslySetInnerHTML={{ __html: receiptHtml }} 
+                    />
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
