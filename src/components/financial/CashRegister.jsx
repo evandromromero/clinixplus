@@ -329,18 +329,20 @@ export default function CashRegister() {
       console.log("[CashRegister] Data de hoje formatada:", today);
       
       // Buscar transações e dados relacionados
-      const [transactionsData, services, salesData, clientsData] = await Promise.all([
+      const [transactionsData, services, salesData, clientsData, paymentMethodsData] = await Promise.all([
         FinancialTransaction.list(),
         Service.list(),
         Sale.list(),
-        Client.list()
+        Client.list(),
+        PaymentMethod.list()
       ]);
       
       console.log("[CashRegister] Dados carregados:", {
         transacoes: transactionsData.length,
         servicos: services.length,
         vendas: salesData.length,
-        clientes: clientsData.length
+        clientes: clientsData.length,
+        metodosPagamento: paymentMethodsData.length
       });
       
       // Mapeamento de vendas por ID para facilitar o acesso
@@ -355,6 +357,12 @@ export default function CashRegister() {
         return acc;
       }, {});
       
+      // Mapeamento de métodos de pagamento por ID para facilitar o acesso
+      const paymentMethodsMap = paymentMethodsData.reduce((acc, method) => {
+        acc[method.id] = method;
+        return acc;
+      }, {});
+      
       // Processar transações
       const processedTransactions = transactionsData.map(t => {
         // Encontrar o serviço relacionado
@@ -363,6 +371,8 @@ export default function CashRegister() {
         const sale = salesMap[t.sale_id];
         // Encontrar o cliente relacionado
         const client = clientsMap[t.client_id];
+        // Encontrar o método de pagamento relacionado
+        const paymentMethod = paymentMethodsMap[t.payment_method];
         
         // Formatar a descrição da transação
         let formattedDescription = t.description;
@@ -410,13 +420,15 @@ export default function CashRegister() {
           description: formattedDescription, // Descrição formatada
           created_at: t.created_at || t.created_date, // Garante que temos a hora
           client_name: client ? client.name : 'Cliente não identificado', // Nome do cliente
-          payment_method: t.payment_method || 'Não especificado' // Forma de pagamento
+          payment_method: t.payment_method || 'Não especificado', // ID do método de pagamento
+          payment_method_name: paymentMethod ? paymentMethod.name : 'Método não identificado' // Nome do método de pagamento
         };
       });
 
       console.log("[CashRegister] Transações processadas:", processedTransactions);
       
       setTransactions(processedTransactions);
+      setPaymentMethods(paymentMethodsData);
       
     } catch (error) {
       console.error("[CashRegister] Erro ao carregar transações:", error);
@@ -1704,11 +1716,7 @@ export default function CashRegister() {
                         {transaction.category.replace(/_/g, ' ')}
                       </TableCell>
                       <TableCell>
-                        {transaction.payment_method === "dinheiro" && "Dinheiro"}
-                        {transaction.payment_method === "cartao_debito" && "Cartão de Débito"}
-                        {transaction.payment_method === "cartao_credito" && "Cartão de Crédito"}
-                        {transaction.payment_method === "pix" && "PIX"}
-                        {transaction.payment_method === "transferencia" && "Transferência"}
+                        {transaction.payment_method_name}
                       </TableCell>
                       <TableCell>
                         {transaction.client_name}
