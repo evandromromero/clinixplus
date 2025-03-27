@@ -24,7 +24,8 @@ import {
   Check,
   Gift,
   Clock,
-  RefreshCw
+  RefreshCw,
+  Printer
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -33,6 +34,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, } from 
 import { createPageUrl } from "@/utils";
 import { AlertTriangle } from "lucide-react";
 import RateLimitHandler from '@/components/RateLimitHandler';
+import html2pdf from 'html2pdf.js';
 
 export default function SalesRegister() {
   const { toast } = useToast();
@@ -57,6 +59,8 @@ export default function SalesRegister() {
   const [salesEmployee, setSalesEmployee] = useState("");
   const [showClientSearch, setShowClientSearch] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [showReceiptDialog, setShowReceiptDialog] = useState(false);
+  const [saleReceipt, setSaleReceipt] = useState(null);
   const [unfinishedSaleId, setUnfinishedSaleId] = useState(null);
   
   const [finalDiscount, setFinalDiscount] = useState(0);
@@ -572,6 +576,28 @@ export default function SalesRegister() {
       setFinalDiscount(0);
       setFinalDiscountType("percentage");
       setShowConfirmDialog(false);
+      
+      // Gerar comprovante de venda
+      const saleReceiptData = {
+        sale_id: createdSale.id,
+        client_name: selectedClient.name,
+        client_cpf: selectedClient.cpf,
+        sale_date: new Date().toISOString(),
+        sale_total: calculateCartTotal(),
+        payment_methods: paymentMethods.map(pm => ({
+          method_name: availablePaymentMethods.find(m => m.id === pm.methodId)?.name || 'Método não selecionado',
+          amount: pm.amount,
+          installments: pm.installments
+        })),
+        items: cartItems.map(item => ({
+          name: item.name,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          subtotal: getSubtotal(item)
+        }))
+      };
+      setSaleReceipt(saleReceiptData);
+      setShowReceiptDialog(true);
       
       toast({
         title: "Sucesso",
@@ -1233,6 +1259,100 @@ export default function SalesRegister() {
             >
               <Check className="mr-2 h-4 w-4" />
               Confirmar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showReceiptDialog} onOpenChange={setShowReceiptDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Comprovante de Venda</DialogTitle>
+          </DialogHeader>
+          
+          <div id="receipt" className="space-y-4 py-4">
+            <div className="text-center mb-4">
+              <h2 className="text-xl font-bold">MAGNIFIC</h2>
+              <p className="text-sm">Rua Eduardo Santos Pereira, 2221</p>
+              <p className="text-sm">Campo Grande MS 79020-170</p>
+              <p className="text-sm mt-2">COMPROVANTE DE VENDA</p>
+              <p className="text-sm">{format(new Date(saleReceipt?.sale_date || new Date()), "dd/MM/yyyy HH:mm", { locale: ptBR })}</p>
+            </div>
+            
+            <div className="space-y-2">
+              <p className="font-medium">Cliente:</p>
+              <p>{saleReceipt?.client_name}</p>
+              <p>CPF: {saleReceipt?.client_cpf}</p>
+            </div>
+            
+            <div className="space-y-2">
+              <p className="font-medium">Itens:</p>
+              <ul className="space-y-1">
+                {saleReceipt?.items.map((item, index) => (
+                  <li key={index} className="flex justify-between">
+                    <span>{item.quantity}x {item.name}</span>
+                    <span>{formatCurrency(item.subtotal)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            
+            <div className="pt-3 border-t flex justify-between font-bold">
+              <span>Total:</span>
+              <span>{formatCurrency(saleReceipt?.sale_total)}</span>
+            </div>
+            
+            <div className="pt-2 space-y-2">
+              <p className="font-medium">Formas de pagamento:</p>
+              <ul className="space-y-1">
+                {saleReceipt?.payment_methods.map((payment, index) => (
+                  <li key={index} className="flex justify-between text-sm">
+                    <span>
+                      {payment.method_name}
+                      {payment.installments > 1 ? ` (${payment.installments}x)` : ''}
+                    </span>
+                    <span>{formatCurrency(payment.amount)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowReceiptDialog(false)}>
+              Fechar
+            </Button>
+            <Button 
+              onClick={() => {
+                // Gerar PDF do comprovante
+                const element = document.getElementById('receipt');
+                const opt = {
+                  margin: 10,
+                  filename: `Comprovante-Venda-${saleReceipt.sale_id}.pdf`,
+                  image: { type: 'jpeg', quality: 0.98 },
+                  html2canvas: { scale: 2 },
+                  jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                };
+                
+                html2pdf().from(element).set(opt).save().then(() => {
+                  toast({
+                    title: "Sucesso",
+                    description: "Comprovante gerado com sucesso!",
+                    variant: "success"
+                  });
+                }).catch(error => {
+                  console.error("Erro ao gerar comprovante:", error);
+                  toast({
+                    title: "Erro",
+                    description: "Erro ao gerar comprovante. Tente novamente.",
+                    variant: "destructive"
+                  });
+                });
+              }}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              <Printer className="mr-2 h-4 w-4" />
+              Imprimir
             </Button>
           </DialogFooter>
         </DialogContent>
