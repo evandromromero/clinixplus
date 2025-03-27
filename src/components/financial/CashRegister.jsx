@@ -239,7 +239,7 @@ export default function CashRegister() {
       } else {
         console.log("[CashRegister] Nenhuma transação de caixa encontrada para hoje");
         setCashIsOpen(false);
-        setInitialAmount(0);
+        // Não zerar o valor inicial aqui para manter o saldo correto
       }
 
     } catch (error) {
@@ -418,7 +418,6 @@ export default function CashRegister() {
           description: "Abertura de Caixa (Simulado)",
           amount: 200,
           payment_method: "dinheiro",
-          status: "pago",
           payment_date: today,
           initial_amount: 200,
           created_date: new Date().toISOString()
@@ -606,6 +605,8 @@ export default function CashRegister() {
     const [initialAmount, setInitialAmount] = useState("0");
     const [notes, setNotes] = useState("");
     const [loading, setLoading] = useState(false);
+    const [selectedDate, setSelectedDate] = useState(new Date());
+    const [showCalendar, setShowCalendar] = useState(false);
     
     // Resetar o estado do diálogo quando ele for fechado
     useEffect(() => {
@@ -615,6 +616,8 @@ export default function CashRegister() {
         setInitialAmount("0");
         setNotes("");
         setLoading(false);
+        setSelectedDate(new Date());
+        setShowCalendar(false);
       }
     }, [open]);
     
@@ -638,8 +641,8 @@ export default function CashRegister() {
         // Fechar o diálogo antes de prosseguir
         onClose();
         
-        // Chamar a função de confirmação
-        await onConfirm(employeeName, numericValue, notes);
+        // Chamar a função de confirmação com a data selecionada
+        await onConfirm(employeeName, numericValue, notes, format(selectedDate, "yyyy-MM-dd"));
       } catch (error) {
         console.error("[OpenCashDialog] Erro ao abrir caixa:", error);
         toast.error("Erro ao abrir o caixa");
@@ -655,7 +658,7 @@ export default function CashRegister() {
           <DialogHeader>
             <DialogTitle>Abrir Caixa</DialogTitle>
             <DialogDescription>
-              Selecione um funcionário responsável e informe o valor inicial em dinheiro.
+              Selecione um funcionário responsável, a data e informe o valor inicial em dinheiro.
             </DialogDescription>
           </DialogHeader>
           
@@ -679,6 +682,34 @@ export default function CashRegister() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="cashDate">Data do Caixa</Label>
+              <div className="relative">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full justify-start text-left font-normal"
+                  onClick={() => setShowCalendar(!showCalendar)}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {format(selectedDate, "dd/MM/yyyy")}
+                </Button>
+                {showCalendar && (
+                  <div className="absolute top-full left-0 z-50 mt-2 bg-white rounded-md shadow-md p-2 border">
+                    <Calendar
+                      mode="single"
+                      selected={selectedDate}
+                      onSelect={(date) => {
+                        setSelectedDate(date || new Date());
+                        setShowCalendar(false);
+                      }}
+                      className="rounded-md border"
+                    />
+                  </div>
+                )}
+              </div>
             </div>
             
             <div className="space-y-2">
@@ -731,13 +762,25 @@ export default function CashRegister() {
     );
   };
 
-  const handleOpenCash = async (employeeName, initialAmount, notes = "") => {
+  const handleOpenCash = async (employeeName, initialAmount, notes = "", cashDate = format(new Date(), "yyyy-MM-dd")) => {
     try {
-      const today = format(new Date(), "yyyy-MM-dd");
-      console.log("[CashRegister] Abrindo caixa para a data:", today);
+      console.log("[CashRegister] Abrindo caixa para a data:", cashDate);
       
-      if (cashIsOpen) {
-        toast.error("O caixa já está aberto!");
+      // Verificar se já existe um caixa aberto para a data específica
+      const cashRegistersForDate = await FinancialTransaction.filter({
+        category: "abertura_caixa",
+        payment_date: cashDate
+      }, true);
+      
+      const closingRegistersForDate = await FinancialTransaction.filter({
+        category: "fechamento_caixa",
+        payment_date: cashDate
+      }, true);
+      
+      const isOpenForDate = cashRegistersForDate.length > 0 && closingRegistersForDate.length === 0;
+      
+      if (isOpenForDate) {
+        toast.error(`O caixa para ${format(parseISO(cashDate), "dd/MM/yyyy")} já está aberto!`);
         setShowOpenCashDialog(false);
         return;
       }
@@ -748,7 +791,7 @@ export default function CashRegister() {
         description: "Abertura de Caixa",
         amount: initialAmount,
         payment_method: "dinheiro",
-        payment_date: today,
+        payment_date: cashDate,
         status: "pago",
         notes: notes,
         opened_by: employeeName
@@ -758,17 +801,76 @@ export default function CashRegister() {
       
       await FinancialTransaction.create(openingTransaction);
       
-      setInitialAmount(initialAmount);
-      setCashIsOpen(true);
+      // Se a data for hoje, atualizar o estado do caixa
+      const today = format(new Date(), "yyyy-MM-dd");
+      if (cashDate === today) {
+        setInitialAmount(initialAmount);
+        setCashIsOpen(true);
+      }
       
       await loadTransactions();
       await loadCashRegisters();
       await checkCashStatus();
       
-      toast.success("Caixa aberto com sucesso!");
+      toast.success(`Caixa aberto com sucesso para ${format(parseISO(cashDate), "dd/MM/yyyy")}!`);
     } catch (error) {
       console.error("[CashRegister] Erro ao abrir o caixa:", error);
       toast.error("Erro ao abrir o caixa. Tente novamente.");
+    }
+  };
+  
+  const handleCloseCash = async (employeeName) => {
+    try {
+      const today = format(new Date(), "yyyy-MM-dd");
+      console.log("[CashRegister] Fechando caixa para a data:", today);
+      
+      if (!cashIsOpen) {
+        toast.error("O caixa não está aberto!");
+        setShowCloseCashDialog(false);
+        return;
+      }
+      
+      // Verificar se há uma transação de abertura para hoje
+      const openingTransaction = await FinancialTransaction.filter({
+        category: "abertura_caixa",
+        payment_date: today
+      }, true);
+      
+      if (openingTransaction.length === 0) {
+        toast.error("Não foi encontrada uma abertura de caixa para hoje!");
+        setShowCloseCashDialog(false);
+        return;
+      }
+      
+      const closingTransaction = {
+        type: "despesa",
+        category: "fechamento_caixa",
+        description: "Fechamento de Caixa",
+        amount: expectedCashAmount,
+        payment_method: "dinheiro",
+        payment_date: today,
+        status: "pago",
+        notes: "",
+        closed_by: employeeName,
+        initial_amount: initialAmount,
+        final_amount: expectedCashAmount
+      };
+      
+      setShowCloseCashDialog(false);
+      
+      await FinancialTransaction.create(closingTransaction);
+      
+      setInitialAmount(0);
+      setCashIsOpen(false);
+      
+      await loadTransactions();
+      await loadCashRegisters();
+      await checkCashStatus();
+      
+      toast.success("Caixa fechado com sucesso!");
+    } catch (error) {
+      console.error("[CashRegister] Erro ao fechar o caixa:", error);
+      toast.error("Erro ao fechar o caixa. Tente novamente.");
     }
   };
 
@@ -925,7 +1027,7 @@ export default function CashRegister() {
 
         <div style="margin-top: 50px; text-align: center;">
           <div style="border-top: 1px solid #000; display: inline-block; padding-top: 10px; min-width: 200px;">
-            (Assinatura)
+            (Assinaturaa)
           </div>
         </div>
 
@@ -948,7 +1050,38 @@ export default function CashRegister() {
       return;
     }
 
-    const html = generateReportHtml(cashRegisters[0], transactions);
+    // Usar a data selecionada ou a data atual
+    const dateToUse = selectedDate || format(new Date(), "yyyy-MM-dd");
+    
+    // Buscar transações para a data selecionada
+    const transactionsForDate = transactions.filter(t => {
+      const transactionDate = t.payment_date.split('T')[0];
+      return transactionDate === dateToUse;
+    });
+    
+    // Buscar registros de abertura/fechamento para a data selecionada
+    const { opening, closing } = getCashRegisterByDate(dateToUse);
+    
+    if (!opening) {
+      toast({
+        title: "Aviso",
+        description: `Não há registro de abertura de caixa para ${format(parseISO(dateToUse), "dd/MM/yyyy")}`,
+        type: "warning"
+      });
+      return;
+    }
+    
+    // Criar um objeto com os dados do caixa para a data selecionada
+    const cashData = {
+      opened_by: opening.opened_by,
+      opened_at: opening.payment_date,
+      closed_at: closing ? closing.payment_date : null,
+      initial_amount: opening.amount,
+      final_amount: closing ? closing.amount : null,
+      difference: closing ? (closing.amount - opening.amount) : 0
+    };
+    
+    const html = generateReportHtml(cashData, transactionsForDate);
     setReportHtml(html);
     setShowReportDialog(true);
   };
@@ -1146,6 +1279,9 @@ export default function CashRegister() {
         return;
       }
       
+      // Definir a data de hoje
+      const today = format(new Date(), "yyyy-MM-dd");
+      
       // Filtrar transações excluídas
       const activeTransactions = transactions.filter(transaction => 
         transaction.status !== "excluido" && transaction.deleted !== true
@@ -1164,11 +1300,6 @@ export default function CashRegister() {
         // Valor inicial do caixa
         const initialAmountValue = parseFloat(lastOpeningTransaction.amount) || 0;
         console.log(`Valor inicial do caixa: R$ ${initialAmountValue.toFixed(2)}`);
-        
-        // Atualizar o valor inicial (apenas se diferente)
-        if (initialAmount !== initialAmountValue) {
-          setInitialAmount(initialAmountValue);
-        }
         
         // Data de abertura do caixa
         const openingDate = lastOpeningTransaction.payment_date.split('T')[0];
@@ -1225,10 +1356,16 @@ export default function CashRegister() {
         }
         
         // Verificar se há transação de fechamento após a abertura
-        const closingTransaction = transactionsAfterOpening.find(t => t.category === "fechamento_caixa");
+        const closingTransaction = transactionsAfterOpening.find(t => 
+          t.category === "fechamento_caixa" && 
+          t.payment_date.split('T')[0] === today
+        );
         
         // Atualizar o status do caixa (apenas se diferente)
-        const newCashStatus = !closingTransaction;
+        // Só considera aberto se a abertura for para hoje e não houver fechamento
+        const isOpeningForToday = openingDate === today;
+        const newCashStatus = isOpeningForToday && !closingTransaction;
+        
         if (cashIsOpen !== newCashStatus) {
           setCashIsOpen(newCashStatus);
         }
@@ -1237,21 +1374,7 @@ export default function CashRegister() {
         if (cashIsOpen) {
           setCashIsOpen(false);
         }
-        if (initialAmount !== 0) {
-          setInitialAmount(0);
-        }
-        if (dailyReceipts !== 0) {
-          setDailyReceipts(0);
-        }
-        if (dailyExpenses !== 0) {
-          setDailyExpenses(0);
-        }
-        if (dailyBalance !== 0) {
-          setDailyBalance(0);
-        }
-        if (expectedCashAmount !== 0) {
-          setExpectedCashAmount(0);
-        }
+        // Não zerar os valores aqui para manter os totais corretos
       }
 
     } catch (error) {
@@ -1529,6 +1652,42 @@ export default function CashRegister() {
               </div>
             </DialogFooter>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showHistoricCashDialog} onOpenChange={setShowHistoricCashDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Caixas Anteriores</DialogTitle>
+            <DialogDescription>
+              Selecione uma data para visualizar o relatório de caixa.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Data</Label>
+              <Calendar
+                mode="single"
+                selected={selectedHistoricDate}
+                onSelect={(date) => setSelectedHistoricDate(date || new Date())}
+                className="rounded-md border w-full"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setShowHistoricCashDialog(false)}
+            >
+              Cancelar
+            </Button>
+            <Button 
+              onClick={() => viewHistoricCash(selectedHistoricDate)}
+              className="bg-[#294380] hover:bg-[#0D0F36]"
+            >
+              Visualizar Relatório
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
