@@ -113,20 +113,7 @@ export default function AccountsReceivable() {
       
       console.log('[AccountsReceivable] Mapa de métodos de pagamento:', paymentMethodsMap);
       
-      // Processa as transações para exibição
-      console.log('[AccountsReceivable] Processando transações para exibição...');
-      
-      // Log de todas as transações antes do filtro
-      console.log('[AccountsReceivable] Todas as transações:', transactionsData.map(t => ({
-        id: t.id,
-        type: t.type,
-        status: t.status,
-        payment_method: t.payment_method,
-        is_installment: t.is_installment,
-        amount: t.amount,
-        sale_id: t.sale_id
-      })));
-      
+      // Processar transações
       const processedTransactions = transactionsData
         .filter(transaction => {
           // Filtra transações a receber:
@@ -181,12 +168,70 @@ export default function AccountsReceivable() {
           };
         });
       
-      // Log após o processamento
-      console.log('[AccountsReceivable] Transações processadas:', processedTransactions.length);
+      // Agrupar transações por sale_id
+      const groupedTransactions = [];
+      const transactionsBySaleId = {};
       
-      setTransactions(processedTransactions);
-      setFilteredTransactions(processedTransactions);
-      console.log('[AccountsReceivable] Dados carregados com sucesso');
+      // Primeiro, agrupar as transações pelo sale_id
+      processedTransactions.forEach(transaction => {
+        if (transaction.sale_id) {
+          if (!transactionsBySaleId[transaction.sale_id]) {
+            transactionsBySaleId[transaction.sale_id] = [];
+          }
+          transactionsBySaleId[transaction.sale_id].push(transaction);
+        } else {
+          // Se não tiver sale_id, adicionar diretamente ao resultado final
+          groupedTransactions.push(transaction);
+        }
+      });
+      
+      // Depois, para cada grupo de transações com o mesmo sale_id, criar uma transação combinada
+      Object.keys(transactionsBySaleId).forEach(saleId => {
+        const saleTransactions = transactionsBySaleId[saleId];
+        
+        if (saleTransactions.length === 1) {
+          // Se só tem uma transação para esta venda, adicionar diretamente
+          groupedTransactions.push(saleTransactions[0]);
+        } else {
+          // Se tem múltiplas transações para a mesma venda, combinar em uma única entrada
+          const firstTransaction = saleTransactions[0];
+          const totalAmount = saleTransactions.reduce((sum, t) => sum + parseFloat(t.amount), 0);
+          
+          // Combinar os métodos de pagamento
+          const paymentMethods = saleTransactions.map(t => {
+            const method = paymentMethodsMap[t.payment_method];
+            return {
+              name: method ? method.name : 'Método não identificado',
+              amount: parseFloat(t.amount)
+            };
+          });
+          
+          // Criar uma transação combinada
+          const combinedTransaction = {
+            ...firstTransaction,
+            id: `${firstTransaction.id}_combined`,
+            amount: totalAmount,
+            formatted_amount: formatCurrency(totalAmount),
+            original_transactions: saleTransactions,
+            payment_methods: paymentMethods,
+            is_combined: true
+          };
+          
+          groupedTransactions.push(combinedTransaction);
+        }
+      });
+      
+      // Ordenar as transações agrupadas
+      const sortedTransactions = [...groupedTransactions].sort((a, b) => {
+        const dateA = a.due_date ? new Date(a.due_date) : new Date(0);
+        const dateB = b.due_date ? new Date(b.due_date) : new Date(0);
+        return dateB - dateA; // Ordenar do mais recente para o mais antigo
+      });
+      
+      console.log('[AccountsReceivable] Transações agrupadas:', sortedTransactions);
+      
+      setTransactions(sortedTransactions);
+      setFilteredTransactions(sortedTransactions);
     } catch (error) {
       console.error('[AccountsReceivable] Erro ao carregar dados:', error);
       setError(error);
@@ -441,9 +486,40 @@ export default function AccountsReceivable() {
         return;
       }
 
-      // Buscar o método de pagamento
-      const paymentMethod = paymentMethods.find(m => m.id === transaction.payment_method);
-      const paymentMethodName = paymentMethod ? paymentMethod.name : 'Método não identificado';
+      // Verificar se é uma transação combinada (com múltiplos métodos de pagamento)
+      let paymentMethodsHtml = '';
+      if (transaction.is_combined && transaction.payment_methods) {
+        // Gerar HTML para a tabela de métodos de pagamento
+        paymentMethodsHtml = `
+          <h3 style="margin-top: 0;">FORMAS DE PAGAMENTO</h3>
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 10px;">
+            <thead>
+              <tr style="background-color: #f2f2f2;">
+                <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Método</th>
+                <th style="padding: 8px; border: 1px solid #ddd; text-align: right;">Valor</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${transaction.payment_methods.map(method => `
+                <tr>
+                  <td style="padding: 8px; border: 1px solid #ddd;">${method.name}</td>
+                  <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">R$ ${method.amount.toFixed(2)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      } else {
+        // Buscar o método de pagamento para transação normal
+        const paymentMethod = paymentMethods.find(m => m.id === transaction.payment_method);
+        const paymentMethodName = paymentMethod ? paymentMethod.name : 'Método não identificado';
+        
+        paymentMethodsHtml = `
+          <h3 style="margin-top: 0;">FORMA DE PAGAMENTO</h3>
+          <p><strong>${paymentMethodName}</strong></p>
+          ${transaction.is_installment ? `<p>Parcelado em ${transaction.installments}x</p>` : ''}
+        `;
+      }
 
       // Calcular o total dos itens
       const totalItems = sale.items.reduce((total, item) => {
@@ -500,9 +576,7 @@ export default function AccountsReceivable() {
 
           <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
             <div style="width: 48%;">
-              <h3 style="margin-top: 0;">FORMA DE PAGAMENTO</h3>
-              <p><strong>${paymentMethodName}</strong></p>
-              ${transaction.is_installment ? `<p>Parcelado em ${transaction.installments}x</p>` : ''}
+              ${paymentMethodsHtml}
               <p><strong>Status:</strong> ${formatStatus(transaction.status)}</p>
             </div>
             <div style="width: 48%;">
@@ -725,7 +799,7 @@ export default function AccountsReceivable() {
                       {transaction.due_date && format(new Date(transaction.due_date), "dd/MM/yyyy")}
                     </TableCell>
                     <TableCell className="text-right">
-                      {formatCurrency(transaction.amount)}
+                      {transaction.formatted_amount}
                     </TableCell>
                     <TableCell>
                       <span 
@@ -809,6 +883,31 @@ export default function AccountsReceivable() {
                         : 'Não pago'}
                     </p>
                   </div>
+                  
+                  {/* Exibir métodos de pagamento para transações combinadas */}
+                  {selectedTransaction.is_combined && selectedTransaction.payment_methods && (
+                    <div className="col-span-2">
+                      <h3 className="text-sm font-medium mb-2">Métodos de Pagamento</h3>
+                      <div className="bg-gray-50 p-3 rounded-md">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b">
+                              <th className="text-left pb-2">Método</th>
+                              <th className="text-right pb-2">Valor</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {selectedTransaction.payment_methods.map((method, index) => (
+                              <tr key={index} className="border-b border-gray-200 last:border-0">
+                                <td className="py-2">{method.name}</td>
+                                <td className="py-2 text-right">{formatCurrency(method.amount)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 
                 <div className="flex justify-end gap-2 mt-4">
