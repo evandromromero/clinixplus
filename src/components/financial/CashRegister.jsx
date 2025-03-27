@@ -31,7 +31,7 @@ import {
   RefreshCcw,
   Trash2
 } from "lucide-react";
-import { FinancialTransaction, User, Client, Employee, Package, ClientPackage, Service } from "@/firebase/entities";
+import { FinancialTransaction, User, Client, Employee, Package, ClientPackage, Service, PaymentMethod } from "@/firebase/entities";
 import { InvokeLLM } from "@/api/integrations";
 import { toast } from "@/components/ui/toast";
 import RateLimitHandler from '@/components/RateLimitHandler';
@@ -56,7 +56,7 @@ export default function CashRegister() {
   const [finalAmount, setFinalAmount] = useState(0);
   const [closingNotes, setClosingNotes] = useState("");
   const [user, setUser] = useState(null);
-
+  const [paymentMethods, setPaymentMethods] = useState([]);
   const [openCashData, setOpenCashData] = useState({
     initial_amount: 0,
     notes: "",
@@ -105,6 +105,7 @@ export default function CashRegister() {
         setIsLoading(true);
         await loadCashRegisters();
         await loadTransactions();
+        await loadPaymentMethods();
         await checkCashStatus();
       } catch (error) {
         console.error("[CashRegister] Erro ao carregar dados iniciais:", error);
@@ -875,33 +876,27 @@ export default function CashRegister() {
   };
 
   const getPaymentMethodTotals = (transactions) => {
-    const totals = {
-      pix: 0,
-      dinheiro: 0,
-      cartao_debito: 0,
-      cartao_credito: 0,
-      link: 0
-    };
+    // Inicializar objeto de totais com base nos métodos de pagamento disponíveis
+    const totals = {};
+    
+    // Adicionar métodos de pagamento do Firebase
+    if (paymentMethods && paymentMethods.length > 0) {
+      paymentMethods.forEach(method => {
+        totals[method.type] = 0;
+      });
+    } else {
+      // Fallback para métodos padrão caso não tenha carregado do Firebase
+      totals.pix = 0;
+      totals.dinheiro = 0;
+      totals.cartao_debito = 0;
+      totals.cartao_credito = 0;
+      totals.link = 0;
+    }
 
+    // Processar transações
     transactions.forEach(t => {
-      if (t.type === 'receita') {
-        switch (t.payment_method) {
-          case 'pix':
-            totals.pix += Number(t.amount);
-            break;
-          case 'dinheiro':
-            totals.dinheiro += Number(t.amount);
-            break;
-          case 'cartao_debito':
-            totals.cartao_debito += Number(t.amount);
-            break;
-          case 'cartao_credito':
-            totals.cartao_credito += Number(t.amount);
-            break;
-          case 'link':
-            totals.link += Number(t.amount);
-            break;
-        }
+      if (t.type === 'receita' && t.payment_method && totals[t.payment_method] !== undefined) {
+        totals[t.payment_method] += Number(t.amount);
       }
     });
 
@@ -931,6 +926,34 @@ export default function CashRegister() {
         return '-';
       }
     };
+    
+    // Função para obter o nome formatado do método de pagamento
+    const getPaymentMethodName = (type) => {
+      if (!paymentMethods || paymentMethods.length === 0) {
+        // Fallback para nomes padrão
+        const defaultNames = {
+          'pix': 'PIX',
+          'dinheiro': 'DINHEIRO',
+          'cartao_debito': 'DÉBITO',
+          'cartao_credito': 'CRÉDITO',
+          'link': 'LINK'
+        };
+        return defaultNames[type] || type.toUpperCase();
+      }
+      
+      const method = paymentMethods.find(m => m.type === type);
+      return method ? method.name.toUpperCase() : type.toUpperCase();
+    };
+    
+    // Gerar cabeçalhos de métodos de pagamento dinamicamente
+    const paymentMethodHeaders = Object.keys(paymentTotals).map(type => 
+      `<th style="padding: 8px; border: 1px solid #ddd;">${getPaymentMethodName(type)}</th>`
+    ).join('');
+    
+    // Gerar células de valores de métodos de pagamento dinamicamente
+    const paymentMethodCells = Object.entries(paymentTotals).map(([type, total]) => 
+      `<td style="padding: 8px; border: 1px solid #ddd; text-align: center;">R$ ${Number(total).toFixed(2)}</td>`
+    ).join('');
     
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px;">
@@ -966,18 +989,10 @@ export default function CashRegister() {
           <h3 style="margin-bottom: 10px;">DETALHAMENTO DE ENTRADAS / TOTAL: R$ ${totalReceitas.toFixed(2)}</h3>
           <table style="width: 100%; border-collapse: collapse; table-layout: fixed;">
             <tr style="background-color: #f0f0f0;">
-              <th style="padding: 8px; border: 1px solid #ddd; width: 20%;">PIX</th>
-              <th style="padding: 8px; border: 1px solid #ddd; width: 20%;">DINHEIRO</th>
-              <th style="padding: 8px; border: 1px solid #ddd; width: 20%;">DÉBITO</th>
-              <th style="padding: 8px; border: 1px solid #ddd; width: 20%;">CRÉDITO</th>
-              <th style="padding: 8px; border: 1px solid #ddd; width: 20%;">LINK</th>
+              ${paymentMethodHeaders}
             </tr>
             <tr>
-              <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">R$ ${paymentTotals.pix.toFixed(2)}</td>
-              <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">R$ ${paymentTotals.dinheiro.toFixed(2)}</td>
-              <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">R$ ${paymentTotals.cartao_debito.toFixed(2)}</td>
-              <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">R$ ${paymentTotals.cartao_credito.toFixed(2)}</td>
-              <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">R$ ${paymentTotals.link.toFixed(2)}</td>
+              ${paymentMethodCells}
             </tr>
           </table>
         </div>
@@ -993,14 +1008,6 @@ export default function CashRegister() {
             <th style="padding: 8px; border: 1px solid #ddd; width: 15%;">FORMA PGTO</th>
           </tr>
           ${transactions.map(t => {
-            const paymentMethodMap = {
-              'pix': 'PIX',
-              'dinheiro': 'DINHEIRO',
-              'cartao_debito': 'DÉBITO',
-              'cartao_credito': 'CRÉDITO',
-              'link': 'LINK'
-            };
-
             const categoryMap = {
               'venda_produto': 'PRODUTO',
               'venda_servico': 'SERVIÇO',
@@ -1019,7 +1026,7 @@ export default function CashRegister() {
                 <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${formatDate(t.payment_date)}</td>
                 <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${formatTime(t.created_at)}</td>
                 <td style="padding: 8px; border: 1px solid #ddd;">${t.client_name || '-'}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${paymentMethodMap[t.payment_method] || t.payment_method || '-'}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${getPaymentMethodName(t.payment_method)}</td>
               </tr>
             `;
           }).join('')}
@@ -1087,6 +1094,54 @@ export default function CashRegister() {
   };
 
   const generatePDFReport = async (cashData, transactions) => {
+    // Função para obter o nome formatado do método de pagamento
+    const getPaymentMethodName = (type) => {
+      if (!paymentMethods || paymentMethods.length === 0) {
+        // Fallback para nomes padrão
+        const defaultNames = {
+          'pix': 'PIX',
+          'dinheiro': 'DINHEIRO',
+          'cartao_debito': 'DÉBITO',
+          'cartao_credito': 'CRÉDITO',
+          'link': 'LINK'
+        };
+        return defaultNames[type] || type.toUpperCase();
+      }
+      
+      const method = paymentMethods.find(m => m.type === type);
+      return method ? method.name.toUpperCase() : type.toUpperCase();
+    };
+    
+    const paymentTotals = getPaymentMethodTotals(transactions);
+    
+    // Gerar cabeçalhos de métodos de pagamento dinamicamente
+    const paymentMethodHeaders = Object.keys(paymentTotals).map(type => 
+      `<th style="padding: 8px; border: 1px solid #ddd;">${getPaymentMethodName(type)}</th>`
+    ).join('');
+    
+    // Gerar células de valores de métodos de pagamento dinamicamente
+    const paymentMethodCells = Object.entries(paymentTotals).map(([type, total]) => 
+      `<td style="padding: 8px; border: 1px solid #ddd; text-align: center;">R$ ${Number(total).toFixed(2)}</td>`
+    ).join('');
+    
+    const formatDate = (dateStr) => {
+      if (!dateStr) return '-';
+      try {
+        return format(parseISO(dateStr), "dd/MM/yyyy");
+      } catch (e) {
+        return '-';
+      }
+    };
+
+    const formatTime = (dateStr) => {
+      if (!dateStr) return '-';
+      try {
+        return format(parseISO(dateStr), "HH:mm");
+      } catch (e) {
+        return '-';
+      }
+    };
+    
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px;">
         <!-- Cabeçalho -->
@@ -1123,17 +1178,11 @@ export default function CashRegister() {
         <div style="margin-bottom: 20px;">
           <h3 style="margin-bottom: 10px;">DETALHAMENTO DE ENTRADAS / TOTAL: R$ ${transactions.reduce((acc, t) => t.type === 'receita' ? acc + Number(t.amount) : acc, 0).toFixed(2)}</h3>
           <table style="width: 100%; border-collapse: collapse; table-layout: fixed;">
-            <tr>
-              <th style="padding: 8px; border: 1px solid #ddd; width: 20%;">PIX</th>
-              <th style="padding: 8px; border: 1px solid #ddd; width: 20%;">DINHEIRO</th>
-              <th style="padding: 8px; border: 1px solid #ddd; width: 20%;">DÉBITO</th>
-              <th style="padding: 8px; border: 1px solid #ddd; width: 20%;">CRÉDITO</th>
-              <th style="padding: 8px; border: 1px solid #ddd; width: 20%;">LINK</th>
+            <tr style="background-color: #f0f0f0;">
+              ${paymentMethodHeaders}
             </tr>
             <tr>
-              ${Object.entries(getPaymentMethodTotals(transactions)).map(([method, total]) => `
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">R$ ${Number(total).toFixed(2)}</td>
-              `).join('')}
+              ${paymentMethodCells}
             </tr>
           </table>
         </div>
@@ -1150,14 +1199,6 @@ export default function CashRegister() {
             <th style="padding: 8px; border: 1px solid #ddd; width: 15%;">FORMA PGTO</th>
           </tr>
           ${transactions.map(t => {
-            const paymentMethodMap = {
-              'pix': 'PIX',
-              'dinheiro': 'DINHEIRO',
-              'cartao_debito': 'DÉBITO',
-              'cartao_credito': 'CRÉDITO',
-              'link': 'LINK'
-            };
-
             const categoryMap = {
               'venda_produto': 'PRODUTO',
               'venda_servico': 'SERVIÇO',
@@ -1176,7 +1217,7 @@ export default function CashRegister() {
                 <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${formatDate(t.payment_date)}</td>
                 <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${formatTime(t.created_at)}</td>
                 <td style="padding: 8px; border: 1px solid #ddd;">${t.client_name || '-'}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${paymentMethodMap[t.payment_method] || t.payment_method || '-'}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${getPaymentMethodName(t.payment_method)}</td>
               </tr>
             `;
           }).join('')}
@@ -1379,6 +1420,27 @@ export default function CashRegister() {
 
     } catch (error) {
       console.error("Erro ao processar transações:", error);
+    }
+  };
+
+  const loadPaymentMethods = async () => {
+    try {
+      console.log("[CashRegister] Carregando métodos de pagamento...");
+      
+      // Importar dinamicamente a entidade PaymentMethod
+      const { PaymentMethod } = await import("@/firebase/entities");
+      
+      // Buscar métodos de pagamento ativos
+      const methods = await PaymentMethod.list();
+      const activeMethods = methods.filter(method => !method.isInactive);
+      
+      console.log(`[CashRegister] ${activeMethods.length} métodos de pagamento carregados`);
+      setPaymentMethods(activeMethods);
+      
+      return activeMethods;
+    } catch (error) {
+      console.error("[CashRegister] Erro ao carregar métodos de pagamento:", error);
+      return [];
     }
   };
 
