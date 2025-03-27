@@ -960,7 +960,7 @@ export default function CashRegister() {
     // Adicionar métodos de pagamento do Firebase
     if (paymentMethods && paymentMethods.length > 0) {
       paymentMethods.forEach(method => {
-        totals[method.type] = 0;
+        totals[method.id] = 0;
       });
     } else {
       // Fallback para métodos padrão caso não tenha carregado do Firebase
@@ -1006,7 +1006,7 @@ export default function CashRegister() {
     };
     
     // Função para obter o nome formatado do método de pagamento
-    const getPaymentMethodName = (type) => {
+    const getPaymentMethodName = (methodId) => {
       if (!paymentMethods || paymentMethods.length === 0) {
         // Fallback para nomes padrão
         const defaultNames = {
@@ -1016,11 +1016,14 @@ export default function CashRegister() {
           'cartao_credito': 'CRÉDITO',
           'link': 'LINK'
         };
-        return defaultNames[type] || type.toUpperCase();
+        return defaultNames[methodId] || methodId;
       }
       
-      const method = paymentMethods.find(m => m.type === type);
-      return method ? method.name.toUpperCase() : type.toUpperCase();
+      // Procurar o método de pagamento pelo ID
+      const method = paymentMethods.find(m => m.id === methodId);
+      
+      // Se encontrar, retornar o nome, senão retornar o ID
+      return method ? method.name.toUpperCase() : methodId;
     };
     
     // Gerar cabeçalhos de métodos de pagamento dinamicamente
@@ -1173,7 +1176,7 @@ export default function CashRegister() {
 
   const generatePDFReport = async (cashData, transactions) => {
     // Função para obter o nome formatado do método de pagamento
-    const getPaymentMethodName = (type) => {
+    const getPaymentMethodName = (methodId) => {
       if (!paymentMethods || paymentMethods.length === 0) {
         // Fallback para nomes padrão
         const defaultNames = {
@@ -1183,11 +1186,14 @@ export default function CashRegister() {
           'cartao_credito': 'CRÉDITO',
           'link': 'LINK'
         };
-        return defaultNames[type] || type.toUpperCase();
+        return defaultNames[methodId] || methodId;
       }
       
-      const method = paymentMethods.find(m => m.type === type);
-      return method ? method.name.toUpperCase() : type.toUpperCase();
+      // Procurar o método de pagamento pelo ID
+      const method = paymentMethods.find(m => m.id === methodId);
+      
+      // Se encontrar, retornar o nome, senão retornar o ID
+      return method ? method.name.toUpperCase() : methodId;
     };
     
     const paymentTotals = getPaymentMethodTotals(transactions);
