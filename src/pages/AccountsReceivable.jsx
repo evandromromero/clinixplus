@@ -16,15 +16,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Search, Filter, ChevronDown, ChevronUp, RefreshCw, FileText, Download, Printer } from "lucide-react";
+import { Search, Filter, ChevronDown, ChevronUp, RefreshCw, FileText, Download, Printer, Plus } from "lucide-react";
 import { FinancialTransaction, Client, PaymentMethod, Sale } from "@/firebase/entities";
 import RateLimitHandler from '@/components/RateLimitHandler';
 import { toast } from "@/components/ui/use-toast";
 import html2pdf from 'html2pdf.js';
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 export default function AccountsReceivable() {
   const [transactions, setTransactions] = useState([]);
@@ -46,6 +50,21 @@ export default function AccountsReceivable() {
   const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [receiptHtml, setReceiptHtml] = useState('');
   const receiptRef = useRef(null);
+
+  // Estado para o diálogo de nova conta a receber
+  const [showNewReceivableDialog, setShowNewReceivableDialog] = useState(false);
+  const [newReceivable, setNewReceivable] = useState({
+    description: '',
+    client_id: 'sem_cliente',
+    amount: '',
+    due_date: new Date(),
+    payment_method: 'sem_metodo',
+    category: 'outros',
+    type: 'receita',
+    status: 'pendente',
+    notes: '',
+    source: 'cliente' // Nova propriedade para indicar a origem do recebimento
+  });
 
   useEffect(() => {
     loadData();
@@ -295,7 +314,7 @@ export default function AccountsReceivable() {
     }
     
     // Filtro de cliente
-    if (clientFilter !== 'all') {
+    if (clientFilter !== 'all' && clientFilter !== 'sem_cliente') {
       filtered = filtered.filter(t => t.client_id === clientFilter);
     }
     
@@ -627,6 +646,68 @@ export default function AccountsReceivable() {
     printWindow.close();
   };
 
+  const handleSaveNewReceivable = async () => {
+    setIsLoading(true);
+
+    try {
+      // Validar campos obrigatórios
+      if (!newReceivable.description) {
+        toast.error("Por favor, informe uma descrição para a conta a receber.");
+        setIsLoading(false);
+        return;
+      }
+
+      if (!newReceivable.amount || parseFloat(newReceivable.amount) <= 0) {
+        toast.error("Por favor, informe um valor válido para a conta a receber.");
+        setIsLoading(false);
+        return;
+      }
+
+      // Preparar os dados para salvar
+      const receivableData = {
+        description: newReceivable.description,
+        amount: parseFloat(newReceivable.amount),
+        type: newReceivable.type,
+        category: newReceivable.category,
+        status: newReceivable.status,
+        payment_method_id: newReceivable.payment_method === "sem_metodo" ? null : newReceivable.payment_method,
+        due_date: format(newReceivable.due_date, "yyyy-MM-dd"),
+        payment_date: newReceivable.status === "pago" ? format(new Date(), "yyyy-MM-dd") : null,
+        client_id: newReceivable.client_id === "sem_cliente" ? null : newReceivable.client_id,
+        notes: newReceivable.notes,
+        source: newReceivable.source
+      };
+
+      // Salvar no Firebase
+      await FinancialTransaction.create(receivableData);
+      
+      toast.success("Conta a receber cadastrada com sucesso!");
+      setShowNewReceivableDialog(false);
+      
+      // Resetar o formulário
+      setNewReceivable({
+        description: '',
+        client_id: 'sem_cliente',
+        amount: '',
+        due_date: new Date(),
+        payment_method: 'sem_metodo',
+        category: 'outros',
+        type: 'receita',
+        status: 'pendente',
+        notes: '',
+        source: 'cliente'
+      });
+
+      // Recarregar os dados
+      loadData();
+    } catch (error) {
+      console.error("Erro ao salvar conta a receber:", error);
+      toast.error("Erro ao salvar conta a receber. Por favor, tente novamente.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -640,15 +721,25 @@ export default function AccountsReceivable() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-3xl font-bold tracking-tight">Contas a Receber</h2>
-        <Button 
-          variant="outline" 
-          onClick={loadData}
-          disabled={isLoading}
-          className="flex items-center gap-2"
-        >
-          <RefreshCw className="h-4 w-4 mr-2" />
-          Atualizar
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={() => setShowNewReceivableDialog(true)}
+            className="flex items-center gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            Nova Conta a Receber
+          </Button>
+          <Button 
+            variant="outline" 
+            onClick={loadData}
+            disabled={isLoading}
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Atualizar
+          </Button>
+        </div>
       </div>
 
       {error && (
@@ -707,7 +798,7 @@ export default function AccountsReceivable() {
                   <SelectValue placeholder="Todos os clientes" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todos os clientes</SelectItem>
+                  <SelectItem value="sem_cliente">Sem cliente</SelectItem>
                   {clients.map(client => (
                     <SelectItem key={client.id} value={client.id}>
                       {client.name}
@@ -953,6 +1044,183 @@ export default function AccountsReceivable() {
                 )}
               </>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Diálogo de Nova Conta a Receber */}
+      <Dialog open={showNewReceivableDialog} onOpenChange={setShowNewReceivableDialog}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Nova Conta a Receber</DialogTitle>
+            <DialogDescription>
+              Cadastre uma nova conta a receber de cliente, fornecedor, funcionário ou outros.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-6 py-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Informações básicas */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium">Informações Básicas</h3>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="description">Descrição</Label>
+                  <Input
+                    id="description"
+                    value={newReceivable.description}
+                    onChange={(e) => setNewReceivable({ ...newReceivable, description: e.target.value })}
+                    placeholder="Descreva a conta a receber"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="amount">Valor</Label>
+                  <Input
+                    id="amount"
+                    value={newReceivable.amount}
+                    onChange={(e) => setNewReceivable({ ...newReceivable, amount: e.target.value })}
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0,00"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="category">Categoria</Label>
+                  <Select value={newReceivable.category} onValueChange={(value) => setNewReceivable({ ...newReceivable, category: value })}>
+                    <SelectTrigger id="category">
+                      <SelectValue placeholder="Selecione uma categoria" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="venda">Venda</SelectItem>
+                      <SelectItem value="serviço">Serviço</SelectItem>
+                      <SelectItem value="comissão">Comissão</SelectItem>
+                      <SelectItem value="reembolso">Reembolso</SelectItem>
+                      <SelectItem value="empréstimo">Empréstimo</SelectItem>
+                      <SelectItem value="outros">Outros</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="source">Origem</Label>
+                  <Select value={newReceivable.source} onValueChange={(value) => setNewReceivable({ ...newReceivable, source: value })}>
+                    <SelectTrigger id="source">
+                      <SelectValue placeholder="Selecione a origem" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cliente">Cliente</SelectItem>
+                      <SelectItem value="fornecedor">Fornecedor</SelectItem>
+                      <SelectItem value="funcionário">Funcionário</SelectItem>
+                      <SelectItem value="outros">Outros</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              
+              {/* Informações de pagamento */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium">Informações de Pagamento</h3>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="client">Cliente</Label>
+                  <Select value={newReceivable.client_id} onValueChange={(value) => setNewReceivable({ ...newReceivable, client_id: value })}>
+                    <SelectTrigger id="client">
+                      <SelectValue placeholder="Selecione um cliente" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="sem_cliente">Sem cliente</SelectItem>
+                      {clients.map(client => (
+                        <SelectItem key={client.id} value={client.id}>
+                          {client.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="payment_method">Método de Pagamento</Label>
+                  <Select value={newReceivable.payment_method} onValueChange={(value) => setNewReceivable({ ...newReceivable, payment_method: value })}>
+                    <SelectTrigger id="payment_method">
+                      <SelectValue placeholder="Selecione um método de pagamento" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="sem_metodo">Sem método de pagamento</SelectItem>
+                      {paymentMethods.map(method => (
+                        <SelectItem key={method.id} value={method.id}>
+                          {method.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="due_date">Data de Vencimento</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className="w-full justify-start text-left font-normal"
+                      >
+                        {newReceivable.due_date ? format(newReceivable.due_date, "dd/MM/yyyy") : "Selecione uma data"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <Calendar
+                        mode="single"
+                        selected={newReceivable.due_date}
+                        onSelect={(date) => setNewReceivable({ ...newReceivable, due_date: date })}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="status">Status</Label>
+                  <Select value={newReceivable.status} onValueChange={(value) => setNewReceivable({ ...newReceivable, status: value })}>
+                    <SelectTrigger id="status">
+                      <SelectValue placeholder="Selecione um status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pendente">Pendente</SelectItem>
+                      <SelectItem value="pago">Pago</SelectItem>
+                      <SelectItem value="cancelado">Cancelado</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+            
+            {/* Observações */}
+            <div className="space-y-2">
+              <Label htmlFor="notes">Observações</Label>
+              <Textarea
+                id="notes"
+                value={newReceivable.notes}
+                onChange={(e) => setNewReceivable({ ...newReceivable, notes: e.target.value })}
+                placeholder="Observações adicionais sobre esta conta a receber"
+                className="min-h-[100px]"
+              />
+            </div>
+            
+            <div className="flex justify-end gap-2">
+              <Button 
+                variant="outline" 
+                onClick={() => setShowNewReceivableDialog(false)}
+              >
+                Cancelar
+              </Button>
+              <Button 
+                onClick={handleSaveNewReceivable}
+                disabled={isLoading}
+              >
+                {isLoading ? "Salvando..." : "Salvar"}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
