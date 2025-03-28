@@ -775,7 +775,8 @@ export default function Reports() {
       setPeakHoursData(peakHoursData);
       
       // Processar dados para relatórios adicionais
-      setTrendsData([]);
+      const trendsData = processTrendsData(filteredSalesByFilters);
+      setTrendsData(trendsData);
       
       // Processar dados de fidelização
       const retentionData = processRetentionData(clients, filteredSalesByFilters, filteredAppointments);
@@ -932,6 +933,76 @@ export default function Reports() {
         rfmScore
       };
     });
+  };
+
+  // Função para processar dados de tendências
+  const processTrendsData = (sales) => {
+    if (!sales || !sales.length) {
+      return [];
+    }
+
+    // Agrupar vendas por mês
+    const salesByMonth = {};
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    
+    // Inicializar os últimos 12 meses
+    for (let i = 0; i < 12; i++) {
+      const month = (currentMonth - i + 12) % 12;
+      const year = currentYear - Math.floor((i - currentMonth) / 12);
+      const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
+      const monthName = new Date(year, month, 1).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
+      
+      salesByMonth[monthKey] = {
+        month: monthName,
+        total: 0,
+        count: 0,
+        projected: i < 0 // Meses futuros são projeções
+      };
+    }
+    
+    // Agrupar vendas por mês
+    sales.forEach(sale => {
+      if (!sale.date) return;
+      
+      const saleDate = new Date(sale.date);
+      const month = saleDate.getMonth();
+      const year = saleDate.getFullYear();
+      const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
+      
+      // Verificar se o mês está nos últimos 12 meses
+      if (salesByMonth[monthKey]) {
+        salesByMonth[monthKey].total += parseFloat(sale.total) || 0;
+        salesByMonth[monthKey].count += 1;
+      }
+    });
+    
+    // Converter para array e ordenar por data
+    const trendsArray = Object.values(salesByMonth).sort((a, b) => {
+      return a.month.localeCompare(b.month);
+    });
+    
+    // Calcular projeções para o mês atual (se ainda não terminou)
+    const currentMonthKey = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
+    const currentMonthData = salesByMonth[currentMonthKey];
+    
+    if (currentMonthData) {
+      const dayOfMonth = now.getDate();
+      const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+      const remainingDays = daysInMonth - dayOfMonth;
+      
+      // Se ainda não chegamos ao final do mês, fazer projeção
+      if (remainingDays > 0) {
+        const dailyAverage = currentMonthData.total / dayOfMonth;
+        const projectedTotal = currentMonthData.total + (dailyAverage * remainingDays);
+        
+        // Adicionar projeção como um ponto separado
+        currentMonthData.projectedTotal = projectedTotal;
+      }
+    }
+    
+    return trendsArray;
   };
 
   return (
