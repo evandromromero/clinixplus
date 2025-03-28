@@ -22,6 +22,61 @@ import RateLimitHandler from '@/components/RateLimitHandler';
 import toast, { Toaster } from 'react-hot-toast';
 
 export default function AccountsPayable() {
+  // Função para ajustar datas para o fuso horário correto
+  const adjustDateForTimezone = (dateString) => {
+    // Se a data já estiver no formato yyyy-MM-dd, retorná-la diretamente
+    if (dateString && dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      return dateString;
+    }
+    
+    // Criar uma data a partir da string e extrair os componentes
+    const date = new Date(dateString);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    
+    // Retornar a data no formato yyyy-MM-dd
+    return `${year}-${month}-${day}`;
+  };
+
+  // Função para formatar a data para exibição, preservando o dia correto
+  const formatDateForDisplay = (dateString) => {
+    if (!dateString) return "Sem data";
+    
+    // Extrair os componentes da data diretamente da string (formato yyyy-MM-dd)
+    const [year, month, day] = dateString.split('-');
+    
+    // Retornar a data formatada sem criar um objeto Date
+    return `${day}/${month}/${year}`;
+  };
+
+  // Função para formatar o mês para exibição
+  const formatMonthForDisplay = (monthString) => {
+    if (monthString === "sem-data") return "Sem data de vencimento";
+    
+    // Extrair o ano e o mês da string (formato yyyy-MM)
+    const [year, month] = monthString.split('-');
+    
+    // Mapear o número do mês para o nome em português
+    const monthNames = {
+      '01': 'janeiro',
+      '02': 'fevereiro',
+      '03': 'março',
+      '04': 'abril',
+      '05': 'maio',
+      '06': 'junho',
+      '07': 'julho',
+      '08': 'agosto',
+      '09': 'setembro',
+      '10': 'outubro',
+      '11': 'novembro',
+      '12': 'dezembro'
+    };
+    
+    // Retornar o mês formatado
+    return `${monthNames[month]} de ${year}`;
+  };
+
   const [transactions, setTransactions] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [showNewTransactionDialog, setShowNewTransactionDialog] = useState(false);
@@ -29,7 +84,7 @@ export default function AccountsPayable() {
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [paymentDetails, setPaymentDetails] = useState({
-    payment_date: format(new Date(), "yyyy-MM-dd"),
+    payment_date: adjustDateForTimezone(format(new Date(), "yyyy-MM-dd")),
     payment_method: "dinheiro",
     interest: "0",
     observations: ""
@@ -48,7 +103,7 @@ export default function AccountsPayable() {
     amount: "",
     payment_method: "transferencia",
     status: "pendente",
-    due_date: format(new Date(), "yyyy-MM-dd"),
+    due_date: adjustDateForTimezone(format(new Date(), "yyyy-MM-dd")),
     payment_date: "",
     supplier_id: "",
     is_recurring: false,
@@ -65,7 +120,12 @@ export default function AccountsPayable() {
   const loadData = async () => {
     try {
       const transactionsData = await FinancialTransaction.list();
-      const expensesData = transactionsData.filter(t => t.type === "despesa");
+      // Filtrar apenas despesas e excluir transações de abertura/fechamento de caixa
+      const expensesData = transactionsData.filter(t => 
+        t.type === "despesa" && 
+        t.category !== "fechamento_caixa" && 
+        t.category !== "abertura_caixa"
+      );
       setTransactions(expensesData);
 
       const suppliersData = await Supplier.list();
@@ -76,8 +136,10 @@ export default function AccountsPayable() {
   };
 
   const createNextRecurrence = async (transaction) => {
-    const currentDate = new Date(transaction.due_date);
+    const currentDate = new Date(adjustDateForTimezone(transaction.due_date));
     const dayOfMonth = currentDate.getDate();
+    console.log("Criando próxima recorrência a partir da data:", transaction.due_date);
+    console.log("Data ajustada para cálculo:", format(currentDate, "yyyy-MM-dd"));
 
     switch (transaction.recurrence_type) {
       case "monthly": {
@@ -105,18 +167,23 @@ export default function AccountsPayable() {
       }
     }
 
-    if (transaction.recurrence_end_date && currentDate > new Date(transaction.recurrence_end_date)) {
+    if (transaction.recurrence_end_date && currentDate > new Date(adjustDateForTimezone(transaction.recurrence_end_date))) {
+      console.log("Data da próxima recorrência excede a data final. Recorrência não será criada.");
       return;
     }
 
+    const nextDueDate = adjustDateForTimezone(format(currentDate, "yyyy-MM-dd"));
+    console.log("Data da próxima recorrência:", nextDueDate);
+    
     const nextTransaction = {
       ...transaction,
-      due_date: format(currentDate, "yyyy-MM-dd"),
+      due_date: nextDueDate,
       status: "pendente",
       payment_date: null,
       parent_transaction_id: transaction.id
     };
 
+    delete nextTransaction.id;
     await FinancialTransaction.create(nextTransaction);
   };
 
@@ -132,9 +199,9 @@ export default function AccountsPayable() {
       for (const transaction of autoRecurringTransactions) {
         const lastRecurrence = allTransactions
           .filter(t => t.parent_transaction_id === transaction.id)
-          .sort((a, b) => new Date(b.due_date) - new Date(a.due_date))[0];
+          .sort((a, b) => new Date(adjustDateForTimezone(b.due_date)) - new Date(adjustDateForTimezone(a.due_date)))[0];
 
-        const lastDueDate = lastRecurrence ? new Date(lastRecurrence.due_date) : new Date(transaction.due_date);
+        const lastDueDate = lastRecurrence ? new Date(adjustDateForTimezone(lastRecurrence.due_date)) : new Date(adjustDateForTimezone(transaction.due_date));
         const today = new Date();
         const monthsAhead = 2;
 
@@ -153,12 +220,18 @@ export default function AccountsPayable() {
 
   const handleCreateTransaction = async () => {
     try {
+      // Ajustar as datas para evitar problemas de fuso horário
+      const adjustedDueDate = adjustDateForTimezone(newTransaction.due_date);
+      const adjustedPaymentDate = newTransaction.payment_date ? adjustDateForTimezone(newTransaction.payment_date) : null;
+      const adjustedRecurrenceEndDate = newTransaction.recurrence_end_date ? adjustDateForTimezone(newTransaction.recurrence_end_date) : null;
+      
       const mainTransaction = { 
         ...newTransaction,
+        due_date: adjustedDueDate,
+        payment_date: adjustedPaymentDate,
+        recurrence_end_date: adjustedRecurrenceEndDate,
         amount: parseFloat(newTransaction.amount) || 0,
         recurrence_count: parseInt(newTransaction.recurrence_count),
-        payment_date: newTransaction.payment_date || null,
-        recurrence_end_date: newTransaction.recurrence_end_date || null,
         is_auto_recurring: newTransaction.is_recurring && 
                          newTransaction.recurrence_type !== "none" && 
                          (!newTransaction.recurrence_count || newTransaction.recurrence_count === "0")
@@ -167,6 +240,7 @@ export default function AccountsPayable() {
       delete mainTransaction.recurrence_count;
       delete mainTransaction.recurrence_end_date;
       
+      console.log("Criando transação com data de vencimento:", adjustedDueDate);
       const createdTransaction = await FinancialTransaction.create(mainTransaction);
 
       if (newTransaction.is_recurring && 
@@ -174,7 +248,7 @@ export default function AccountsPayable() {
           newTransaction.recurrence_count && 
           newTransaction.recurrence_count !== "0") {
         const transactions = [];
-        const firstDueDate = new Date(newTransaction.due_date);
+        const firstDueDate = new Date(adjustedDueDate);
         const dayOfMonth = firstDueDate.getDate();
         let currentDate = new Date(firstDueDate);
         let count = parseInt(newTransaction.recurrence_count);
@@ -206,14 +280,17 @@ export default function AccountsPayable() {
             }
           }
 
-          if (newTransaction.recurrence_end_date && 
-              currentDate > new Date(newTransaction.recurrence_end_date)) {
+          if (adjustedRecurrenceEndDate && 
+              currentDate > new Date(adjustedRecurrenceEndDate)) {
             break;
           }
 
+          const nextDueDate = adjustDateForTimezone(format(currentDate, "yyyy-MM-dd"));
+          console.log("Criando parcela com data de vencimento:", nextDueDate);
+          
           transactions.push({
             ...mainTransaction,
-            due_date: format(currentDate, "yyyy-MM-dd"),
+            due_date: nextDueDate,
             parent_transaction_id: createdTransaction.id
           });
 
@@ -253,21 +330,31 @@ export default function AccountsPayable() {
         is_auto_recurring: false
       });
     } catch (error) {
-      console.error("Error creating transaction:", error);
-      toast.error("Erro ao criar despesa");
+      console.error("Erro ao criar transação:", error);
+      toast.error("Erro ao criar despesa. Verifique os dados e tente novamente.");
     }
   };
 
   const handleStatusChange = async (transaction, newStatus) => {
     try {
-      await FinancialTransaction.update(transaction.id, { 
-        ...transaction, 
+      const updatedTransaction = {
+        ...transaction,
         status: newStatus,
-        payment_date: newStatus === 'pago' ? format(new Date(), "yyyy-MM-dd") : null
-      });
-      loadData();
+        payment_date: newStatus === 'pago' ? adjustDateForTimezone(format(new Date(), "yyyy-MM-dd")) : null
+      };
+      
+      await FinancialTransaction.update(transaction.id, updatedTransaction);
+      
+      // Se for uma transação recorrente automática e foi marcada como paga, criar a próxima
+      if (newStatus === 'pago' && transaction.is_auto_recurring) {
+        await createNextRecurrence(transaction);
+      }
+      
+      await loadData();
+      toast.success(`Status alterado para ${newStatus}`);
     } catch (error) {
-      console.error("Error updating transaction:", error);
+      console.error("Erro ao alterar status:", error);
+      toast.error("Erro ao alterar status");
     }
   };
 
@@ -296,7 +383,7 @@ export default function AccountsPayable() {
       await FinancialTransaction.update(selectedTransaction.id, {
         ...selectedTransaction,
         status: "pago",
-        payment_date: paymentDetails.payment_date,
+        payment_date: adjustDateForTimezone(paymentDetails.payment_date),
         payment_method: paymentDetails.payment_method,
         paid_amount: totalAmount,
         interest_amount: interest,
@@ -350,7 +437,16 @@ export default function AccountsPayable() {
   };
 
   const filterByDate = (transaction) => {
-    const transactionDate = new Date(transaction.due_date);
+    // Se dateFilter for "all", retornar true imediatamente
+    if (dateFilter === "all") return true;
+    
+    // Verificar se due_date existe
+    if (!transaction.due_date) {
+      console.warn("Transação sem data de vencimento em filterByDate:", transaction);
+      return false; // Transações sem data não passam pelo filtro de data
+    }
+    
+    const transactionDate = new Date(adjustDateForTimezone(transaction.due_date));
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -373,8 +469,8 @@ export default function AccountsPayable() {
 
       case "custom": {
         if (!customDateRange.startDate || !customDateRange.endDate) return true;
-        const start = new Date(customDateRange.startDate);
-        const end = new Date(customDateRange.endDate);
+        const start = new Date(adjustDateForTimezone(customDateRange.startDate));
+        const end = new Date(adjustDateForTimezone(customDateRange.endDate));
         return transactionDate >= start && transactionDate <= end;
       }
 
@@ -395,21 +491,10 @@ export default function AccountsPayable() {
     return matchesSearch && matchesStatus && matchesDate;
   });
 
-  const groupedTransactions = filteredTransactions.reduce((acc, transaction) => {
-    const month = transaction.due_date.substring(0, 7); 
-    if (!acc[month]) acc[month] = [];
-    acc[month].push(transaction);
-    return acc;
-  }, {});
-
-  const sortedMonths = Object.keys(groupedTransactions).sort((a, b) => {
-    return new Date(a) - new Date(b);
-  });
-
   const getTotalPending = () => {
     return filteredTransactions
       .filter(t => t.status === "pendente")
-      .reduce((sum, t) => sum + t.amount, 0);
+      .reduce((sum, t) => sum + (t.amount || 0), 0);
   };
 
   const getDueThisWeek = () => {
@@ -418,10 +503,68 @@ export default function AccountsPayable() {
     
     return filteredTransactions
       .filter(t => {
-        const dueDate = new Date(t.due_date);
+        // Verificar se a transação tem data de vencimento
+        if (!t.due_date) return false;
+        
+        const dueDate = new Date(adjustDateForTimezone(t.due_date));
         return t.status === "pendente" && dueDate >= today && dueDate <= nextWeek;
       })
-      .reduce((sum, t) => sum + t.amount, 0);
+      .reduce((sum, t) => sum + (t.amount || 0), 0);
+  };
+
+  const groupedTransactions = filteredTransactions.reduce((acc, transaction) => {
+    // Verificar se due_date existe antes de usar substring
+    if (!transaction.due_date) {
+      console.warn("Transação sem data de vencimento:", transaction);
+      // Agrupar em "Sem data"
+      const month = "sem-data";
+      if (!acc[month]) acc[month] = [];
+      acc[month].push(transaction);
+      return acc;
+    }
+    
+    const month = adjustDateForTimezone(transaction.due_date).substring(0, 7); 
+    if (!acc[month]) acc[month] = [];
+    acc[month].push(transaction);
+    return acc;
+  }, {});
+
+  const sortedMonths = Object.keys(groupedTransactions).sort((a, b) => {
+    // Caso especial para "sem-data"
+    if (a === "sem-data") return 1; // "sem-data" fica no final
+    if (b === "sem-data") return -1; // "sem-data" fica no final
+    
+    // Criar datas válidas adicionando o dia (01)
+    try {
+      // Verificar se a e b são strings de data válidas (formato YYYY-MM)
+      if (a.match(/^\d{4}-\d{2}$/) && b.match(/^\d{4}-\d{2}$/)) {
+        return new Date(a + "-01") - new Date(b + "-01");
+      }
+      // Caso não sejam strings de data válidas, ordenar alfabeticamente
+      return a.localeCompare(b);
+    } catch (error) {
+      console.warn("Erro ao ordenar meses:", error, a, b);
+      return 0; // Manter a ordem original em caso de erro
+    }
+  });
+
+  const handleResetTransaction = () => {
+    setNewTransaction({
+      type: "despesa",
+      category: "compra_produto",
+      description: "",
+      amount: "",
+      payment_method: "transferencia",
+      status: "pendente",
+      due_date: adjustDateForTimezone(format(new Date(), "yyyy-MM-dd")),
+      payment_date: "",
+      supplier_id: "",
+      is_recurring: false,
+      recurrence_type: "none",
+      recurrence_count: "0",
+      recurrence_end_date: "",
+      is_auto_recurring: false
+    });
   };
 
   return (
@@ -570,7 +713,7 @@ export default function AccountsPayable() {
               <React.Fragment key={month}>
                 <TableRow className="bg-[#B9F1D6]/20">
                   <TableCell colSpan={6} className="font-medium py-2">
-                    {format(new Date(month), "MMMM 'de' yyyy", { locale: ptBR })}
+                    {formatMonthForDisplay(month)}
                   </TableCell>
                 </TableRow>
                 {groupedTransactions[month].map(transaction => {
@@ -584,10 +727,14 @@ export default function AccountsPayable() {
                       </TableCell>
                       <TableCell>{supplier?.name || '-'}</TableCell>
                       <TableCell>
-                        {format(new Date(transaction.due_date), "dd/MM/yyyy")}
+                        {transaction.due_date 
+                          ? formatDateForDisplay(transaction.due_date) 
+                          : "Sem data"}
                       </TableCell>
                       <TableCell className="font-medium">
-                        R$ {transaction.amount.toFixed(2)}
+                        R$ {transaction.amount !== undefined && transaction.amount !== null
+                          ? Number(transaction.amount).toFixed(2)
+                          : "0.00"}
                       </TableCell>
                       <TableCell>
                         <span
@@ -722,7 +869,12 @@ export default function AccountsPayable() {
                 <Input
                   type="date"
                   value={newTransaction.due_date}
-                  onChange={(e) => setNewTransaction({...newTransaction, due_date: e.target.value})}
+                  onChange={(e) => {
+                    const adjustedDate = adjustDateForTimezone(e.target.value);
+                    console.log("Data selecionada:", e.target.value);
+                    console.log("Data ajustada:", adjustedDate);
+                    setNewTransaction({...newTransaction, due_date: adjustedDate});
+                  }}
                 />
               </div>
             </div>
@@ -803,7 +955,10 @@ export default function AccountsPayable() {
                   <Input
                     type="date"
                     value={newTransaction.recurrence_end_date}
-                    onChange={(e) => setNewTransaction({...newTransaction, recurrence_end_date: e.target.value})}
+                    onChange={(e) => {
+                      const adjustedDate = e.target.value ? adjustDateForTimezone(e.target.value) : "";
+                      setNewTransaction({...newTransaction, recurrence_end_date: adjustedDate});
+                    }}
                   />
                 </div>
 
@@ -811,16 +966,19 @@ export default function AccountsPayable() {
                   <Label>Recorrência Automática</Label>
                   <Select
                     value={newTransaction.is_auto_recurring}
-                    onValueChange={(value) => setNewTransaction({...newTransaction, is_auto_recurring: value})}
+                    onValueChange={(value) => setNewTransaction({...newTransaction, is_auto_recurring: value === "true"})}
                   >
                     <SelectTrigger>
-                      <SelectValue />
+                      <SelectValue placeholder="Selecione uma opção" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value={false}>Não</SelectItem>
-                      <SelectItem value={true}>Sim</SelectItem>
+                      <SelectItem value="true">Sim</SelectItem>
+                      <SelectItem value="false">Não</SelectItem>
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-gray-500">
+                    Se ativado, novas parcelas serão geradas automaticamente quando a parcela atual for paga.
+                  </p>
                 </div>
               </div>
             )}
@@ -885,14 +1043,16 @@ export default function AccountsPayable() {
                 <div>
                   <Label className="text-sm text-gray-500">Data de Vencimento</Label>
                   <div className="font-medium">
-                    {format(new Date(selectedTransaction.due_date), "dd/MM/yyyy")}
+                    {selectedTransaction.due_date 
+                      ? formatDateForDisplay(selectedTransaction.due_date)
+                      : '-'}
                   </div>
                 </div>
                 <div>
                   <Label className="text-sm text-gray-500">Data de Pagamento</Label>
                   <div className="font-medium">
                     {selectedTransaction.payment_date 
-                      ? format(new Date(selectedTransaction.payment_date), "dd/MM/yyyy")
+                      ? formatDateForDisplay(selectedTransaction.payment_date)
                       : '-'}
                   </div>
                 </div>
@@ -922,7 +1082,7 @@ export default function AccountsPayable() {
                       <p className="text-sm text-blue-600 mt-0.5">
                         Esta é uma despesa recorrente que gera novas parcelas automaticamente.
                         {selectedTransaction.recurrence_end_date && (
-                          <> Recorrências serão geradas até {format(new Date(selectedTransaction.recurrence_end_date), "dd/MM/yyyy")}.</>
+                          <> Recorrências serão geradas até {formatDateForDisplay(selectedTransaction.recurrence_end_date)}.</>
                         )}
                       </p>
                     </div>
@@ -1005,14 +1165,16 @@ export default function AccountsPayable() {
                     id="payment_date"
                     type="date"
                     value={paymentDetails.payment_date}
-                    onChange={(e) => setPaymentDetails({
-                      ...paymentDetails,
-                      payment_date: e.target.value
-                    })}
+                    onChange={(e) => {
+                      const adjustedDate = adjustDateForTimezone(e.target.value);
+                      console.log("Data de pagamento selecionada:", e.target.value);
+                      console.log("Data de pagamento ajustada:", adjustedDate);
+                      setPaymentDetails({...paymentDetails, payment_date: adjustedDate});
+                    }}
                   />
                 </div>
                 <div>
-                  <Label htmlFor="payment_method">Forma de Pagamento</Label>
+                  <Label htmlFor="payment_method">Método de Pagamento</Label>
                   <Select
                     value={paymentDetails.payment_method}
                     onValueChange={(value) => setPaymentDetails({
