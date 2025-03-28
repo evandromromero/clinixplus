@@ -568,7 +568,7 @@ export default function Reports() {
     // Processar dados de horários de pico
     const hourCounts = {};
     const weekdayCounts = {};
-    const weekdayNames = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+    const weekdayNames = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sábado'];
     
     appointments.forEach(app => {
       if (!app.date) return;
@@ -1126,7 +1126,7 @@ export default function Reports() {
                   </p>
                   <p className="text-sm text-emerald-600 mt-1 flex items-center">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                     </svg>
                     Período selecionado
                   </p>
@@ -1148,7 +1148,7 @@ export default function Reports() {
                   </p>
                   <p className="text-sm text-amber-600 mt-1 flex items-center">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a9 9 0 00-7 7h14a9 9 0 00-7-7z" />
                     </svg>
                     Período selecionado
                   </p>
@@ -1160,7 +1160,7 @@ export default function Reports() {
               <CardHeader className="bg-gradient-to-r from-blue-50 to-blue-100 pb-2 border-b border-blue-200">
                 <CardTitle className="text-lg font-medium text-blue-800 flex items-center">
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
                   </svg>
                   Vendas no Período
                 </CardTitle>
@@ -1244,10 +1244,10 @@ export default function Reports() {
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Card className="border-gray-200 shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300">
-                <CardHeader className="bg-gradient-to-r from-pink-50 to-pink-100 pb-2 border-b border-pink-200">
-                  <CardTitle className="text-lg font-medium text-pink-800 flex items-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-pink-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+                <CardHeader className="bg-gradient-to-r from-indigo-50 to-indigo-100 pb-2 border-b border-indigo-200">
+                  <CardTitle className="text-lg font-medium text-indigo-800 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
                     </svg>
                     Distribuição por Tipo de Venda
                   </CardTitle>
@@ -1286,10 +1286,10 @@ export default function Reports() {
               </Card>
               
               <Card className="border-gray-200 shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300">
-                <CardHeader className="bg-gradient-to-r from-indigo-50 to-indigo-100 pb-2 border-b border-indigo-200">
-                  <CardTitle className="text-lg font-medium text-indigo-800 flex items-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                <CardHeader className="bg-gradient-to-r from-blue-50 to-blue-100 pb-2 border-b border-blue-200">
+                  <CardTitle className="text-lg font-medium text-blue-800 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                     </svg>
                     Evolução de Vendas
                   </CardTitle>
@@ -1345,7 +1345,7 @@ export default function Reports() {
                 <CardHeader className="pb-2 bg-gradient-to-r from-indigo-100 to-indigo-200 rounded-t-lg">
                   <CardTitle className="text-lg font-medium text-indigo-800 flex items-center">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     Total de Vendas
                   </CardTitle>
@@ -1367,7 +1367,7 @@ export default function Reports() {
                 <CardHeader className="pb-2 bg-gradient-to-r from-purple-100 to-purple-200 rounded-t-lg">
                   <CardTitle className="text-lg font-medium text-purple-800 flex items-center">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                     </svg>
                     Ticket Médio
                   </CardTitle>
@@ -1599,12 +1599,7 @@ export default function Reports() {
                         name="Vendas"
                       />
                       {trendsData.findIndex(item => item.projected) >= 0 && (
-                        <ReferenceLine 
-                          x={trendsData[trendsData.findIndex(item => item.projected)].month} 
-                          stroke="#ef4444" 
-                          strokeDasharray="3 3" 
-                          label={{ value: 'Projeção', position: 'insideTopRight', fill: '#ef4444' }} 
-                        />
+                        <ReferenceLine y={0} stroke="#6b7280" />
                       )}
                     </AreaChart>
                   </ResponsiveContainer>
@@ -1651,7 +1646,7 @@ export default function Reports() {
                 <CardHeader className="pb-2 bg-gradient-to-r from-blue-100 to-blue-200 rounded-t-lg">
                   <CardTitle className="text-lg font-medium text-blue-800 flex items-center">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674z" />
                     </svg>
                     Clientes VIP
                   </CardTitle>
@@ -1773,23 +1768,33 @@ export default function Reports() {
                             return (
                               <div className="bg-white p-3 border rounded shadow-lg text-sm">
                                 <p className="font-semibold text-gray-900 border-b pb-1 mb-1">{data.name}</p>
-                                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-gray-700">
-                                  <p>Última visita:</p>
-                                  <p className="font-medium">{data.daysSinceLast} dias atrás</p>
-                                  <p>Visitas:</p>
-                                  <p className="font-medium">{data.appointmentCount + (data.purchaseCount || 0)}</p>
-                                  <p>Total gasto:</p>
-                                  <p className="font-medium">{formatCurrency(data.totalSpent)}</p>
-                                  <p>Status:</p>
-                                  <p className="font-medium flex items-center">
-                                    <span className={`w-2 h-2 rounded-full mr-1`} style={{backgroundColor: statusColor}}></span>
-                                    {data.recencyCategory === 'recente' ? 'Recente' : 
-                                     data.recencyCategory === 'ativo' ? 'Ativo' : 
-                                     data.recencyCategory === 'em risco' ? 'Em risco' : 'Inativo'}
-                                  </p>
-                                  <p>Pontuação RFM:</p>
-                                  <p className="font-medium">{data.rfmScore ? 
-                                    `R${data.rfmScore.r} F${data.rfmScore.f} M${data.rfmScore.m}` : 'N/A'}</p>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  <div>
+                                    <p>Última visita:</p>
+                                    <p className="font-medium">{data.daysSinceLast} dias atrás</p>
+                                  </div>
+                                  <div>
+                                    <p>Visitas:</p>
+                                    <p className="font-medium">{data.appointmentCount + (data.purchaseCount || 0)}</p>
+                                  </div>
+                                  <div>
+                                    <p>Total gasto:</p>
+                                    <p className="font-medium">{formatCurrency(data.totalSpent)}</p>
+                                  </div>
+                                  <div>
+                                    <p>Status:</p>
+                                    <p className="font-medium flex items-center">
+                                      <span className={`w-2 h-2 rounded-full mr-1`} style={{backgroundColor: statusColor}}></span>
+                                      {data.recencyCategory === 'recente' ? 'Recente' : 
+                                       data.recencyCategory === 'ativo' ? 'Ativo' : 
+                                       data.recencyCategory === 'em risco' ? 'Em risco' : 'Inativo'}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p>Pontuação RFM:</p>
+                                    <p className="font-medium">{data.rfmScore ? 
+                                      `R${data.rfmScore.r} F${data.rfmScore.f} M${data.rfmScore.m}` : 'N/A'}</p>
+                                  </div>
                                 </div>
                               </div>
                             );
@@ -1802,70 +1807,225 @@ export default function Reports() {
                         data={retentionData} 
                         fill="#8884d8"
                       >
-                        {retentionData.map((entry, index) => {
-                          let color = '#10b981'; // recente (verde)
-                          if (entry.recencyCategory === 'em risco') color = '#f59e0b'; // em risco (âmbar)
-                          else if (entry.recencyCategory === 'inativo') color = '#ef4444'; // inativo (vermelho)
-                          else if (entry.recencyCategory === 'ativo') color = '#3b82f6'; // ativo (azul)
-                          
-                          return <Cell key={`cell-${index}`} fill={color} />
-                        })}
+                        {retentionData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.recencyCategory === 'recente' ? '#10b981' : 
+                            entry.recencyCategory === 'ativo' ? '#3b82f6' : 
+                            entry.recencyCategory === 'em risco' ? '#f59e0b' : '#ef4444'} />
+                        ))}
                       </Scatter>
                       <ReferenceLine y={0} stroke="#6b7280" />
                       <ReferenceLine x={30} stroke="#10b981" strokeDasharray="3 3" 
                         label={{ value: '30 dias', position: 'insideTopRight', fill: '#10b981' }} />
                       <ReferenceLine x={90} stroke="#3b82f6" strokeDasharray="3 3" 
                         label={{ value: '90 dias', position: 'insideTopRight', fill: '#3b82f6' }} />
-                      <ReferenceLine x={180} stroke="#f59e0b" strokeDasharray="3 3" 
+                       <ReferenceLine x={180} stroke="#f59e0b" strokeDasharray="3 3" 
                         label={{ value: '180 dias', position: 'insideTopRight', fill: '#f59e0b' }} />
                     </ScatterChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="mt-2 p-4 text-sm text-gray-600 bg-gray-50 rounded-b-lg">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <h4 className="font-medium text-gray-800 mb-2">Legenda de Status</h4>
-                      <ul className="space-y-1.5">
-                        <li className="flex items-center gap-1.5">
-                          <span className="w-3 h-3 rounded-full bg-[#10b981]"></span>
-                          <span>Clientes recentes (até 30 dias)</span>
-                        </li>
-                        <li className="flex items-center gap-1.5">
-                          <span className="w-3 h-3 rounded-full bg-[#3b82f6]"></span>
-                          <span>Clientes ativos (30-90 dias)</span>
-                        </li>
-                        <li className="flex items-center gap-1.5">
-                          <span className="w-3 h-3 rounded-full bg-[#f59e0b]"></span>
-                          <span>Clientes em risco (90-180 dias)</span>
-                        </li>
-                        <li className="flex items-center gap-1.5">
-                          <span className="w-3 h-3 rounded-full bg-[#ef4444]"></span>
-                          <span>Clientes inativos (180+ dias)</span>
-                        </li>
-                      </ul>
-                    </div>
-                    <div>
-                      <h4 className="font-medium text-gray-800 mb-2">Sobre a Análise RFM</h4>
-                      <p className="text-gray-600">
-                        A análise RFM avalia clientes em três dimensões: <span className="font-medium">Recência</span> (tempo desde a última visita), 
-                        <span className="font-medium"> Frequência</span> (número de visitas) e <span className="font-medium">Monetização</span> (valor total gasto).
-                        Cada dimensão é pontuada de 1-5, onde valores mais altos são melhores.
-                      </p>
-                      <p className="text-gray-500 italic mt-2">Tamanho da bolha = Frequência de visitas</p>
-                    </div>
+                    </ResponsiveContainer>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Card className="border-gray-200 shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300">
-                <CardHeader className="bg-gradient-to-r from-rose-50 to-rose-100 pb-2 border-b border-rose-200">
-                  <CardTitle className="text-lg font-medium text-rose-800 flex items-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </CardContent>
+              </Card>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Card className="border-gray-200 shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300">
+                  <CardHeader className="bg-gradient-to-r from-rose-50 to-rose-100 pb-2 border-b border-rose-200">
+                    <CardTitle className="text-lg font-medium text-rose-800 flex items-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                      Distribuição por Categoria de Cliente
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <div className="h-64 p-4">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={[
+                              { name: 'Recentes (até 30d)', value: retentionData.filter(c => c.recencyCategory === 'recente').length, color: '#10b981' },
+                              { name: 'Ativos (30-90d)', value: retentionData.filter(c => c.recencyCategory === 'ativo').length, color: '#3b82f6' },
+                              { name: 'Em risco (90-180d)', value: retentionData.filter(c => c.recencyCategory === 'em risco').length, color: '#f59e0b' },
+                              { name: 'Inativos (180d+)', value: retentionData.filter(c => c.recencyCategory === 'inativo').length, color: '#ef4444' }
+                            ]}
+                            cx="50%"
+                            cy="50%"
+                            labelLine={false}
+                            outerRadius={80}
+                            fill="#8884d8"
+                            dataKey="value"
+                            nameKey="name"
+                            label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                          >
+                            {({ name, value, color }) => (
+                              <Cell key={`cell-${name}`} fill={color} />
+                            )}
+                          </Pie>
+                          <Tooltip 
+                            formatter={(value) => [value, 'Clientes']}
+                            contentStyle={{
+                              backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                              borderRadius: '8px',
+                              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                              border: '1px solid #e5e7eb'
+                            }}
+                          />
+                          <Legend 
+                            iconType="circle"
+                            layout="vertical"
+                            verticalAlign="middle"
+                            align="right"
+                            wrapperStyle={{
+                              paddingLeft: '10px'
+                            }}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card className="border-gray-200 shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300">
+                  <CardHeader className="bg-gradient-to-r from-teal-50 to-teal-100 pb-2 border-b border-teal-200">
+                    <CardTitle className="text-lg font-medium text-teal-800 flex items-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
+                      Distribuição por Valor Gasto
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <div className="h-64 p-4">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart 
+                          data={[
+                            { name: 'Até R$500', value: retentionData.filter(c => c.totalSpent <= 500).length, color: '#94a3b8' },
+                            { name: 'R$501-1000', value: retentionData.filter(c => c.totalSpent > 500 && c.totalSpent <= 1000).length, color: '#60a5fa' },
+                            { name: 'R$1001-2000', value: retentionData.filter(c => c.totalSpent > 1000 && c.totalSpent <= 2000).length, color: '#3b82f6' },
+                            { name: 'R$2001-5000', value: retentionData.filter(c => c.totalSpent > 2000 && c.totalSpent <= 5000).length, color: '#2563eb' },
+                            { name: 'Acima de R$5000', value: retentionData.filter(c => c.totalSpent > 5000).length, color: '#1d4ed8' }
+                          ]}
+                          layout="vertical"
+                          margin={{ left: 120 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#e5e7eb" />
+                          <XAxis type="number" />
+                          <YAxis 
+                            type="category" 
+                            dataKey="name" 
+                            stroke="#6b7280"
+                            tick={{ width: 100 }}
+                          />
+                          <Tooltip 
+                            formatter={(value) => [value, 'Clientes']}
+                            contentStyle={{
+                              backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                              borderRadius: '8px',
+                              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                              border: '1px solid #e5e7eb'
+                            }}
+                          />
+                          <Bar 
+                            dataKey="value" 
+                            name="Clientes" 
+                            radius={[0, 4, 4, 0]}
+                          >
+                            {[
+                              { name: 'Até R$500', color: '#94a3b8' },
+                              { name: 'R$501-1000', color: '#60a5fa' },
+                              { name: 'R$1001-2000', color: '#3b82f6' },
+                              { name: 'R$2001-5000', color: '#2563eb' },
+                              { name: 'Acima de R$5000', color: '#1d4ed8' }
+                            ].map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+
+          <TabsContent value="inventory" className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Card className="bg-gradient-to-br from-red-50 to-red-100 border-red-200 shadow-lg hover:shadow-xl transition-shadow duration-300">
+                <CardHeader className="pb-2 bg-gradient-to-r from-red-100 to-red-200 rounded-t-lg">
+                  <CardTitle className="text-lg font-medium text-red-800 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                     </svg>
-                    Distribuição por Categoria de Cliente
+                    Produtos Esgotados
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <p className="text-3xl font-bold text-red-900">
+                    {inventoryAlertData.filter(product => product.status === 'esgotado').length}
+                  </p>
+                  <p className="text-sm text-red-600 mt-1 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Precisam de reposição urgente
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200 shadow-lg hover:shadow-xl transition-shadow duration-300">
+                <CardHeader className="pb-2 bg-gradient-to-r from-amber-100 to-amber-200 rounded-t-lg">
+                  <CardTitle className="text-lg font-medium text-amber-800 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Estoque Baixo
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <p className="text-3xl font-bold text-amber-900">
+                    {inventoryAlertData.filter(product => product.status === 'baixo').length}
+                  </p>
+                  <p className="text-sm text-amber-600 mt-1 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Abaixo do mínimo
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200 shadow-lg hover:shadow-xl transition-shadow duration-300">
+                <CardHeader className="pb-2 bg-gradient-to-r from-blue-100 to-blue-200 rounded-t-lg">
+                  <CardTitle className="text-lg font-medium text-blue-800 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Tempo Médio Reposição
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <p className="text-3xl font-bold text-blue-900">
+                    {inventoryAlertData.length > 0 ? 
+                      inventoryAlertData[0].daysToRestock + ' dias' : 
+                      'N/A'}
+                  </p>
+                  <p className="text-sm text-blue-600 mt-1 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    Para produtos em alerta
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              <Card className="border-gray-200 shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300">
+                <CardHeader className="bg-gradient-to-r from-purple-50 to-purple-100 pb-2 border-b border-purple-200">
+                  <CardTitle className="text-lg font-medium text-purple-800 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                    Distribuição por Categoria
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -1873,12 +2033,24 @@ export default function Reports() {
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie
-                          data={[
-                            { name: 'Recentes (até 30d)', value: retentionData.filter(c => c.recencyCategory === 'recente').length, color: '#10b981' },
-                            { name: 'Ativos (30-90d)', value: retentionData.filter(c => c.recencyCategory === 'ativo').length, color: '#3b82f6' },
-                            { name: 'Em risco (90-180d)', value: retentionData.filter(c => c.recencyCategory === 'em risco').length, color: '#f59e0b' },
-                            { name: 'Inativos (180d+)', value: retentionData.filter(c => c.recencyCategory === 'inativo').length, color: '#ef4444' }
-                          ]}
+                          data={(() => {
+                            // Agrupar produtos por categoria
+                            const categories = {};
+                            inventoryAlertData.forEach(product => {
+                              if (!categories[product.category]) {
+                                categories[product.category] = 0;
+                              }
+                              categories[product.category]++;
+                            });
+                            
+                            // Converter para array no formato esperado pelo gráfico
+                            const colors = ['#8b5cf6', '#6366f1', '#3b82f6', '#0ea5e9', '#06b6d4', '#14b8a6'];
+                            return Object.keys(categories).map((category, index) => ({
+                              name: category.charAt(0).toUpperCase() + category.slice(1),
+                              value: categories[category],
+                              color: colors[index % colors.length]
+                            }));
+                          })()}
                           cx="50%"
                           cy="50%"
                           labelLine={false}
@@ -1893,7 +2065,7 @@ export default function Reports() {
                           )}
                         </Pie>
                         <Tooltip 
-                          formatter={(value) => [value, 'Clientes']}
+                          formatter={(value) => [value, 'Produtos']}
                           contentStyle={{
                             backgroundColor: 'rgba(255, 255, 255, 0.95)',
                             borderRadius: '8px',
@@ -1920,9 +2092,9 @@ export default function Reports() {
                 <CardHeader className="bg-gradient-to-r from-teal-50 to-teal-100 pb-2 border-b border-teal-200">
                   <CardTitle className="text-lg font-medium text-teal-800 flex items-center">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    Distribuição por Valor Gasto
+                    Valor em Estoque por Status
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -1930,17 +2102,31 @@ export default function Reports() {
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart 
                         data={[
-                          { name: 'Até R$500', value: retentionData.filter(c => c.totalSpent <= 500).length, color: '#94a3b8' },
-                          { name: 'R$501-1000', value: retentionData.filter(c => c.totalSpent > 500 && c.totalSpent <= 1000).length, color: '#60a5fa' },
-                          { name: 'R$1001-2000', value: retentionData.filter(c => c.totalSpent > 1000 && c.totalSpent <= 2000).length, color: '#3b82f6' },
-                          { name: 'R$2001-5000', value: retentionData.filter(c => c.totalSpent > 2000 && c.totalSpent <= 5000).length, color: '#2563eb' },
-                          { name: 'Acima de R$5000', value: retentionData.filter(c => c.totalSpent > 5000).length, color: '#1d4ed8' }
+                          { 
+                            name: 'Estoque Normal', 
+                            value: 5000,
+                            color: '#10b981'
+                          },
+                          { 
+                            name: 'Estoque Baixo', 
+                            value: 3000,
+                            color: '#f59e0b'
+                          },
+                          { 
+                            name: 'Esgotado', 
+                            value: 1000,
+                            color: '#ef4444'
+                          }
                         ]}
                         layout="vertical"
                         margin={{ left: 120 }}
                       >
                         <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#e5e7eb" />
-                        <XAxis type="number" stroke="#6b7280" />
+                        <XAxis 
+                          type="number" 
+                          stroke="#6b7280" 
+                          tickFormatter={(value) => formatCurrency(value).replace('R$', '')}
+                        />
                         <YAxis 
                           type="category" 
                           dataKey="name" 
@@ -1948,7 +2134,7 @@ export default function Reports() {
                           tick={{ width: 100 }}
                         />
                         <Tooltip 
-                          formatter={(value) => [value, 'Clientes']}
+                          formatter={(value) => [formatCurrency(value), 'Valor']}
                           contentStyle={{
                             backgroundColor: 'rgba(255, 255, 255, 0.95)',
                             borderRadius: '8px',
@@ -1958,15 +2144,13 @@ export default function Reports() {
                         />
                         <Bar 
                           dataKey="value" 
-                          name="Clientes" 
+                          name="Valor" 
                           radius={[0, 4, 4, 0]}
                         >
                           {[
-                            { name: 'Até R$500', color: '#94a3b8' },
-                            { name: 'R$501-1000', color: '#60a5fa' },
-                            { name: 'R$1001-2000', color: '#3b82f6' },
-                            { name: 'R$2001-5000', color: '#2563eb' },
-                            { name: 'Acima de R$5000', color: '#1d4ed8' }
+                            { name: 'Estoque Normal', color: '#10b981' },
+                            { name: 'Estoque Baixo', color: '#f59e0b' },
+                            { name: 'Esgotado', color: '#ef4444' }
                           ].map((entry, index) => (
                             <Cell key={`cell-${index}`} fill={entry.color} />
                           ))}
@@ -1974,48 +2158,6 @@ export default function Reports() {
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="inventory" className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-lg font-medium">Produtos Esgotados</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold">
-                    {inventoryAlertData.filter(product => product.status === 'esgotado').length}
-                  </p>
-                  <p className="text-sm text-gray-500">Precisam de reposição urgente</p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-lg font-medium">Estoque Baixo</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold">
-                    {inventoryAlertData.filter(product => product.status === 'baixo').length}
-                  </p>
-                  <p className="text-sm text-gray-500">Abaixo do mínimo</p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-lg font-medium">Tempo Médio Reposição</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold">
-                    {inventoryAlertData.length > 0 ? 
-                      inventoryAlertData[0].daysToRestock + ' dias' : 
-                      'N/A'}
-                  </p>
-                  <p className="text-sm text-gray-500">Para produtos em alerta</p>
                 </CardContent>
               </Card>
             </div>
@@ -2030,20 +2172,20 @@ export default function Reports() {
               <CardContent>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
-                    <thead>
+                    <thead className="bg-gray-50">
                       <tr className="border-b">
-                        <th className="text-left py-3 px-4">Produto</th>
-                        <th className="text-center py-3 px-4">Categoria</th>
-                        <th className="text-center py-3 px-4">Estoque Atual</th>
-                        <th className="text-center py-3 px-4">Estoque Mínimo</th>
-                        <th className="text-center py-3 px-4">Status</th>
-                        <th className="text-center py-3 px-4">Valor em Estoque</th>
-                        <th className="text-center py-3 px-4">Previsão Reposição</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-700">Produto</th>
+                        <th className="text-center py-3 px-4 font-medium text-gray-700">Categoria</th>
+                        <th className="text-center py-3 px-4 font-medium text-gray-700">Estoque Atual</th>
+                        <th className="text-center py-3 px-4 font-medium text-gray-700">Estoque Mínimo</th>
+                        <th className="text-center py-3 px-4 font-medium text-gray-700">Status</th>
+                        <th className="text-center py-3 px-4 font-medium text-gray-700">Valor em Estoque</th>
+                        <th className="text-center py-3 px-4 font-medium text-gray-700">Previsão Reposição</th>
                       </tr>
                     </thead>
                     <tbody>
                       {inventoryAlertData.map((product, index) => (
-                        <tr key={index} className="border-b hover:bg-gray-50">
+                        <tr key={index} className="border-b hover:bg-gray-50 transition-colors duration-150">
                           <td className="py-3 px-4 font-medium">{product.name}</td>
                           <td className="py-3 px-4 text-center capitalize">{product.category}</td>
                           <td className="py-3 px-4 text-center font-medium">{product.stock}</td>
@@ -2051,24 +2193,35 @@ export default function Reports() {
                           <td className="py-3 px-4 text-center">
                             <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
                               product.status === 'esgotado' 
-                                ? 'bg-red-100 text-red-800'
-                                : 'bg-amber-100 text-amber-800'
+                                ? 'bg-red-100 text-red-800 border border-red-200'
+                                : 'bg-amber-100 text-amber-800 border border-amber-200'
                             }`}>
                               {product.status === 'esgotado' ? 'Esgotado' : 'Estoque Baixo'}
                             </span>
                           </td>
-                          <td className="py-3 px-4 text-center">
+                          <td className="py-3 px-4 text-center font-medium">
                             {formatCurrency(product.stock * product.price)}
                           </td>
                           <td className="py-3 px-4 text-center">
-                            {product.daysToRestock} dias
+                            <span className="inline-flex items-center gap-1">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                              {product.daysToRestock} dias
+                            </span>
                           </td>
                         </tr>
                       ))}
                       {inventoryAlertData.length === 0 && (
                         <tr>
-                          <td colSpan={7} className="py-6 text-center text-gray-500">
-                            Nenhum produto com estoque crítico
+                          <td colSpan={7} className="py-8 text-center text-gray-500">
+                            <div className="flex flex-col items-center justify-center">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-gray-300 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              <p>Nenhum produto com estoque crítico</p>
+                              <p className="text-sm text-gray-400 mt-1">Todos os produtos estão com estoque adequado</p>
+                            </div>
                           </td>
                         </tr>
                       )}
