@@ -114,6 +114,12 @@ export default function Reports() {
     peakDayLabel: ''
   });
   const [efficiencyData, setEfficiencyData] = useState([]);
+  const [expensesData, setExpensesData] = useState({
+    totalExpenses: 0,
+    categorizedExpenses: [],
+    monthlyExpenses: [],
+    topExpenses: []
+  });
 
   // Filtros avançados
   const [filters, setFilters] = useState({
@@ -786,6 +792,10 @@ export default function Reports() {
       const inventoryAlerts = processInventoryAlerts(products, inventory);
       setInventoryAlertData(inventoryAlerts);
       
+      // Processar dados de despesas
+      const expensesData = processExpensesData(filteredSalesByFilters, filteredEmployees);
+      setExpensesData(expensesData);
+      
       setLastRefresh(new Date());
     } catch (error) {
       console.error("Erro ao carregar dados dos relatórios:", error);
@@ -1005,6 +1015,67 @@ export default function Reports() {
     return trendsArray;
   };
 
+  // Função para processar dados de despesas
+  const processExpensesData = (sales, employees) => {
+    if (!sales || !sales.length) {
+      return {
+        totalExpenses: 0,
+        categorizedExpenses: [],
+        monthlyExpenses: [],
+        topExpenses: []
+      };
+    }
+
+    // Calcular total de despesas
+    const totalExpenses = sales.reduce((acc, sale) => acc + (sale.expenses || 0), 0);
+
+    // Agrupar despesas por categoria
+    const categorizedExpenses = {};
+    sales.forEach(sale => {
+      if (sale.expenses && sale.expense_category) {
+        if (!categorizedExpenses[sale.expense_category]) {
+          categorizedExpenses[sale.expense_category] = 0;
+        }
+        categorizedExpenses[sale.expense_category] += sale.expenses;
+      }
+    });
+    const categorizedExpensesArray = Object.keys(categorizedExpenses).map(category => ({
+      category,
+      value: categorizedExpenses[category]
+    }));
+
+    // Agrupar despesas por mês
+    const monthlyExpenses = {};
+    sales.forEach(sale => {
+      if (sale.expenses) {
+        const month = new Date(sale.date).getMonth();
+        const year = new Date(sale.date).getFullYear();
+        const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
+        if (!monthlyExpenses[monthKey]) {
+          monthlyExpenses[monthKey] = 0;
+        }
+        monthlyExpenses[monthKey] += sale.expenses;
+      }
+    });
+    const monthlyExpensesArray = Object.keys(monthlyExpenses).map(month => ({
+      month,
+      value: monthlyExpenses[month]
+    }));
+
+    // Encontrar as maiores despesas
+    const topExpenses = sales
+      .filter(sale => sale.expenses)
+      .sort((a, b) => b.expenses - a.expenses)
+      .slice(0, 5);
+
+    return {
+      totalExpenses,
+      categorizedExpenses: categorizedExpensesArray,
+      monthlyExpenses: monthlyExpensesArray,
+      topExpenses
+    };
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -1075,12 +1146,13 @@ export default function Reports() {
         </div>
       ) : (
         <Tabs defaultValue="sales">
-          <TabsList className="grid grid-cols-5">
+          <TabsList className="grid grid-cols-6">
             <TabsTrigger value="sales">Vendas</TabsTrigger>
             <TabsTrigger value="trends">Tendências</TabsTrigger>
             <TabsTrigger value="retention">Fidelização</TabsTrigger>
             <TabsTrigger value="inventory">Estoque</TabsTrigger>
             <TabsTrigger value="efficiency">Eficiência</TabsTrigger>
+            <TabsTrigger value="expenses">Despesas</TabsTrigger>
           </TabsList>
 
           <TabsContent value="sales" className="space-y-4">
@@ -1111,7 +1183,7 @@ export default function Reports() {
                 <CardHeader className="pb-2 bg-gradient-to-r from-emerald-100 to-emerald-200 rounded-t-lg">
                   <CardTitle className="text-lg font-medium text-emerald-800 flex items-center">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     Ticket Médio
                   </CardTitle>
@@ -1126,18 +1198,18 @@ export default function Reports() {
                   </p>
                   <p className="text-sm text-emerald-600 mt-1 flex items-center">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     Período selecionado
                   </p>
                 </CardContent>
               </Card>
-
+              
               <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200 shadow-lg hover:shadow-xl transition-shadow duration-300">
                 <CardHeader className="pb-2 bg-gradient-to-r from-amber-100 to-amber-200 rounded-t-lg">
                   <CardTitle className="text-lg font-medium text-amber-800 flex items-center">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     Clientes Atendidos
                   </CardTitle>
@@ -1148,7 +1220,7 @@ export default function Reports() {
                   </p>
                   <p className="text-sm text-amber-600 mt-1 flex items-center">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a9 9 0 00-7 7h14a9 9 0 00-7-7z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                     </svg>
                     Período selecionado
                   </p>
@@ -1160,7 +1232,7 @@ export default function Reports() {
               <CardHeader className="bg-gradient-to-r from-blue-50 to-blue-100 pb-2 border-b border-blue-200">
                 <CardTitle className="text-lg font-medium text-blue-800 flex items-center">
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                   </svg>
                   Vendas no Período
                 </CardTitle>
@@ -1233,7 +1305,7 @@ export default function Reports() {
                   <div className="flex justify-center items-center h-64 bg-gray-50 rounded-md m-4">
                     <div className="text-center">
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto text-gray-400 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                       <p className="text-gray-500">Nenhum dado de vendas disponível para o período selecionado</p>
                     </div>
@@ -1247,7 +1319,7 @@ export default function Reports() {
                 <CardHeader className="bg-gradient-to-r from-indigo-50 to-indigo-100 pb-2 border-b border-indigo-200">
                   <CardTitle className="text-lg font-medium text-indigo-800 flex items-center">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     Distribuição por Tipo de Venda
                   </CardTitle>
@@ -1417,7 +1489,7 @@ export default function Reports() {
                 <CardHeader className="bg-gradient-to-r from-indigo-50 to-indigo-100 pb-2 border-b border-indigo-200">
                   <CardTitle className="text-lg font-medium text-indigo-800 flex items-center">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     Tendência de Vendas
                   </CardTitle>
@@ -2557,6 +2629,339 @@ export default function Reports() {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="expenses" className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Card className="bg-gradient-to-br from-red-50 to-red-100 border-red-200 shadow-lg hover:shadow-xl transition-shadow duration-300">
+                <CardHeader className="pb-2 bg-gradient-to-r from-red-100 to-red-200 rounded-t-lg">
+                  <CardTitle className="text-lg font-medium text-red-800 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    Total de Despesas
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <p className="text-3xl font-bold text-red-900">
+                    {formatCurrency(expensesData.totalExpenses)}
+                  </p>
+                  <p className="text-sm text-red-600 mt-1 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Período selecionado
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200 shadow-lg hover:shadow-xl transition-shadow duration-300">
+                <CardHeader className="pb-2 bg-gradient-to-r from-amber-100 to-amber-200 rounded-t-lg">
+                  <CardTitle className="text-lg font-medium text-amber-800 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Despesas por Categoria
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <div className="h-64 p-4">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={expensesData.categorizedExpenses}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          outerRadius={80}
+                          fill="#8884d8"
+                          dataKey="value"
+                          nameKey="category"
+                          label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                        >
+                          {expensesData.categorizedExpenses.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip 
+                          formatter={(value) => [value, 'Despesas']}
+                          contentStyle={{
+                            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                            borderRadius: '8px',
+                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                            border: '1px solid #e5e7eb'
+                          }}
+                        />
+                        <Legend 
+                          iconType="circle"
+                          layout="vertical"
+                          verticalAlign="middle"
+                          align="right"
+                          wrapperStyle={{
+                            paddingLeft: '10px'
+                          }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200 shadow-lg hover:shadow-xl transition-shadow duration-300">
+                <CardHeader className="pb-2 bg-gradient-to-r from-blue-100 to-blue-200 rounded-t-lg">
+                  <CardTitle className="text-lg font-medium text-blue-800 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Despesas por Mês
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <div className="h-64 p-4">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart 
+                        data={expensesData.monthlyExpenses}
+                        layout="vertical"
+                        margin={{ left: 120 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#e5e7eb" />
+                        <XAxis type="number" />
+                        <YAxis 
+                          type="category" 
+                          dataKey="month" 
+                          stroke="#6b7280"
+                          tick={{ width: 100 }}
+                        />
+                        <Tooltip 
+                          formatter={(value) => [formatCurrency(value), 'Despesas']}
+                          contentStyle={{
+                            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                            borderRadius: '8px',
+                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                            border: '1px solid #e5e7eb'
+                          }}
+                        />
+                        <Bar 
+                          dataKey="value" 
+                          name="Despesas" 
+                          radius={[0, 4, 4, 0]}
+                        >
+                          {expensesData.monthlyExpenses.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-amber-500" />
+                  Despesas por Categoria
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gradient-to-r from-teal-50 to-teal-100">
+                      <tr className="border-b border-teal-200">
+                        <th className="text-left py-3 px-4 font-medium text-teal-800">Categoria</th>
+                        <th className="text-center py-3 px-4 font-medium text-teal-800">Valor</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {expensesData.categorizedExpenses.map((expense, index) => (
+                        <tr key={index} className="border-b hover:bg-gray-50 transition-colors duration-150">
+                          <td className="py-3 px-4 font-medium">{expense.category}</td>
+                          <td className="py-3 px-4 text-center font-medium">{formatCurrency(expense.value)}</td>
+                        </tr>
+                      ))}
+                      {expensesData.categorizedExpenses.length === 0 && (
+                        <tr>
+                          <td colSpan={2} className="py-8 text-center text-gray-500">
+                            <div className="flex flex-col items-center justify-center">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-gray-300 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              <p>Nenhuma despesa registrada</p>
+                              <p className="text-sm text-gray-400 mt-1">Verifique se há despesas no período selecionado</p>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="bg-gradient-to-r from-red-50 to-red-100 pb-2 border-b border-red-200">
+                <CardTitle className="text-lg font-medium text-red-800 flex items-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Maiores Despesas no Período
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gradient-to-r from-red-50 to-red-100">
+                      <tr className="border-b border-red-200">
+                        <th className="text-left py-3 px-4 font-medium text-red-800">Descrição</th>
+                        <th className="text-center py-3 px-4 font-medium text-red-800">Data</th>
+                        <th className="text-center py-3 px-4 font-medium text-red-800">Categoria</th>
+                        <th className="text-center py-3 px-4 font-medium text-red-800">Valor</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {expensesData.topExpenses.map((expense, index) => (
+                        <tr key={index} className="border-b hover:bg-gray-50 transition-colors duration-150">
+                          <td className="py-3 px-4 font-medium">{expense.description || 'Sem descrição'}</td>
+                          <td className="py-3 px-4 text-center">{new Date(expense.date).toLocaleDateString('pt-BR')}</td>
+                          <td className="py-3 px-4 text-center">
+                            <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-red-100 text-red-800 border border-red-200">
+                              {expense.expense_category || 'Não categorizado'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-center font-medium text-red-600">{formatCurrency(expense.expenses)}</td>
+                        </tr>
+                      ))}
+                      {expensesData.topExpenses.length === 0 && (
+                        <tr>
+                          <td colSpan={4} className="py-8 text-center text-gray-500">
+                            <div className="flex flex-col items-center justify-center">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-gray-300 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              <p>Nenhuma despesa registrada</p>
+                              <p className="text-sm text-gray-400 mt-1">Verifique se há despesas no período selecionado</p>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Card className="border-gray-200 shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300">
+                <CardHeader className="bg-gradient-to-r from-purple-50 to-purple-100 pb-2 border-b border-purple-200">
+                  <CardTitle className="text-lg font-medium text-purple-800 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                    Evolução de Despesas
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="h-80 p-4">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart
+                        data={expensesData.monthlyExpenses}
+                        margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+                      >
+                        <defs>
+                          <linearGradient id="colorExpenses" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#ef4444" stopOpacity={0.8}/>
+                            <stop offset="95%" stopColor="#ef4444" stopOpacity={0.1}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                        <XAxis 
+                          dataKey="month" 
+                          stroke="#6b7280"
+                        />
+                        <YAxis stroke="#6b7280" />
+                        <Tooltip 
+                          formatter={(value) => [formatCurrency(value), 'Despesas']}
+                          contentStyle={{
+                            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                            borderRadius: '8px',
+                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                            border: '1px solid #e5e7eb'
+                          }}
+                        />
+                        <Area 
+                          type="monotone" 
+                          dataKey="value" 
+                          stroke="#ef4444" 
+                          fillOpacity={1} 
+                          fill="url(#colorExpenses)" 
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-gray-200 shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300">
+                <CardHeader className="bg-gradient-to-r from-amber-50 to-amber-100 pb-2 border-b border-amber-200">
+                  <CardTitle className="text-lg font-medium text-amber-800 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Distribuição de Despesas
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="h-80 p-4">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <defs>
+                          {expensesData.categorizedExpenses.map((entry, index) => (
+                            <linearGradient key={`gradient-${index}`} id={`colorGradient-${index}`} x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor={COLORS[index % COLORS.length]} stopOpacity={0.8}/>
+                              <stop offset="100%" stopColor={COLORS[index % COLORS.length]} stopOpacity={0.5}/>
+                            </linearGradient>
+                          ))}
+                        </defs>
+                        <Pie
+                          data={expensesData.categorizedExpenses}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={60}
+                          outerRadius={80}
+                          fill="#8884d8"
+                          paddingAngle={5}
+                          dataKey="value"
+                        >
+                          {expensesData.categorizedExpenses.map((entry, index) => (
+                            <Cell 
+                              key={`cell-${index}`} 
+                              fill={`url(#colorGradient-${index})`} 
+                              stroke={COLORS[index % COLORS.length]}
+                            />
+                          ))}
+                        </Pie>
+                        <Tooltip 
+                          formatter={(value) => [formatCurrency(value), 'Despesas']}
+                          contentStyle={{
+                            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                            borderRadius: '8px',
+                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                            border: '1px solid #e5e7eb'
+                          }}
+                        />
+                        <Legend 
+                          layout="vertical" 
+                          verticalAlign="middle" 
+                          align="right"
+                          iconType="circle"
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
         </Tabs>
       )}
