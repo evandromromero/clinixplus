@@ -776,7 +776,10 @@ export default function Reports() {
       
       // Processar dados para relatórios adicionais
       setTrendsData([]);
-      setRetentionData([]);
+      
+      // Processar dados de fidelização
+      const retentionData = processRetentionData(clients, filteredSalesByFilters, filteredAppointments);
+      setRetentionData(retentionData);
       
       // Processar dados de inventário para alertas
       const inventoryAlerts = processInventoryAlerts(products, inventory);
@@ -842,6 +845,93 @@ export default function Reports() {
 
     // Filtrar produtos com estoque baixo ou esgotado
     return productsWithInventory.filter(product => product.status === 'esgotado' || product.status === 'baixo');
+  };
+
+  // Função para processar dados de fidelização
+  const processRetentionData = (clients, sales, appointments) => {
+    if (!clients || !clients.length) {
+      return [];
+    }
+
+    const now = new Date();
+  
+    return clients.map(client => {
+      // Filtrar vendas e agendamentos deste cliente
+      const clientSales = sales.filter(sale => sale.client_id === client.id);
+      const clientAppointments = appointments.filter(app => app.client_id === client.id);
+      
+      // Calcular total gasto
+      const totalSpent = clientSales.reduce((total, sale) => total + (parseFloat(sale.total) || 0), 0);
+      
+      // Calcular número de compras e agendamentos
+      const purchaseCount = clientSales.length;
+      const appointmentCount = clientAppointments.length;
+      
+      // Encontrar data da última visita (venda ou agendamento)
+      const salesDates = clientSales.map(sale => new Date(sale.date));
+      const appointmentDates = clientAppointments.map(app => new Date(app.date));
+      const allDates = [...salesDates, ...appointmentDates].filter(date => !isNaN(date.getTime()));
+      
+      // Se não houver datas válidas, usar a data de criação do cliente ou hoje
+      const lastVisitDate = allDates.length > 0 
+        ? new Date(Math.max(...allDates.map(date => date.getTime())))
+        : (client.created_date ? new Date(client.created_date) : now);
+      
+      // Calcular dias desde a última visita
+      const daysSinceLast = Math.floor((now - lastVisitDate) / (1000 * 60 * 60 * 24));
+      
+      // Determinar categoria de recência
+      let recencyCategory = 'recente';
+      if (daysSinceLast > 180) {
+        recencyCategory = 'inativo';
+      } else if (daysSinceLast > 90) {
+        recencyCategory = 'em risco';
+      } else if (daysSinceLast > 30) {
+        recencyCategory = 'ativo';
+      }
+      
+      // Calcular pontuação RFM (Recência, Frequência, Monetização)
+      // Pontuação de 1-5 para cada dimensão
+      
+      // Recência (R) - menor é melhor
+      let r = 5;
+      if (daysSinceLast > 365) r = 1;
+      else if (daysSinceLast > 180) r = 2;
+      else if (daysSinceLast > 90) r = 3;
+      else if (daysSinceLast > 30) r = 4;
+      
+      // Frequência (F) - maior é melhor
+      let f = 1;
+      const totalVisits = purchaseCount + appointmentCount;
+      if (totalVisits > 20) f = 5;
+      else if (totalVisits > 10) f = 4;
+      else if (totalVisits > 5) f = 3;
+      else if (totalVisits > 2) f = 2;
+      
+      // Monetização (M) - maior é melhor
+      let m = 1;
+      if (totalSpent > 5000) m = 5;
+      else if (totalSpent > 2000) m = 4;
+      else if (totalSpent > 1000) m = 3;
+      else if (totalSpent > 500) m = 2;
+      
+      // Pontuação total RFM
+      const rfmScore = {
+        r, f, m,
+        total: r + f + m
+      };
+      
+      return {
+        id: client.id,
+        name: client.name,
+        daysSinceLast,
+        totalSpent,
+        purchaseCount,
+        appointmentCount,
+        recencyCategory,
+        rfmScore
+      };
+    });
   };
 
   return (
