@@ -1341,83 +1341,284 @@ export default function Reports() {
 
           <TabsContent value="trends" className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-lg font-medium">Total de Vendas</CardTitle>
+              <Card className="bg-gradient-to-br from-indigo-50 to-indigo-100 border-indigo-200 shadow-lg hover:shadow-xl transition-shadow duration-300">
+                <CardHeader className="pb-2 bg-gradient-to-r from-indigo-100 to-indigo-200 rounded-t-lg">
+                  <CardTitle className="text-lg font-medium text-indigo-800 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                    </svg>
+                    Total de Vendas
+                  </CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold">
+                <CardContent className="pt-4">
+                  <p className="text-3xl font-bold text-indigo-900">
                     {formatCurrency(trendsData.reduce((acc, item) => acc + item.total, 0))}
                   </p>
-                  <p className="text-sm text-gray-500">Período selecionado</p>
+                  <p className="text-sm text-indigo-600 mt-1 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    Período selecionado
+                  </p>
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-lg font-medium">Ticket Médio</CardTitle>
+              <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200 shadow-lg hover:shadow-xl transition-shadow duration-300">
+                <CardHeader className="pb-2 bg-gradient-to-r from-purple-100 to-purple-200 rounded-t-lg">
+                  <CardTitle className="text-lg font-medium text-purple-800 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Ticket Médio
+                  </CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold">
+                <CardContent className="pt-4">
+                  <p className="text-3xl font-bold text-purple-900">
                     {formatCurrency(
                       trendsData.length > 0
                         ? trendsData.reduce((acc, item) => acc + item.total, 0) / trendsData.length
                         : 0
                     )}
                   </p>
-                  <p className="text-sm text-gray-500">Período selecionado</p>
+                  <p className="text-sm text-purple-600 mt-1 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                    Período selecionado
+                  </p>
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-lg font-medium">Clientes Atendidos</CardTitle>
+              <Card className="bg-gradient-to-br from-cyan-50 to-cyan-100 border-cyan-200 shadow-lg hover:shadow-xl transition-shadow duration-300">
+                <CardHeader className="pb-2 bg-gradient-to-r from-cyan-100 to-cyan-200 rounded-t-lg">
+                  <CardTitle className="text-lg font-medium text-cyan-800 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-cyan-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                    Clientes Atendidos
+                  </CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold">
+                <CardContent className="pt-4">
+                  <p className="text-3xl font-bold text-cyan-900">
                     {clientsData?.activeClients || 0}
                   </p>
-                  <p className="text-sm text-gray-500">Período selecionado</p>
+                  <p className="text-sm text-cyan-600 mt-1 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                    Período selecionado
+                  </p>
                 </CardContent>
               </Card>
             </div>
 
-            <div className="bg-white p-6 rounded-lg shadow">
-              <h3 className="text-lg font-medium mb-4">Vendas no Período</h3>
-              {salesData.length > 0 ? (
-                <div className="h-80">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Card className="border-gray-200 shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300">
+                <CardHeader className="bg-gradient-to-r from-indigo-50 to-indigo-100 pb-2 border-b border-indigo-200">
+                  <CardTitle className="text-lg font-medium text-indigo-800 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                    </svg>
+                    Tendência de Vendas
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="h-80 p-4">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={trendsData}>
+                        <defs>
+                          <linearGradient id="colorTrend" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#6366f1" stopOpacity={0.8}/>
+                            <stop offset="95%" stopColor="#6366f1" stopOpacity={0.1}/>
+                          </linearGradient>
+                          <linearGradient id="colorProjection" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.8}/>
+                            <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.1}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                        <XAxis 
+                          dataKey="month" 
+                          stroke="#6b7280"
+                        />
+                        <YAxis 
+                          tickFormatter={(value) => formatCurrency(value).replace('R$', '')}
+                          stroke="#6b7280"
+                        />
+                        <Tooltip 
+                          formatter={(value) => formatCurrency(value)}
+                          contentStyle={{
+                            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                            borderRadius: '8px',
+                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                            border: '1px solid #e5e7eb'
+                          }}
+                        />
+                        <Legend 
+                          iconType="circle"
+                          wrapperStyle={{
+                            paddingTop: '10px'
+                          }}
+                        />
+                        <Line 
+                          type="monotone" 
+                          dataKey="total" 
+                          name="Vendas" 
+                          stroke="#6366f1" 
+                          strokeWidth={3}
+                          dot={{ r: 4, fill: "#6366f1" }}
+                          activeDot={{ r: 6, fill: "#4f46e5" }}
+                          fill="url(#colorTrend)"
+                        />
+                        {trendsData.some(item => item.projectedTotal) && (
+                          <Line 
+                            type="monotone" 
+                            dataKey="projectedTotal" 
+                            name="Projeção" 
+                            stroke="#f59e0b" 
+                            strokeWidth={2}
+                            strokeDasharray="5 5"
+                            dot={{ r: 4, fill: "#f59e0b" }}
+                            activeDot={{ r: 6, fill: "#d97706" }}
+                          />
+                        )}
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-gray-200 shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300">
+                <CardHeader className="bg-gradient-to-r from-blue-50 to-blue-100 pb-2 border-b border-blue-200">
+                  <CardTitle className="text-lg font-medium text-blue-800 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                    Retenção de Clientes
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="h-80 p-4">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={[
+                            { name: 'Recentes (até 30d)', value: retentionData.filter(c => c.recencyCategory === 'recente').length, color: '#10b981' },
+                            { name: 'Ativos (30-90d)', value: retentionData.filter(c => c.recencyCategory === 'ativo').length, color: '#3b82f6' },
+                            { name: 'Em risco (90-180d)', value: retentionData.filter(c => c.recencyCategory === 'em risco').length, color: '#f59e0b' },
+                            { name: 'Inativos (180d+)', value: retentionData.filter(c => c.recencyCategory === 'inativo').length, color: '#ef4444' }
+                          ]}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          outerRadius={80}
+                          fill="#8884d8"
+                          dataKey="value"
+                          nameKey="name"
+                          label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                        >
+                          {({ name, value, color }) => (
+                            <Cell key={`cell-${name}`} fill={color} />
+                          )}
+                        </Pie>
+                        <Tooltip 
+                          formatter={(value) => [value, 'Clientes']}
+                          contentStyle={{
+                            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                            borderRadius: '8px',
+                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                            border: '1px solid #e5e7eb'
+                          }}
+                        />
+                        <Legend 
+                          iconType="circle"
+                          layout="vertical"
+                          verticalAlign="middle"
+                          align="right"
+                          wrapperStyle={{
+                            paddingLeft: '10px'
+                          }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card className="border-gray-200 shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300">
+              <CardHeader className="bg-gradient-to-r from-amber-50 to-amber-100 pb-2 border-b border-amber-200">
+                <CardTitle className="text-lg font-medium text-amber-800 flex items-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                  Análise Projetada de Crescimento
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="h-80 p-4">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={salesData}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <AreaChart data={trendsData}>
+                      <defs>
+                        <linearGradient id="colorTotalArea" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.8}/>
+                          <stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
                       <XAxis 
-                        dataKey="date" 
-                        tickFormatter={(value) => {
-                          const date = new Date(value);
-                          return format(date, 'dd/MM');
-                        }}
+                        dataKey="month" 
+                        stroke="#6b7280"
                       />
                       <YAxis 
                         tickFormatter={(value) => formatCurrency(value).replace('R$', '')}
+                        stroke="#6b7280"
                       />
                       <Tooltip 
                         formatter={(value) => formatCurrency(value)}
-                        labelFormatter={(value) => format(new Date(value), 'dd/MM/yyyy', { locale: ptBR })} 
+                        contentStyle={{
+                          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                          borderRadius: '8px',
+                          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                          border: '1px solid #e5e7eb'
+                        }}
                       />
-                      <Legend />
-                      <Bar name="Produtos" dataKey="products" fill={COLORS[0]} />
-                      <Bar name="Serviços" dataKey="services" fill={COLORS[1]} />
-                      <Bar name="Pacotes" dataKey="packages" fill={COLORS[2]} />
-                      <Bar name="Giftcards" dataKey="giftcards" fill={COLORS[3]} />
-                      <Bar name="Assinaturas" dataKey="subscriptions" fill={COLORS[4]} />
-                    </BarChart>
+                      <Legend 
+                        iconType="circle"
+                        wrapperStyle={{
+                          paddingTop: '10px'
+                        }}
+                      />
+                      <Area 
+                        type="monotone" 
+                        dataKey="total" 
+                        stroke="#f59e0b" 
+                        strokeWidth={2}
+                        fillOpacity={1} 
+                        fill="url(#colorTotalArea)" 
+                        name="Vendas"
+                      />
+                      {trendsData.findIndex(item => item.projected) >= 0 && (
+                        <ReferenceLine 
+                          x={trendsData[trendsData.findIndex(item => item.projected)].month} 
+                          stroke="#ef4444" 
+                          strokeDasharray="3 3" 
+                          label={{ value: 'Projeção', position: 'insideTopRight', fill: '#ef4444' }} 
+                        />
+                      )}
+                    </AreaChart>
                   </ResponsiveContainer>
                 </div>
-              ) : (
-                <div className="flex justify-center items-center h-64 bg-gray-50 rounded-md">
-                  <p className="text-gray-500">Nenhum dado de vendas disponível para o período selecionado</p>
+                <div className="px-4 py-3 bg-amber-50 border-t border-amber-200">
+                  <div className="flex items-center text-sm text-amber-700">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <p>A projeção é baseada na média diária de vendas do mês atual, aplicada aos dias restantes.</p>
+                  </div>
                 </div>
-              )}
-            </div>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="retention" className="space-y-4">
