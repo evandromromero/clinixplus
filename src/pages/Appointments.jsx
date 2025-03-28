@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Clock, Plus, Check, X, Filter, ArrowRight, User, DollarSign, History, Phone, Mail, FileText, Package as PackageIcon, Scissors, CalendarPlus, Trash2 } from "lucide-react";
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Clock, Plus, Check, X, Filter, ArrowRight, User, DollarSign, History, Phone, Mail, FileText, Package as PackageIcon, Scissors, CalendarPlus, Trash2, AlertTriangle } from "lucide-react";
 import { format, parseISO, isToday, isTomorrow, isThisWeek, isAfter, getDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
@@ -100,6 +100,12 @@ export default function Appointments() {
     title: '',
     description: '',
     confirmText: ''
+  });
+
+  const [confirmOverlapDialog, setConfirmOverlapDialog] = useState({
+    isOpen: false,
+    timeSlot: null,
+    existingAppointments: []
   });
 
   const navigate = useNavigate();
@@ -794,23 +800,54 @@ export default function Appointments() {
     });
   };
 
+  // Função para verificar se um horário já está ocupado
+  const checkTimeSlotAvailability = (employeeId, date, hour) => {
+    if (!employeeId || !date) return { available: true, appointments: [] };
+    
+    const dateStr = format(date, 'yyyy-MM-dd');
+    const employeeAppointments = appointments.filter(app => 
+      app.employee_id === employeeId && 
+      format(new Date(app.date), 'yyyy-MM-dd') === dateStr &&
+      new Date(app.date).getHours() === hour
+    );
+    
+    return { 
+      available: employeeAppointments.length === 0,
+      appointments: employeeAppointments
+    };
+  };
+
   // Modificar o onChange do Select de horário para validar o intervalo
   const handleTimeSelection = (value) => {
-    const selectedHour = parseFloat(value);
-    const isValidInterval = validateAppointmentInterval(newAppointment.employee_id, selectedHour);
-    
-    if (!isValidInterval) {
-      toast({
-        title: "Horário Indisponível",
-        description: "Este horário não respeita o intervalo mínimo entre agendamentos do profissional.",
-        variant: "destructive"
-      });
-      return;
-    }
-
+    const [hours, minutes] = value.split(':').map(Number);
     const newDate = new Date(newAppointment.date);
-    newDate.setHours(selectedHour, 0, 0, 0);
+    newDate.setHours(hours, minutes, 0, 0);
+    
+    // Verificar disponibilidade do horário
+    const { available, appointments: conflictingAppointments } = 
+      checkTimeSlotAvailability(newAppointment.employee_id, newAppointment.date, hours);
+    
+    if (!available) {
+      // Mostrar diálogo de confirmação
+      setConfirmOverlapDialog({
+        isOpen: true,
+        timeSlot: { hours, minutes },
+        existingAppointments: conflictingAppointments
+      });
+    } else {
+      // Horário disponível, atualizar normalmente
+      setNewAppointment({...newAppointment, date: newDate});
+    }
+  };
+
+  // Função para confirmar agendamento em horário ocupado
+  const confirmOverlappingAppointment = () => {
+    const { timeSlot } = confirmOverlapDialog;
+    const newDate = new Date(newAppointment.date);
+    newDate.setHours(timeSlot.hours, timeSlot.minutes, 0, 0);
+    
     setNewAppointment({...newAppointment, date: newDate});
+    setConfirmOverlapDialog({ isOpen: false, timeSlot: null, existingAppointments: [] });
   };
 
   useEffect(() => {
@@ -1291,22 +1328,31 @@ export default function Appointments() {
                 <Label>Horário</Label>
                 <Select
                   value={newAppointment.date ? format(newAppointment.date, 'HH:mm') : ''}
-                  onValueChange={(value) => {
-                    const [hours, minutes] = value.split(':').map(Number);
-                    const newDate = new Date(newAppointment.date);
-                    newDate.setHours(hours, minutes, 0, 0);
-                    setNewAppointment({...newAppointment, date: newDate});
-                  }}
+                  onValueChange={handleTimeSelection}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione o horário..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {availableHours.map((hour) => (
-                      <SelectItem key={hour} value={formatHour(hour)}>
-                        {formatHour(hour)}
-                      </SelectItem>
-                    ))}
+                    {availableHours.map((hour) => {
+                      const { available, appointments: conflictingApps } = 
+                        checkTimeSlotAvailability(newAppointment.employee_id, newAppointment.date, hour);
+                      
+                      return (
+                        <SelectItem 
+                          key={hour} 
+                          value={formatHour(hour)}
+                          className={!available ? "bg-red-50 text-red-700 font-medium" : ""}
+                        >
+                          {formatHour(hour)}
+                          {!available && (
+                            <span className="ml-2 text-xs">
+                              ({conflictingApps.length} agendamento{conflictingApps.length > 1 ? 's' : ''})
+                            </span>
+                          )}
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
               </div>
@@ -1789,12 +1835,74 @@ export default function Appointments() {
               Cancelar
             </Button>
             <Button 
+              onClick={() => handleConfirmAction()}
               variant={confirmationDialog.type === 'delete' ? 'destructive' : 
                       confirmationDialog.type === 'cancel' ? 'secondary' : 
                       'default'}
-              onClick={() => handleConfirmAction()}
             >
               {confirmationDialog.confirmText}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog 
+        open={confirmOverlapDialog.isOpen} 
+        onOpenChange={(isOpen) => {
+          if (!isOpen) setConfirmOverlapDialog({ isOpen: false, timeSlot: null, existingAppointments: [] });
+        }}
+      >
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Horário já ocupado</DialogTitle>
+          </DialogHeader>
+          
+          <div className="py-4 space-y-4">
+            <div className="bg-amber-50 border border-amber-200 p-4 rounded-md">
+              <div className="flex items-center gap-2 text-amber-700 mb-2">
+                <AlertTriangle className="h-5 w-5" />
+                <p className="font-medium">Atenção!</p>
+              </div>
+              <p className="text-sm text-amber-700">
+                O horário {confirmOverlapDialog.timeSlot ? formatHour(confirmOverlapDialog.timeSlot.hours) : ""} já possui {confirmOverlapDialog.existingAppointments.length} agendamento{confirmOverlapDialog.existingAppointments.length > 1 ? 's' : ''}.
+              </p>
+            </div>
+            
+            <div className="space-y-2">
+              <p className="font-medium">Agendamentos existentes:</p>
+              <div className="max-h-[200px] overflow-y-auto space-y-2">
+                {confirmOverlapDialog.existingAppointments.map(app => {
+                  const client = clients.find(c => c.id === app.client_id);
+                  const service = services.find(s => s.id === app.service_id);
+                  
+                  return (
+                    <div key={app.id} className="border p-3 rounded-md bg-gray-50">
+                      <p className="font-medium">{client?.name || "Cliente"}</p>
+                      <p className="text-sm text-gray-600">{service?.name || "Serviço"}</p>
+                      <p className="text-xs text-gray-500">{format(new Date(app.date), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            
+            <p className="text-sm">
+              Deseja prosseguir com o agendamento mesmo assim?
+            </p>
+          </div>
+          
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setConfirmOverlapDialog({ isOpen: false, timeSlot: null, existingAppointments: [] })}
+            >
+              Cancelar
+            </Button>
+            <Button 
+              onClick={confirmOverlappingAppointment}
+              className="bg-amber-600 hover:bg-amber-700"
+            >
+              Agendar mesmo assim
             </Button>
           </DialogFooter>
         </DialogContent>
