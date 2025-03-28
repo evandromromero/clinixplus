@@ -977,19 +977,19 @@ export default function Appointments() {
                 <div className="space-y-2">
                   {employees.map(employee => (
                     <div key={employee.id} className="flex items-center space-x-2">
-                      <Checkbox 
-                        id={`emp-${employee.id}`}
-                        checked={selectedEmployees.includes(employee.id)}
-                        onCheckedChange={() => toggleEmployeeFilter(employee.id)}
-                      />
-                      <Label htmlFor={`emp-${employee.id}`} className="flex items-center gap-2">
-                        <div 
-                          className="w-3 h-3 rounded-full"
-                          style={{ backgroundColor: employee.color || '#94a3b8' }}
-                        ></div>
-                        {employee.name}
-                      </Label>
-                    </div>
+                    <Checkbox 
+                      id={`emp-${employee.id}`}
+                      checked={selectedEmployees.includes(employee.id)}
+                      onCheckedChange={() => toggleEmployeeFilter(employee.id)}
+                    />
+                    <Label htmlFor={`emp-${employee.id}`} className="flex items-center gap-2">
+                      <div 
+                        className="w-3 h-3 rounded-full"
+                        style={{ backgroundColor: employee.color || '#94a3b8' }}
+                      ></div>
+                      {employee.name.length > 16 ? employee.name.substring(0, 16) + '...' : employee.name}
+                    </Label>
+                  </div>
                   ))}
                 </div>
               </div>
@@ -1018,7 +1018,7 @@ export default function Appointments() {
                             className="w-3 h-3 rounded-full"
                             style={{ backgroundColor: employee.color || '#94a3b8' }}
                           ></div>
-                          {employee.name}
+                          {employee.name.length > 16 ? employee.name.substring(0, 16) + '...' : employee.name}
                         </div>
                       </th>
                     ))}
@@ -1172,8 +1172,8 @@ export default function Appointments() {
                           <div 
                             className="w-3 h-3 rounded-full"
                             style={{ backgroundColor: employee.color || '#94a3b8' }}
-                          ></div>
-                          {employee.name}
+                          />
+                          {employee.name.length > 16 ? employee.name.substring(0, 16) + '...' : employee.name}
                         </div>
                       </SelectItem>
                     ))}
@@ -1423,15 +1423,15 @@ export default function Appointments() {
                     </SelectTrigger>
                     <SelectContent>
                       {employees.map((employee) => (
-                        <SelectItem key={employee.id} value={employee.id}>
-                          <div className="flex items-center gap-2">
-                            <div 
-                              className="w-3 h-3 rounded-full"
-                              style={{ backgroundColor: employee.color || '#94a3b8' }}
-                            ></div>
-                            {employee.name}
-                          </div>
-                        </SelectItem>
+                       <SelectItem key={employee.id} value={employee.id}>
+                       <div className="flex items-center gap-2">
+                         <div 
+                           className="w-3 h-3 rounded-full"
+                           style={{ backgroundColor: employee.color || '#94a3b8' }}
+                         />
+                         {employee.name.length > 16 ? employee.name.substring(0, 16) + '...' : employee.name}
+                       </div>
+                     </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -1538,7 +1538,7 @@ export default function Appointments() {
                       </div>
                       <div>
                         <Label className="text-gray-500">Profissional</Label>
-                        <p className="font-medium">{selectedAppointmentDetails.employee.name}</p>
+                        <p className="font-medium">{selectedAppointmentDetails.employee.name.length > 16 ? selectedAppointmentDetails.employee.name.substring(0, 16) + '...' : selectedAppointmentDetails.employee.name}</p>
                       </div>
                       <div>
                         <Label className="text-gray-500">Data e Hora</Label>
@@ -1588,7 +1588,7 @@ export default function Appointments() {
                                   </p>
                                   <p className="text-sm text-gray-600">
                                     {services.find(s => s.id === app.service_id)?.name} - 
-                                    {employees.find(e => e.id === app.employee_id)?.name}
+                                    {employees.find(e => e.id === app.employee_id)?.name.length > 16 ? employees.find(e => e.id === app.employee_id)?.name.substring(0, 16) + '...' : employees.find(e => e.id === app.employee_id)?.name}
                                   </p>
                                 </div>
                               </div>
