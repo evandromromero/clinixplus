@@ -113,6 +113,27 @@ src/
    - Respeitado o estilo de escrita do projeto
    - Conservada a estrutura de dados atual
 
+#### Melhorias na Interface de Relatórios
+1. **Aba de Eficiência**:
+   - Adicionados gradientes, sombras e cores vibrantes aos cards principais (Horário de Pico, Dia mais Movimentado, Taxa de Conclusão)
+   - Melhorados os gráficos com gradientes, células coloridas para destacar valores de pico e tooltips estilizados
+   - Aprimorada a tabela de desempenho dos profissionais com indicadores visuais coloridos, badges para taxa de conclusão e mini gráficos de barras para estatísticas semanais
+   - Implementados estados vazios informativos para quando não há dados disponíveis
+
+2. **Nova Aba de Despesas**:
+   - Criada uma nova aba completa para visualização de despesas
+   - Implementados cards principais: Total de Despesas, Despesas por Categoria, Despesas por Mês
+   - Adicionada uma tabela de maiores despesas com design consistente e badges coloridos para categorias
+   - Criados gráficos adicionais: Evolução de Despesas (gráfico de área) e Distribuição de Despesas (gráfico de pizza com anel)
+   - Implementada a função processExpensesData para tratar os dados de despesas, calculando totais e agrupando por categoria e mês
+
+3. **Elementos Visuais Consistentes**:
+   - Gradientes de fundo nos cards e cabeçalhos
+   - Ícones representativos para cada tipo de informação
+   - Tooltips estilizados nos gráficos
+   - Cores temáticas consistentes
+   - Efeitos de hover e transições suaves
+
 #### Sistema de Pacotes
 1. **Sistema de Desconto Flexível**:
    - Suporte para dois tipos de desconto:
