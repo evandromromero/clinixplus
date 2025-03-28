@@ -2172,15 +2172,15 @@ export default function Reports() {
               <CardContent>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
-                    <thead className="bg-gray-50">
-                      <tr className="border-b">
-                        <th className="text-left py-3 px-4 font-medium text-gray-700">Produto</th>
-                        <th className="text-center py-3 px-4 font-medium text-gray-700">Categoria</th>
-                        <th className="text-center py-3 px-4 font-medium text-gray-700">Estoque Atual</th>
-                        <th className="text-center py-3 px-4 font-medium text-gray-700">Estoque Mínimo</th>
-                        <th className="text-center py-3 px-4 font-medium text-gray-700">Status</th>
-                        <th className="text-center py-3 px-4 font-medium text-gray-700">Valor em Estoque</th>
-                        <th className="text-center py-3 px-4 font-medium text-gray-700">Previsão Reposição</th>
+                    <thead className="bg-gradient-to-r from-teal-50 to-teal-100">
+                      <tr className="border-b border-teal-200">
+                        <th className="text-left py-3 px-4 font-medium text-teal-800">Produto</th>
+                        <th className="text-center py-3 px-4 font-medium text-teal-800">Categoria</th>
+                        <th className="text-center py-3 px-4 font-medium text-teal-800">Estoque Atual</th>
+                        <th className="text-center py-3 px-4 font-medium text-teal-800">Estoque Mínimo</th>
+                        <th className="text-center py-3 px-4 font-medium text-teal-800">Status</th>
+                        <th className="text-center py-3 px-4 font-medium text-teal-800">Valor em Estoque</th>
+                        <th className="text-center py-3 px-4 font-medium text-teal-800">Previsão Reposição</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2234,42 +2234,72 @@ export default function Reports() {
 
           <TabsContent value="efficiency" className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-lg font-medium">Horário de Pico</CardTitle>
+              <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200 shadow-lg hover:shadow-xl transition-shadow duration-300">
+                <CardHeader className="pb-2 bg-gradient-to-r from-blue-100 to-blue-200 rounded-t-lg">
+                  <CardTitle className="text-lg font-medium text-blue-800 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Horário de Pico
+                  </CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold">
+                <CardContent className="pt-4">
+                  <p className="text-3xl font-bold text-blue-900">
                     {peakHoursData.peakHourLabel || 'N/A'}
                   </p>
-                  <p className="text-sm text-gray-500">Maior volume de atendimentos</p>
+                  <p className="text-sm text-blue-600 mt-1 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                    Maior volume de atendimentos
+                  </p>
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-lg font-medium">Dia mais Movimentado</CardTitle>
+              <Card className="bg-gradient-to-br from-indigo-50 to-indigo-100 border-indigo-200 shadow-lg hover:shadow-xl transition-shadow duration-300">
+                <CardHeader className="pb-2 bg-gradient-to-r from-indigo-100 to-indigo-200 rounded-t-lg">
+                  <CardTitle className="text-lg font-medium text-indigo-800 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    Dia mais Movimentado
+                  </CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold">
+                <CardContent className="pt-4">
+                  <p className="text-3xl font-bold text-indigo-900">
                     {peakHoursData.peakDayLabel || 'N/A'}
                   </p>
-                  <p className="text-sm text-gray-500">Da semana</p>
+                  <p className="text-sm text-indigo-600 mt-1 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                    Da semana
+                  </p>
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-lg font-medium">Taxa de Conclusão</CardTitle>
+              <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200 shadow-lg hover:shadow-xl transition-shadow duration-300">
+                <CardHeader className="pb-2 bg-gradient-to-r from-green-100 to-green-200 rounded-t-lg">
+                  <CardTitle className="text-lg font-medium text-green-800 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Taxa de Conclusão
+                  </CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold">
+                <CardContent className="pt-4">
+                  <p className="text-3xl font-bold text-green-900">
                     {efficiencyData.length > 0 
                       ? `${Math.round(efficiencyData.reduce((acc, emp) => acc + parseFloat(emp.completionRate || 0), 0) / efficiencyData.length)}%` 
                       : '0%'}
                   </p>
-                  <p className="text-sm text-gray-500">Agendamentos concluídos</p>
-                  <p className="text-xs text-gray-400 mt-1">
+                  <p className="text-sm text-green-600 mt-1 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Agendamentos concluídos
+                  </p>
+                  <p className="text-xs text-green-500 mt-1">
                     {efficiencyData.length > 0 && efficiencyData.every(emp => emp.completionRate === 0)
                       ? "Nenhum agendamento foi concluído ainda"
                       : ""}
@@ -2279,10 +2309,12 @@ export default function Reports() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Clock className="h-5 w-5 text-blue-500" />
+              <Card className="border-gray-200 shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300">
+                <CardHeader className="bg-gradient-to-r from-blue-50 to-blue-100 pb-2 border-b border-blue-200">
+                  <CardTitle className="text-lg font-medium text-blue-800 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
                     Distribuição de Atendimentos por Hora
                   </CardTitle>
                 </CardHeader>
@@ -2290,14 +2322,41 @@ export default function Reports() {
                   <div className="h-80">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={peakHoursData.hourData || []}>
+                        <defs>
+                          <linearGradient id="colorHours" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
+                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.2}/>
+                          </linearGradient>
+                        </defs>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
                         <XAxis 
                           dataKey="hourLabel" 
                           tickFormatter={(value) => value}
+                          stroke="#6b7280"
                         />
-                        <YAxis />
-                        <Tooltip />
-                        <Bar name="Atendimentos" dataKey="count" fill="#3b82f6" />
+                        <YAxis stroke="#6b7280" />
+                        <Tooltip 
+                          formatter={(value) => [value, 'Atendimentos']}
+                          contentStyle={{
+                            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                            borderRadius: '8px',
+                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                            border: '1px solid #e5e7eb'
+                          }}
+                        />
+                        <Bar 
+                          dataKey="count" 
+                          name="Atendimentos" 
+                          fill="url(#colorHours)"
+                          radius={[4, 4, 0, 0]}
+                        >
+                          {peakHoursData.hourData && peakHoursData.hourData.map((entry, index) => (
+                            <Cell 
+                              key={`cell-${index}`} 
+                              fill={entry.hourLabel === peakHoursData.peakHourLabel ? '#1d4ed8' : '#60a5fa'} 
+                            />
+                          ))}
+                        </Bar>
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -2309,26 +2368,39 @@ export default function Reports() {
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Award className="h-5 w-5 text-purple-500" />
+              <Card className="border-gray-200 shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300">
+                <CardHeader className="bg-gradient-to-r from-purple-50 to-purple-100 pb-2 border-b border-purple-200">
+                  <CardTitle className="text-lg font-medium text-purple-800 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
                     Eficiência dos Profissionais
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="h-80">
+                  <div className="h-80 p-4">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart 
                         data={efficiencyData}
                         layout="vertical"
                         margin={{ left: 120 }}
                       >
+                        <defs>
+                          <linearGradient id="colorRevenue" x1="0" y1="0" x2="1" y2="0">
+                            <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.8}/>
+                            <stop offset="95%" stopColor="#a78bfa" stopOpacity={0.8}/>
+                          </linearGradient>
+                          <linearGradient id="colorIdle" x1="0" y1="0" x2="1" y2="0">
+                            <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.8}/>
+                            <stop offset="95%" stopColor="#fbbf24" stopOpacity={0.8}/>
+                          </linearGradient>
+                        </defs>
                         <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#e5e7eb" />
-                        <XAxis type="number" />
+                        <XAxis type="number" stroke="#6b7280" />
                         <YAxis 
                           type="category" 
                           dataKey="name" 
+                          stroke="#6b7280"
                           tick={{ width: 100 }}
                         />
                         <Tooltip 
@@ -2336,10 +2408,16 @@ export default function Reports() {
                             if (name === 'Receita por Hora') return formatCurrency(value);
                             return value;
                           }}
+                          contentStyle={{
+                            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                            borderRadius: '8px',
+                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                            border: '1px solid #e5e7eb'
+                          }}
                         />
-                        <Legend />
-                        <Bar name="Receita por Hora" dataKey="revenuePerHour" fill="#8b5cf6" />
-                        <Bar name="Tempo Ocioso (min)" dataKey="idleTime" fill="#f59e0b" />
+                        <Legend iconType="circle" />
+                        <Bar name="Receita por Hora" dataKey="revenuePerHour" fill="url(#colorRevenue)" radius={[0, 4, 4, 0]} />
+                        <Bar name="Tempo Ocioso (min)" dataKey="idleTime" fill="url(#colorIdle)" radius={[0, 4, 4, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -2364,9 +2442,24 @@ export default function Reports() {
                         <th className="text-left py-3 px-4">Profissional</th>
                         <th className="text-center py-3 px-4">Função</th>
                         <th className="text-center py-3 px-4">Total</th>
-                        <th className="text-center py-3 px-4">Concluídos</th>
-                        <th className="text-center py-3 px-4">Cancelados</th>
-                        <th className="text-center py-3 px-4">Agendados</th>
+                        <th className="text-center py-3 px-4">
+                          <span className="inline-flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                            Concluídos
+                          </span>
+                        </th>
+                        <th className="text-center py-3 px-4">
+                          <span className="inline-flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                            Cancelados
+                          </span>
+                        </th>
+                        <th className="text-center py-3 px-4">
+                          <span className="inline-flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                            Agendados
+                          </span>
+                        </th>
                         <th className="text-center py-3 px-4">Taxa Conclusão</th>
                         <th className="text-center py-3 px-4">Tempo Médio</th>
                         <th className="text-center py-3 px-4">Receita</th>
@@ -2380,44 +2473,66 @@ export default function Reports() {
                             <td className="py-3 px-4 font-medium">{employee.name}</td>
                             <td className="py-3 px-4 text-center capitalize">{employee.role}</td>
                             <td className="py-3 px-4 text-center">{employee.appointments}</td>
-                            <td className="py-3 px-4 text-center">{employee.completed_appointments || 0}</td>
-                            <td className="py-3 px-4 text-center">{employee.canceled_appointments || 0}</td>
-                            <td className="py-3 px-4 text-center">{employee.scheduled_appointments || 0}</td>
-                            <td className="py-3 px-4 text-center">{employee.completionRate}%</td>
+                            <td className="py-3 px-4 text-center">
+                              <span className="inline-flex items-center gap-1">
+                                <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                                {employee.completed_appointments || 0}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              <span className="inline-flex items-center gap-1">
+                                <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                                {employee.canceled_appointments || 0}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              <span className="inline-flex items-center gap-1">
+                                <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                                {employee.scheduled_appointments || 0}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+                                parseInt(employee.completionRate) >= 80 
+                                  ? 'bg-green-100 text-green-800 border border-green-200'
+                                  : parseInt(employee.completionRate) >= 50
+                                    ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                    : 'bg-red-100 text-red-800 border border-red-200'
+                              }`}>
+                                {employee.completionRate}%
+                              </span>
+                            </td>
                             <td className="py-3 px-4 text-center">{employee.avgDuration} min</td>
-                            <td className="py-3 px-4 text-center">{formatCurrency(employee.revenue)}</td>
-                            <td className="py-3 px-4 text-center">{formatCurrency(employee.revenuePerHour)}</td>
+                            <td className="py-3 px-4 text-center font-medium">{formatCurrency(employee.revenue)}</td>
+                            <td className="py-3 px-4 text-center font-medium">{formatCurrency(employee.revenuePerHour)}</td>
                           </tr>
                           {employee.weeklyStats && employee.weeklyStats.length > 0 && (
                             <tr className="bg-gray-50">
-                              <td colSpan={10} className="p-0">
-                                <div className="p-4">
-                                  <h4 className="text-sm font-medium mb-2">Agendamentos por Semana</h4>
-                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                                    {employee.weeklyStats.map((week, weekIndex) => (
-                                      <div key={weekIndex} className="bg-white p-3 rounded border">
-                                        <div className="text-xs font-medium mb-1">{week.weekLabel}</div>
-                                        <div className="grid grid-cols-4 gap-2 text-xs">
-                                          <div>
-                                            <div className="font-medium text-center">{week.total}</div>
-                                            <div className="text-gray-500 text-center">Total</div>
-                                          </div>
-                                          <div>
-                                            <div className="font-medium text-center text-green-600">{week.completed}</div>
-                                            <div className="text-gray-500 text-center">Concluídos</div>
-                                          </div>
-                                          <div>
-                                            <div className="font-medium text-center text-red-600">{week.canceled}</div>
-                                            <div className="text-gray-500 text-center">Cancelados</div>
-                                          </div>
-                                          <div>
-                                            <div className="font-medium text-center text-blue-600">{week.scheduled}</div>
-                                            <div className="text-gray-500 text-center">Agendados</div>
-                                          </div>
-                                        </div>
+                              <td colSpan={10} className="py-2 px-4">
+                                <div className="text-xs text-gray-500 mb-1">Agendamentos por Semana</div>
+                                <div className="flex items-center gap-1">
+                                  {employee.weeklyStats.map((stat, i) => (
+                                    <div key={i} className="flex flex-col items-center">
+                                      <div className="text-xs text-gray-500">{stat.week}</div>
+                                      <div className="flex gap-0.5 mt-1">
+                                        <div 
+                                          className="w-6 bg-green-500 rounded-sm" 
+                                          style={{ height: `${Math.max(4, stat.completed * 4)}px` }}
+                                          title={`Concluídos: ${stat.completed}`}
+                                        ></div>
+                                        <div 
+                                          className="w-6 bg-red-500 rounded-sm" 
+                                          style={{ height: `${Math.max(4, stat.canceled * 4)}px` }}
+                                          title={`Cancelados: ${stat.canceled}`}
+                                        ></div>
+                                        <div 
+                                          className="w-6 bg-blue-500 rounded-sm" 
+                                          style={{ height: `${Math.max(4, stat.scheduled * 4)}px` }}
+                                          title={`Agendados: ${stat.scheduled}`}
+                                        ></div>
                                       </div>
-                                    ))}
-                                  </div>
+                                    </div>
+                                  ))}
                                 </div>
                               </td>
                             </tr>
@@ -2426,8 +2541,14 @@ export default function Reports() {
                       ))}
                       {efficiencyData.length === 0 && (
                         <tr>
-                          <td colSpan={10} className="py-6 text-center text-gray-500">
-                            Nenhum dado de desempenho disponível
+                          <td colSpan={10} className="py-8 text-center text-gray-500">
+                            <div className="flex flex-col items-center justify-center">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-gray-300 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              <p>Nenhum dado de eficiência disponível</p>
+                              <p className="text-sm text-gray-400 mt-1">Selecione outro período ou aguarde novos agendamentos</p>
+                            </div>
                           </td>
                         </tr>
                       )}
