@@ -847,12 +847,17 @@ export default function Appointments() {
   }, [newAppointment.client_id]);
 
   const clearNewAppointmentForm = () => {
-    setSelectedClient(null);
-    setSelectedService(null);
-    setSelectedEmployee(null);
-    setSelectedDate(new Date());
-    setSelectedTime("");
-    setNotes("");
+    setNewAppointment({
+      client_id: "",
+      employee_id: "",
+      service_id: "",
+      date: new Date(),
+      status: "agendado",
+      notes: "",
+      original_appointment_id: null
+    });
+    setSelectedClientPackage(null);
+    setSelectedPackageId("");
   };
 
   return (
