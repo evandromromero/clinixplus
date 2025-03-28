@@ -1623,70 +1623,125 @@ export default function Reports() {
 
           <TabsContent value="retention" className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-lg font-medium">Taxa de Retenção</CardTitle>
+              <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200 shadow-lg hover:shadow-xl transition-shadow duration-300">
+                <CardHeader className="pb-2 bg-gradient-to-r from-green-100 to-green-200 rounded-t-lg">
+                  <CardTitle className="text-lg font-medium text-green-800 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Taxa de Retenção
+                  </CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold">
+                <CardContent className="pt-4">
+                  <p className="text-3xl font-bold text-green-900">
                     {retentionData.length > 0 
                       ? `${Math.round((retentionData.filter(c => c.recencyCategory !== 'inativo').length / retentionData.length) * 100)}%` 
                       : '0%'}
                   </p>
-                  <p className="text-sm text-gray-500">Clientes que retornaram</p>
+                  <p className="text-sm text-green-600 mt-1 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Clientes que retornaram
+                  </p>
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-lg font-medium">Clientes VIP</CardTitle>
+              <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200 shadow-lg hover:shadow-xl transition-shadow duration-300">
+                <CardHeader className="pb-2 bg-gradient-to-r from-blue-100 to-blue-200 rounded-t-lg">
+                  <CardTitle className="text-lg font-medium text-blue-800 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                    </svg>
+                    Clientes VIP
+                  </CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold">
+                <CardContent className="pt-4">
+                  <p className="text-3xl font-bold text-blue-900">
                     {retentionData
                       .filter(c => c.rfmScore && c.rfmScore.total >= 12)
                       .length}
                   </p>
-                  <p className="text-sm text-gray-500">Alto valor e frequência</p>
+                  <p className="text-sm text-blue-600 mt-1 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                    </svg>
+                    Alto valor e frequência
+                  </p>
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-lg font-medium">Clientes em Risco</CardTitle>
+              <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200 shadow-lg hover:shadow-xl transition-shadow duration-300">
+                <CardHeader className="pb-2 bg-gradient-to-r from-amber-100 to-amber-200 rounded-t-lg">
+                  <CardTitle className="text-lg font-medium text-amber-800 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    Clientes em Risco
+                  </CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold">
+                <CardContent className="pt-4">
+                  <p className="text-3xl font-bold text-amber-900">
                     {retentionData
                       .filter(c => c.recencyCategory === 'em risco')
                       .length}
                   </p>
-                  <p className="text-sm text-gray-500">Sem visitas há 90-180 dias</p>
+                  <p className="text-sm text-amber-600 mt-1 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Sem visitas há 90-180 dias
+                  </p>
                 </CardContent>
               </Card>
             </div>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Análise RFM (Recência, Frequência, Monetização)</CardTitle>
+            <Card className="border-gray-200 shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300">
+              <CardHeader className="bg-gradient-to-r from-purple-50 to-purple-100 pb-2 border-b border-purple-200">
+                <CardTitle className="text-lg font-medium text-purple-800 flex items-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                  Análise RFM (Recência, Frequência, Monetização)
+                </CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="h-80">
+              <CardContent className="p-0">
+                <div className="h-80 p-4">
                   <ResponsiveContainer width="100%" height="100%">
                     <ScatterChart>
-                      <CartesianGrid strokeDasharray="3 3" />
+                      <defs>
+                        <linearGradient id="colorRecent" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.8}/>
+                          <stop offset="95%" stopColor="#10b981" stopOpacity={0.2}/>
+                        </linearGradient>
+                        <linearGradient id="colorActive" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
+                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.2}/>
+                        </linearGradient>
+                        <linearGradient id="colorRisk" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.8}/>
+                          <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.2}/>
+                        </linearGradient>
+                        <linearGradient id="colorInactive" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#ef4444" stopOpacity={0.8}/>
+                          <stop offset="95%" stopColor="#ef4444" stopOpacity={0.2}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
                       <XAxis 
                         type="number" 
                         dataKey="daysSinceLast" 
                         name="Recência" 
-                        label={{ value: 'Dias desde última visita', position: 'insideBottom', offset: -5 }} 
+                        label={{ value: 'Dias desde última visita', position: 'insideBottom', offset: -5, fill: '#6b7280' }} 
+                        stroke="#6b7280"
                       />
                       <YAxis 
                         type="number" 
                         dataKey="totalSpent" 
                         name="Valor" 
-                        label={{ value: 'Valor total gasto', angle: -90, position: 'insideLeft' }} 
+                        label={{ value: 'Valor total gasto', angle: -90, position: 'insideLeft', fill: '#6b7280' }} 
                         tickFormatter={(value) => formatCurrency(value).replace('R$', '')}
+                        stroke="#6b7280"
                       />
                       <ZAxis 
                         type="number" 
@@ -1701,17 +1756,41 @@ export default function Reports() {
                           if (name === 'Frequência') return `${value} visitas`;
                           return value;
                         }}
+                        contentStyle={{
+                          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                          borderRadius: '8px',
+                          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                          border: '1px solid #e5e7eb'
+                        }}
                         content={({ active, payload }) => {
                           if (active && payload && payload.length) {
                             const data = payload[0].payload;
+                            let statusColor = "#10b981"; // verde para recente
+                            if (data.recencyCategory === 'em risco') statusColor = "#f59e0b"; // âmbar para em risco
+                            else if (data.recencyCategory === 'inativo') statusColor = "#ef4444"; // vermelho para inativo
+                            else if (data.recencyCategory === 'ativo') statusColor = "#3b82f6"; // azul para ativo
+                            
                             return (
-                              <div className="bg-white p-2 border rounded shadow text-xs">
-                                <p className="font-semibold">{data.name}</p>
-                                <p>Última visita: {data.daysSinceLast} dias atrás</p>
-                                <p>Visitas: {data.appointmentCount + data.purchaseCount}</p>
-                                <p>Total gasto: {formatCurrency(data.totalSpent)}</p>
-                                <p>Categoria: {data.rfmScore ? 
-                                  `R${data.rfmScore.r}F${data.rfmScore.f}M${data.rfmScore.m}` : 'N/A'}</p>
+                              <div className="bg-white p-3 border rounded shadow-lg text-sm">
+                                <p className="font-semibold text-gray-900 border-b pb-1 mb-1">{data.name}</p>
+                                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-gray-700">
+                                  <p>Última visita:</p>
+                                  <p className="font-medium">{data.daysSinceLast} dias atrás</p>
+                                  <p>Visitas:</p>
+                                  <p className="font-medium">{data.appointmentCount + (data.purchaseCount || 0)}</p>
+                                  <p>Total gasto:</p>
+                                  <p className="font-medium">{formatCurrency(data.totalSpent)}</p>
+                                  <p>Status:</p>
+                                  <p className="font-medium flex items-center">
+                                    <span className={`w-2 h-2 rounded-full mr-1`} style={{backgroundColor: statusColor}}></span>
+                                    {data.recencyCategory === 'recente' ? 'Recente' : 
+                                     data.recencyCategory === 'ativo' ? 'Ativo' : 
+                                     data.recencyCategory === 'em risco' ? 'Em risco' : 'Inativo'}
+                                  </p>
+                                  <p>Pontuação RFM:</p>
+                                  <p className="font-medium">{data.rfmScore ? 
+                                    `R${data.rfmScore.r} F${data.rfmScore.f} M${data.rfmScore.m}` : 'N/A'}</p>
+                                </div>
                               </div>
                             );
                           }
@@ -1722,38 +1801,182 @@ export default function Reports() {
                         name="Clientes" 
                         data={retentionData} 
                         fill="#8884d8"
-                      />
-                      <ReferenceLine y={0} stroke="#000" />
-                      <ReferenceLine x={30} stroke="#2563eb" strokeDasharray="3 3" 
-                        label={{ value: '30 dias', position: 'insideTopRight' }} />
-                      <ReferenceLine x={90} stroke="#f59e0b" strokeDasharray="3 3" 
-                        label={{ value: '90 dias', position: 'insideTopRight' }} />
-                      <ReferenceLine x={180} stroke="#ef4444" strokeDasharray="3 3" 
-                        label={{ value: '180 dias', position: 'insideTopRight' }} />
+                      >
+                        {retentionData.map((entry, index) => {
+                          let color = '#10b981'; // recente (verde)
+                          if (entry.recencyCategory === 'em risco') color = '#f59e0b'; // em risco (âmbar)
+                          else if (entry.recencyCategory === 'inativo') color = '#ef4444'; // inativo (vermelho)
+                          else if (entry.recencyCategory === 'ativo') color = '#3b82f6'; // ativo (azul)
+                          
+                          return <Cell key={`cell-${index}`} fill={color} />
+                        })}
+                      </Scatter>
+                      <ReferenceLine y={0} stroke="#6b7280" />
+                      <ReferenceLine x={30} stroke="#10b981" strokeDasharray="3 3" 
+                        label={{ value: '30 dias', position: 'insideTopRight', fill: '#10b981' }} />
+                      <ReferenceLine x={90} stroke="#3b82f6" strokeDasharray="3 3" 
+                        label={{ value: '90 dias', position: 'insideTopRight', fill: '#3b82f6' }} />
+                      <ReferenceLine x={180} stroke="#f59e0b" strokeDasharray="3 3" 
+                        label={{ value: '180 dias', position: 'insideTopRight', fill: '#f59e0b' }} />
                     </ScatterChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="mt-2 text-sm text-gray-600">
-                  <ul className="flex flex-wrap gap-x-4 gap-y-1">
-                    <li className="flex items-center gap-1">
-                      <span className="w-3 h-3 rounded-full bg-[#2563eb]"></span>
-                      <span>Clientes recentes (30 dias)</span>
-                    </li>
-                    <li className="flex items-center gap-1">
-                      <span className="w-3 h-3 rounded-full bg-[#f59e0b]"></span>
-                      <span>Clientes ativos (90 dias)</span>
-                    </li>
-                    <li className="flex items-center gap-1">
-                      <span className="w-3 h-3 rounded-full bg-[#ef4444]"></span>
-                      <span>Clientes em risco (180 dias)</span>
-                    </li>
-                    <li className="flex items-center gap-1">
-                      <span>Tamanho da bolha = Frequência de visitas</span>
-                    </li>
-                  </ul>
+                <div className="mt-2 p-4 text-sm text-gray-600 bg-gray-50 rounded-b-lg">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <h4 className="font-medium text-gray-800 mb-2">Legenda de Status</h4>
+                      <ul className="space-y-1.5">
+                        <li className="flex items-center gap-1.5">
+                          <span className="w-3 h-3 rounded-full bg-[#10b981]"></span>
+                          <span>Clientes recentes (até 30 dias)</span>
+                        </li>
+                        <li className="flex items-center gap-1.5">
+                          <span className="w-3 h-3 rounded-full bg-[#3b82f6]"></span>
+                          <span>Clientes ativos (30-90 dias)</span>
+                        </li>
+                        <li className="flex items-center gap-1.5">
+                          <span className="w-3 h-3 rounded-full bg-[#f59e0b]"></span>
+                          <span>Clientes em risco (90-180 dias)</span>
+                        </li>
+                        <li className="flex items-center gap-1.5">
+                          <span className="w-3 h-3 rounded-full bg-[#ef4444]"></span>
+                          <span>Clientes inativos (180+ dias)</span>
+                        </li>
+                      </ul>
+                    </div>
+                    <div>
+                      <h4 className="font-medium text-gray-800 mb-2">Sobre a Análise RFM</h4>
+                      <p className="text-gray-600">
+                        A análise RFM avalia clientes em três dimensões: <span className="font-medium">Recência</span> (tempo desde a última visita), 
+                        <span className="font-medium"> Frequência</span> (número de visitas) e <span className="font-medium">Monetização</span> (valor total gasto).
+                        Cada dimensão é pontuada de 1-5, onde valores mais altos são melhores.
+                      </p>
+                      <p className="text-gray-500 italic mt-2">Tamanho da bolha = Frequência de visitas</p>
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Card className="border-gray-200 shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300">
+                <CardHeader className="bg-gradient-to-r from-rose-50 to-rose-100 pb-2 border-b border-rose-200">
+                  <CardTitle className="text-lg font-medium text-rose-800 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                    Distribuição por Categoria de Cliente
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="h-64 p-4">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={[
+                            { name: 'Recentes (até 30d)', value: retentionData.filter(c => c.recencyCategory === 'recente').length, color: '#10b981' },
+                            { name: 'Ativos (30-90d)', value: retentionData.filter(c => c.recencyCategory === 'ativo').length, color: '#3b82f6' },
+                            { name: 'Em risco (90-180d)', value: retentionData.filter(c => c.recencyCategory === 'em risco').length, color: '#f59e0b' },
+                            { name: 'Inativos (180d+)', value: retentionData.filter(c => c.recencyCategory === 'inativo').length, color: '#ef4444' }
+                          ]}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          outerRadius={80}
+                          fill="#8884d8"
+                          dataKey="value"
+                          nameKey="name"
+                          label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                        >
+                          {({ name, value, color }) => (
+                            <Cell key={`cell-${name}`} fill={color} />
+                          )}
+                        </Pie>
+                        <Tooltip 
+                          formatter={(value) => [value, 'Clientes']}
+                          contentStyle={{
+                            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                            borderRadius: '8px',
+                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                            border: '1px solid #e5e7eb'
+                          }}
+                        />
+                        <Legend 
+                          iconType="circle"
+                          layout="vertical"
+                          verticalAlign="middle"
+                          align="right"
+                          wrapperStyle={{
+                            paddingLeft: '10px'
+                          }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <Card className="border-gray-200 shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300">
+                <CardHeader className="bg-gradient-to-r from-teal-50 to-teal-100 pb-2 border-b border-teal-200">
+                  <CardTitle className="text-lg font-medium text-teal-800 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                    Distribuição por Valor Gasto
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="h-64 p-4">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart 
+                        data={[
+                          { name: 'Até R$500', value: retentionData.filter(c => c.totalSpent <= 500).length, color: '#94a3b8' },
+                          { name: 'R$501-1000', value: retentionData.filter(c => c.totalSpent > 500 && c.totalSpent <= 1000).length, color: '#60a5fa' },
+                          { name: 'R$1001-2000', value: retentionData.filter(c => c.totalSpent > 1000 && c.totalSpent <= 2000).length, color: '#3b82f6' },
+                          { name: 'R$2001-5000', value: retentionData.filter(c => c.totalSpent > 2000 && c.totalSpent <= 5000).length, color: '#2563eb' },
+                          { name: 'Acima de R$5000', value: retentionData.filter(c => c.totalSpent > 5000).length, color: '#1d4ed8' }
+                        ]}
+                        layout="vertical"
+                        margin={{ left: 120 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#e5e7eb" />
+                        <XAxis type="number" stroke="#6b7280" />
+                        <YAxis 
+                          type="category" 
+                          dataKey="name" 
+                          stroke="#6b7280"
+                          tick={{ width: 100 }}
+                        />
+                        <Tooltip 
+                          formatter={(value) => [value, 'Clientes']}
+                          contentStyle={{
+                            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                            borderRadius: '8px',
+                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                            border: '1px solid #e5e7eb'
+                          }}
+                        />
+                        <Bar 
+                          dataKey="value" 
+                          name="Clientes" 
+                          radius={[0, 4, 4, 0]}
+                        >
+                          {[
+                            { name: 'Até R$500', color: '#94a3b8' },
+                            { name: 'R$501-1000', color: '#60a5fa' },
+                            { name: 'R$1001-2000', color: '#3b82f6' },
+                            { name: 'R$2001-5000', color: '#2563eb' },
+                            { name: 'Acima de R$5000', color: '#1d4ed8' }
+                          ].map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
 
           <TabsContent value="inventory" className="space-y-4">
@@ -1914,7 +2137,7 @@ export default function Reports() {
                   <div className="h-80">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={peakHoursData.hourData || []}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
                         <XAxis 
                           dataKey="hourLabel" 
                           tickFormatter={(value) => value}
@@ -1948,7 +2171,7 @@ export default function Reports() {
                         layout="vertical"
                         margin={{ left: 120 }}
                       >
-                        <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
+                        <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#e5e7eb" />
                         <XAxis type="number" />
                         <YAxis 
                           type="category" 
