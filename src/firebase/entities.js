@@ -566,8 +566,330 @@ const PendingServiceBase = {
 
 export const PendingService = createEnhancedEntity('pending_services', PendingServiceBase);
 
-// Exportar outras entidades
-export const Appointment = createEnhancedEntity('appointments', base44.entities.Appointment);
+// Implementação completa da entidade Employee usando Firebase
+export const Employee = {
+  collection: 'employees',
+  
+  create: async function(data) {
+    try {
+      // Gerar um ID único se não fornecido
+      const id = data.id || doc(collection(db, 'employees')).id;
+      
+      // Adicionar metadados
+      const now = new Date().toISOString();
+      const employeeData = {
+        ...data,
+        id,
+        created_date: data.created_date || now,
+        updated_date: now
+      };
+
+      // Salvar no Firestore
+      await setDoc(doc(db, 'employees', id), employeeData);
+      return employeeData;
+    } catch (error) {
+      console.error('Error creating employee:', error);
+      throw error;
+    }
+  },
+
+  async update(id, data) {
+    try {
+      const docRef = doc(db, 'employees', id);
+      const now = new Date().toISOString();
+      
+      const updateData = {
+        ...data,
+        updated_date: now
+      };
+
+      await setDoc(docRef, updateData, { merge: true });
+      return { id, ...updateData };
+    } catch (error) {
+      console.error('Error updating employee:', error);
+      throw error;
+    }
+  },
+
+  async delete(id) {
+    try {
+      await deleteDoc(doc(db, 'employees', id));
+    } catch (error) {
+      console.error('Error deleting employee:', error);
+      throw error;
+    }
+  },
+
+  async get(id) {
+    try {
+      const docRef = doc(db, 'employees', id);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        return {
+          id: docSnap.id,
+          ...docSnap.data()
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting employee:', error);
+      throw error;
+    }
+  },
+
+  async list() {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'employees'));
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('Error listing employees:', error);
+      return [];
+    }
+  },
+
+  async filter(filters) {
+    try {
+      let q = collection(db, 'employees');
+      
+      // Aplicar filtros se fornecidos
+      if (filters) {
+        Object.entries(filters).forEach(([key, value]) => {
+          q = query(q, where(key, '==', value));
+        });
+      }
+      
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('Error filtering employees:', error);
+      return [];
+    }
+  }
+};
+
+// Implementação da entidade Product usando Firebase
+export const Product = {
+  collection: 'products',
+  
+  create: async function(data) {
+    try {
+      // Gerar um ID único se não fornecido
+      const id = data.id || doc(collection(db, 'products')).id;
+      
+      // Adicionar metadados
+      const now = new Date().toISOString();
+      const productData = {
+        ...data,
+        id,
+        created_date: data.created_date || now,
+        updated_date: now
+      };
+
+      // Salvar no Firestore
+      await setDoc(doc(db, 'products', id), productData);
+      return productData;
+    } catch (error) {
+      console.error('Error creating product:', error);
+      throw error;
+    }
+  },
+
+  async update(id, data) {
+    try {
+      const docRef = doc(db, 'products', id);
+      const now = new Date().toISOString();
+      
+      const updateData = {
+        ...data,
+        updated_date: now
+      };
+
+      await setDoc(docRef, updateData, { merge: true });
+      return { id, ...updateData };
+    } catch (error) {
+      console.error('Error updating product:', error);
+      throw error;
+    }
+  },
+
+  async delete(id) {
+    try {
+      await deleteDoc(doc(db, 'products', id));
+    } catch (error) {
+      console.error('Error deleting product:', error);
+      throw error;
+    }
+  },
+
+  async get(id) {
+    try {
+      const docRef = doc(db, 'products', id);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        return {
+          id: docSnap.id,
+          ...docSnap.data()
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting product:', error);
+      throw error;
+    }
+  },
+
+  async list() {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'products'));
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('Error listing products:', error);
+      return [];
+    }
+  },
+
+  async filter(filters) {
+    try {
+      let q = collection(db, 'products');
+      
+      // Aplicar filtros se fornecidos
+      if (filters) {
+        Object.entries(filters).forEach(([key, value]) => {
+          q = query(q, where(key, '==', value));
+        });
+      }
+      
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('Error filtering products:', error);
+      return [];
+    }
+  }
+};
+
+// Implementação da entidade Inventory usando Firebase
+export const Inventory = {
+  collection: 'inventory',
+  
+  create: async function(data) {
+    try {
+      // Gerar um ID único se não fornecido
+      const id = data.id || doc(collection(db, 'inventory')).id;
+      
+      // Adicionar metadados
+      const now = new Date().toISOString();
+      const inventoryData = {
+        ...data,
+        id,
+        created_date: data.created_date || now,
+        updated_date: now
+      };
+
+      // Salvar no Firestore
+      await setDoc(doc(db, 'inventory', id), inventoryData);
+      return inventoryData;
+    } catch (error) {
+      console.error('Error creating inventory item:', error);
+      throw error;
+    }
+  },
+
+  async update(id, data) {
+    try {
+      const docRef = doc(db, 'inventory', id);
+      const now = new Date().toISOString();
+      
+      const updateData = {
+        ...data,
+        updated_date: now
+      };
+
+      await setDoc(docRef, updateData, { merge: true });
+      return { id, ...updateData };
+    } catch (error) {
+      console.error('Error updating inventory item:', error);
+      throw error;
+    }
+  },
+
+  async delete(id) {
+    try {
+      await deleteDoc(doc(db, 'inventory', id));
+    } catch (error) {
+      console.error('Error deleting inventory item:', error);
+      throw error;
+    }
+  },
+
+  async get(id) {
+    try {
+      const docRef = doc(db, 'inventory', id);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        return {
+          id: docSnap.id,
+          ...docSnap.data()
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting inventory item:', error);
+      throw error;
+    }
+  },
+
+  async list() {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'inventory'));
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('Error listing inventory items:', error);
+      return [];
+    }
+  },
+
+  async filter(filters) {
+    try {
+      let q = collection(db, 'inventory');
+      
+      // Aplicar filtros se fornecidos
+      if (filters) {
+        Object.entries(filters).forEach(([key, value]) => {
+          q = query(q, where(key, '==', value));
+        });
+      }
+      
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('Error filtering inventory items:', error);
+      return [];
+    }
+  }
+};
+
 export const Sale = createEnhancedEntity('sales', null); 
 export const FinancialTransaction = createEnhancedEntity('financial_transactions', base44.entities.FinancialTransaction);
 export const ClientPackage = createEnhancedEntity('client_packages', {
@@ -585,18 +907,15 @@ export const ClientPackage = createEnhancedEntity('client_packages', {
 });
 export const Package = createEnhancedEntity('packages', base44.entities.Package);
 export const Service = createEnhancedEntity('services', base44.entities.Service);
-export const Product = createEnhancedEntity('products', base44.entities.Product);
 export const Supplier = createEnhancedEntity('suppliers', base44.entities.Supplier);
 export const Role = createEnhancedEntity('roles', base44.entities.Role);
 export const PaymentMethod = createEnhancedEntity('payment_methods', base44.entities.PaymentMethod);
-export const Inventory = createEnhancedEntity('inventory', base44.entities.Inventory);
 export const SubscriptionPlan = createEnhancedEntity('subscription_plans', base44.entities.SubscriptionPlan);
 export const ClientSubscription = createEnhancedEntity('client_subscriptions', base44.entities.ClientSubscription);
 export const GiftCard = createEnhancedEntity('gift_cards', base44.entities.GiftCard);
 export const ClientPackageSession = createEnhancedEntity('client_package_sessions', base44.entities.ClientPackageSession);
 export const Receipt = createEnhancedEntity('receipts', base44.entities.Receipt);
 export const UnfinishedSale = createEnhancedEntity('unfinished_sales', null); 
-export const Employee = createEnhancedEntity('employees', base44.entities.Employee);
 export const CompanySettings = createEnhancedEntity('company_settings', base44.entities.CompanySettings);
 export const SlideShowImage = createEnhancedEntity('slideshow_images', base44.entities.SlideShowImage);
 export const Testimonial = createEnhancedEntity('testimonials', base44.entities.Testimonial);
@@ -639,3 +958,110 @@ export const FIREBASE_ONLY_ENTITIES = [
   'client_packages',
   'pending_services'
 ];
+
+export const Appointment = {
+  collection: 'appointments',
+  
+  create: async function(data) {
+    try {
+      // Gerar um ID único se não fornecido
+      const id = data.id || doc(collection(db, 'appointments')).id;
+      
+      // Adicionar metadados
+      const now = new Date().toISOString();
+      const appointmentData = {
+        ...data,
+        id,
+        created_date: data.created_date || now,
+        updated_date: now
+      };
+
+      // Salvar no Firestore
+      await setDoc(doc(db, 'appointments', id), appointmentData);
+      return appointmentData;
+    } catch (error) {
+      console.error('Error creating appointment:', error);
+      throw error;
+    }
+  },
+
+  async update(id, data) {
+    try {
+      const docRef = doc(db, 'appointments', id);
+      const now = new Date().toISOString();
+      
+      const updateData = {
+        ...data,
+        updated_date: now
+      };
+
+      await setDoc(docRef, updateData, { merge: true });
+      return { id, ...updateData };
+    } catch (error) {
+      console.error('Error updating appointment:', error);
+      throw error;
+    }
+  },
+
+  async delete(id) {
+    try {
+      await deleteDoc(doc(db, 'appointments', id));
+    } catch (error) {
+      console.error('Error deleting appointment:', error);
+      throw error;
+    }
+  },
+
+  async get(id) {
+    try {
+      const docRef = doc(db, 'appointments', id);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        return {
+          id: docSnap.id,
+          ...docSnap.data()
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting appointment:', error);
+      throw error;
+    }
+  },
+
+  async list() {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'appointments'));
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('Error listing appointments:', error);
+      return [];
+    }
+  },
+
+  async filter(filters) {
+    try {
+      let q = collection(db, 'appointments');
+      
+      // Aplicar filtros se fornecidos
+      if (filters) {
+        Object.entries(filters).forEach(([key, value]) => {
+          q = query(q, where(key, '==', value));
+        });
+      }
+      
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('Error filtering appointments:', error);
+      return [];
+    }
+  }
+};
