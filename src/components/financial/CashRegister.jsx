@@ -1523,12 +1523,7 @@ export default function CashRegister() {
 
   const handleOpenReport = () => {
     if (!cashRegisters || cashRegisters.length === 0) {
-      toast({
-        title: "Erro",
-        description: "Não há dados de caixa disponíveis",
-        type: "error"
-      });
-      return;
+      console.log("Não há dados de caixa disponíveis");
     }
 
     // Usar a data selecionada ou a data atual
@@ -1544,22 +1539,18 @@ export default function CashRegister() {
     const { opening, closing } = getCashRegisterByDate(dateToUse);
     
     if (!opening) {
-      toast({
-        title: "Aviso",
-        description: `Não há registro de abertura de caixa para ${format(parseISO(dateToUse), "dd/MM/yyyy")}`,
-        type: "warning"
-      });
+      console.log(`Não há registro de abertura de caixa para ${format(parseISO(dateToUse), "dd/MM/yyyy")}`);
       return;
     }
     
     // Criar um objeto com os dados do caixa para a data selecionada
     const cashData = {
-      opened_by: opening.opened_by,
-      opened_at: opening.payment_date,
+      opened_by: opening ? opening.opened_by : "N/A",
+      opened_at: opening ? opening.payment_date : null,
       closed_at: closing ? closing.payment_date : null,
-      initial_amount: opening.amount,
+      initial_amount: opening ? opening.amount : 0,
       final_amount: closing ? closing.amount : null,
-      difference: closing ? (closing.amount - opening.amount) : 0
+      difference: (closing && opening) ? (closing.amount - opening.amount) : 0
     };
     
     const html = generateReportHtml(cashData, transactionsForDate);
