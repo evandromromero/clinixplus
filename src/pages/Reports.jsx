@@ -777,7 +777,11 @@ export default function Reports() {
       // Processar dados para relatórios adicionais
       setTrendsData([]);
       setRetentionData([]);
-      setInventoryAlertData([]);
+      
+      // Processar dados de inventário para alertas
+      const inventoryAlerts = processInventoryAlerts(products, inventory);
+      setInventoryAlertData(inventoryAlerts);
+      
       setLastRefresh(new Date());
     } catch (error) {
       console.error("Erro ao carregar dados dos relatórios:", error);
@@ -804,6 +808,41 @@ export default function Reports() {
   useEffect(() => {
     loadAllReportData();
   }, [loadAllReportData]);
+
+  // Processar dados de inventário para alertas
+  const processInventoryAlerts = (products, inventory) => {
+    // Se não houver produtos ou inventário, retornar array vazio
+    if (!products || !products.length) {
+      return [];
+    }
+
+    // Mapear produtos com seus dados de inventário
+    const productsWithInventory = products.map(product => {
+      // Encontrar o item de inventário correspondente ao produto
+      const inventoryItem = inventory && inventory.length ? 
+        inventory.find(item => item.product_id === product.id) : null;
+      
+      // Se não houver item de inventário, usar valores do produto diretamente
+      const currentStock = inventoryItem ? inventoryItem.quantity : (product.stock || 0);
+      const minStock = product.min_stock || 5; // Valor padrão de estoque mínimo
+      
+      return {
+        ...product,
+        name: product.name,
+        category: product.category,
+        stock: currentStock,
+        min_stock: minStock,
+        price: product.price || 0,
+        status: currentStock <= 0 ? 'esgotado' : currentStock < minStock ? 'baixo' : 'normal',
+        daysToRestock: 7, // Valor padrão para previsão de reposição
+        isLow: currentStock < minStock,
+        isOut: currentStock <= 0
+      };
+    });
+
+    // Filtrar produtos com estoque baixo ou esgotado
+    return productsWithInventory.filter(product => product.status === 'esgotado' || product.status === 'baixo');
+  };
 
   return (
     <div className="space-y-6">
@@ -1236,7 +1275,7 @@ export default function Reports() {
                 </CardHeader>
                 <CardContent>
                   <p className="text-3xl font-bold">
-                    {inventoryAlertData.filter(p => p.status === 'esgotado').length}
+                    {inventoryAlertData.filter(product => product.status === 'esgotado').length}
                   </p>
                   <p className="text-sm text-gray-500">Precisam de reposição urgente</p>
                 </CardContent>
@@ -1248,7 +1287,7 @@ export default function Reports() {
                 </CardHeader>
                 <CardContent>
                   <p className="text-3xl font-bold">
-                    {inventoryAlertData.filter(p => p.status === 'baixo').length}
+                    {inventoryAlertData.filter(product => product.status === 'baixo').length}
                   </p>
                   <p className="text-sm text-gray-500">Abaixo do mínimo</p>
                 </CardContent>
@@ -1260,9 +1299,9 @@ export default function Reports() {
                 </CardHeader>
                 <CardContent>
                   <p className="text-3xl font-bold">
-                    {inventoryAlertData.length > 0 
-                      ? `${Math.round(inventoryAlertData.reduce((acc, item) => acc + item.daysToRestock, 0) / inventoryAlertData.length)} dias` 
-                      : 'N/A'}
+                    {inventoryAlertData.length > 0 ? 
+                      inventoryAlertData[0].daysToRestock + ' dias' : 
+                      'N/A'}
                   </p>
                   <p className="text-sm text-gray-500">Para produtos em alerta</p>
                 </CardContent>
