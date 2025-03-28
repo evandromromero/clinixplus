@@ -113,6 +113,42 @@ export default function Appointments() {
     loadData();
   }, []);
 
+  // Array de cores predefinidas para funcionários
+  const predefinedColors = [
+    "#4f46e5", // indigo
+    "#0ea5e9", // sky
+    "#10b981", // emerald
+    "#f59e0b", // amber
+    "#ef4444", // red
+    "#8b5cf6", // violet
+    "#ec4899", // pink
+    "#06b6d4", // cyan
+    "#f97316", // orange
+    "#84cc16", // lime
+    "#14b8a6", // teal
+    "#6366f1", // indigo-500
+    "#8b5cf6", // violet-500
+    "#d946ef", // fuchsia-500
+    "#f43f5e"  // rose-500
+  ];
+
+  // Função para atribuir cores aos funcionários
+  const assignColorsToEmployees = (employeesData) => {
+    return employeesData.map((employee, index) => {
+      // Se o funcionário já tem uma cor, mantém a cor
+      if (employee.color) {
+        return employee;
+      }
+      
+      // Atribui uma cor do array ou gera uma cor aleatória se não houver cores suficientes
+      const color = index < predefinedColors.length 
+        ? predefinedColors[index]
+        : `#${Math.floor(Math.random()*16777215).toString(16)}`;
+      
+      return { ...employee, color };
+    });
+  };
+
   const loadData = async () => {
     try {
       console.log("[Agenda] Iniciando carregamento de dados...");
@@ -128,6 +164,9 @@ export default function Appointments() {
       );
       console.log("[Agenda] Funcionários filtrados:", providersData);
       
+      // Atribuir cores aos funcionários
+      const providersWithColors = assignColorsToEmployees(providersData);
+      
       // Carregar outros dados
       const [appointmentsData, clientsData, servicesData, packagesData] = await Promise.all([
         Appointment.list(),
@@ -137,8 +176,8 @@ export default function Appointments() {
       ]);
 
       // Atualizar estados
-      setEmployees(providersData);
-      setSelectedEmployees(providersData.map(emp => emp.id));
+      setEmployees(providersWithColors);
+      setSelectedEmployees(providersWithColors.map(emp => emp.id));
       setAppointments(appointmentsData);
       setClients(clientsData);
       setServices(servicesData);
@@ -770,7 +809,7 @@ export default function Appointments() {
     }
 
     const newDate = new Date(newAppointment.date);
-    newDate.setHours(selectedHour, 0, 0);
+    newDate.setHours(selectedHour, 0, 0, 0);
     setNewAppointment({...newAppointment, date: newDate});
   };
 
@@ -927,9 +966,18 @@ export default function Appointments() {
                       <th 
                         key={employee.id} 
                         className="p-2 border-b font-medium text-center"
-                        style={{ borderBottom: `2px solid ${employee.color || '#94a3b8'}` }}
+                        style={{ 
+                          borderBottom: `2px solid ${employee.color || '#94a3b8'}`,
+                          backgroundColor: `${employee.color}10` // Fundo muito suave da cor do funcionário
+                        }}
                       >
-                        {employee.name}
+                        <div className="flex items-center justify-center gap-2">
+                          <div 
+                            className="w-3 h-3 rounded-full"
+                            style={{ backgroundColor: employee.color || '#94a3b8' }}
+                          ></div>
+                          {employee.name}
+                        </div>
                       </th>
                     ))}
                   </tr>
@@ -959,6 +1007,10 @@ export default function Appointments() {
                             <td 
                               key={employee.id} 
                               className={`p-2 ${isAvailable ? '' : 'bg-gray-100'}`}
+                              style={isAvailable ? { 
+                                backgroundColor: `${employee.color}05`,  // Fundo muito suave da cor do funcionário
+                                borderLeft: `1px solid ${employee.color}30` // Borda lateral suave da cor do funcionário
+                              } : {}}
                             >
                               {empAppointments.map((app) => {
                                 const client = clients.find(c => c.id === app.client_id);

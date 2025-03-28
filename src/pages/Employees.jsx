@@ -1098,6 +1098,41 @@ export default function Employees() {
                         Define o intervalo padrão entre agendamentos para este profissional.
                       </p>
                     </div>
+
+                    <div className="space-y-2 mt-4">
+                      <div className="flex justify-between items-center">
+                        <Label htmlFor="employee_color">Cor na Agenda</Label>
+                      </div>
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <div 
+                            className="w-8 h-8 rounded-full border shadow-sm"
+                            style={{ backgroundColor: newEmployee.color || '#f87171' }}
+                          ></div>
+                          <Input
+                            id="employee_color"
+                            type="color"
+                            value={newEmployee.color || '#f87171'}
+                            onChange={(e) => setNewEmployee({...newEmployee, color: e.target.value})}
+                            className="w-16 h-8 p-1"
+                          />
+                          <span className="text-sm font-medium">{newEmployee.color || '#f87171'}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {['#f87171', '#fb923c', '#fbbf24', '#a3e635', '#4ade80', '#2dd4bf', '#38bdf8', '#818cf8', '#a78bfa', '#e879f9', '#fb7185'].map(color => (
+                            <div 
+                              key={color}
+                              onClick={() => setNewEmployee({...newEmployee, color: color})}
+                              className="w-8 h-8 rounded-full cursor-pointer border shadow-sm hover:scale-110 transition-transform"
+                              style={{ backgroundColor: color }}
+                            ></div>
+                          ))}
+                        </div>
+                        <p className="text-sm text-gray-500 mt-1">
+                          Esta cor será usada para identificar o profissional na agenda.
+                        </p>
+                      </div>
+                    </div>
                   </CardContent>
                 </Card>
 
