@@ -26,12 +26,13 @@ import {
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, UserPlus, Edit, Trash2, Check, X, Clock, AlertTriangle, CreditCard } from "lucide-react";
+import { Search, Plus, UserPlus, Edit, Trash2, Check, X, Clock, AlertTriangle, CreditCard, RefreshCw } from "lucide-react";
 import { format, addMonths, addDays, isBefore } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { SubscriptionPlan, ClientSubscription, Client, Service, Product, FinancialTransaction, CompanySettings } from "@/firebase/entities";
 import RateLimitHandler from '@/components/RateLimitHandler';
 import MercadoPagoService from '@/services/mercadoPagoService';
+import SubscriptionStatusChecker from '@/services/subscriptionStatusChecker';
 import { useToast } from "@/components/ui/use-toast";
 
 export default function Subscriptions() {
@@ -89,11 +90,21 @@ export default function Subscriptions() {
   
   const [companySettings, setCompanySettings] = useState(null);
   
+  const [loading, setLoading] = useState({});
+  
   const toast = useToast();
   
   useEffect(() => {
     loadData();
     loadCompanySettings();
+    
+    // Iniciar verificação periódica de status das assinaturas
+    SubscriptionStatusChecker.startPeriodicCheck();
+    
+    // Limpar ao desmontar o componente
+    return () => {
+      SubscriptionStatusChecker.stopPeriodicCheck();
+    };
   }, []);
   
   const loadData = async () => {
@@ -601,6 +612,41 @@ export default function Subscriptions() {
     }
   };
   
+  // Função para verificar manualmente o status de uma assinatura
+  const handleCheckSubscriptionStatus = async (subscription) => {
+    try {
+      setLoading({ [subscription.id]: true });
+      
+      const success = await SubscriptionStatusChecker.checkSubscriptionById(subscription.id);
+      
+      if (success) {
+        toast({
+          title: "Status verificado",
+          description: "O status da assinatura foi verificado com sucesso.",
+          variant: "default"
+        });
+        
+        // Recarregar dados
+        await loadData();
+      } else {
+        toast({
+          title: "Erro ao verificar status",
+          description: "Não foi possível verificar o status da assinatura.",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error("Erro ao verificar status da assinatura:", error);
+      toast({
+        title: "Erro ao verificar status",
+        description: "Ocorreu um erro ao verificar o status da assinatura.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading({ [subscription.id]: false });
+    }
+  };
+  
   // Filtrar planos e assinaturas com base na busca
   const filteredPlans = plans.filter(plan => 
     plan.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -908,16 +954,31 @@ export default function Subscriptions() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => handleEditSubscription(subscription)}
+                          className="text-blue-500"
+                          onClick={() => {
+                            setCurrentSubscription(subscription);
+                            setSubscriptionForm({
+                              ...subscription,
+                              client_id: subscription.client_id,
+                              plan_id: subscription.plan_id,
+                              start_date: subscription.start_date,
+                              billing_cycle: subscription.billing_cycle,
+                              payment_method: subscription.payment_method,
+                              installments: subscription.installments || 1,
+                              custom_discount: subscription.custom_discount || 0
+                            });
+                            setShowSubscriptionDialog(true);
+                          }}
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
-                        {subscription.status === 'ativa' && (
+                        {subscription.status !== "cancelada" && (
                           <Button
                             variant="ghost"
                             size="icon"
                             className="text-red-500"
                             onClick={() => {
+                              setCurrentSubscription(subscription);
                               setItemToDelete({
                                 id: subscription.id,
                                 name: `Assinatura de ${getClientName(subscription.client_id)}`,
@@ -930,14 +991,30 @@ export default function Subscriptions() {
                           </Button>
                         )}
                         {companySettings?.payment_settings?.mercadopago_enabled && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="text-blue-500"
-                            onClick={() => handleProcessPayment(subscription)}
-                          >
-                            <CreditCard className="h-4 w-4" />
-                          </Button>
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-blue-500"
+                              onClick={() => handleProcessPayment(subscription)}
+                              disabled={loading[subscription.id]}
+                            >
+                              <CreditCard className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-green-500"
+                              onClick={() => handleCheckSubscriptionStatus(subscription)}
+                              disabled={loading[subscription.id]}
+                            >
+                              {loading[subscription.id] ? (
+                                <RefreshCw className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <RefreshCw className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </>
                         )}
                       </TableCell>
                     </TableRow>

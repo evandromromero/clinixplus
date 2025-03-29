@@ -219,8 +219,22 @@ class MercadoPagoService {
             unit_price: parseFloat(data.amount)
           }
         ],
+        payer: {
+          email: data.payer_email || 'test_user_123@testuser.com',
+          name: 'Test',
+          surname: 'User',
+          identification: {
+            type: 'CPF',
+            number: '19119119100'
+          }
+        },
+        payment_methods: {
+          excluded_payment_types: [],
+          installments: 1
+        },
         external_reference: data.external_reference || transactionId,
-        notification_url: `${window.location.origin}/api/mercadopago/webhook`,
+        statement_descriptor: 'CLINIXPLUS',
+        expires: false
       };
       
       // Adicionar URLs de retorno se fornecidas
@@ -232,6 +246,13 @@ class MercadoPagoService {
         };
         preferenceData.auto_return = 'approved';
       }
+      
+      // Adicionar URL de notificação para webhook
+      if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+        preferenceData.notification_url = `${window.location.origin}/api/mercadopago/webhook`;
+      }
+      
+      console.log('Criando preferência com os dados:', preferenceData);
       
       // Fazer uma requisição direta para a API do Mercado Pago
       const response = await fetch('https://api.mercadopago.com/checkout/preferences', {
@@ -246,7 +267,7 @@ class MercadoPagoService {
       if (!response.ok) {
         const errorData = await response.json();
         console.error('Erro na resposta do Mercado Pago:', errorData);
-        throw new Error(`Erro na API do Mercado Pago: ${response.status}`);
+        throw new Error(`Erro na API do Mercado Pago: ${response.status} - ${JSON.stringify(errorData)}`);
       }
       
       const responseData = await response.json();
@@ -260,6 +281,39 @@ class MercadoPagoService {
       return checkoutUrl;
     } catch (error) {
       console.error('Erro ao criar link de pagamento:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Obtém informações de um pagamento específico
+   * @param {string} paymentId - ID do pagamento
+   * @returns {Promise<Object>} - Informações do pagamento
+   */
+  async getPaymentInfo(paymentId) {
+    if (!this.checkInitialized()) return null;
+
+    try {
+      // Fazer uma requisição direta para a API do Mercado Pago
+      const response = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.config.mercadopago_access_token}`
+        }
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Erro na resposta do Mercado Pago:', errorData);
+        throw new Error(`Erro na API do Mercado Pago: ${response.status}`);
+      }
+      
+      const paymentData = await response.json();
+      console.log('Informações do pagamento obtidas:', paymentData);
+      
+      return paymentData;
+    } catch (error) {
+      console.error('Erro ao obter informações do pagamento:', error);
       return null;
     }
   }
