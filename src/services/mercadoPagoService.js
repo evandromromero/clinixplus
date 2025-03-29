@@ -198,7 +198,7 @@ class MercadoPagoService {
   /**
    * Cria um link de pagamento para uma assinatura
    * @param {Object} data - Dados para o link de pagamento
-   * @returns {Promise<string>} - URL do link de pagamento
+   * @returns {Promise<Object>} - URL do link de pagamento
    */
   async createPaymentLink(data) {
     if (!this.checkInitialized()) return null;
@@ -278,7 +278,13 @@ class MercadoPagoService {
         ? responseData.sandbox_init_point 
         : responseData.init_point;
       
-      return checkoutUrl;
+      // Retornar um objeto com a URL e os IDs necessários
+      return {
+        url: checkoutUrl,
+        preference_id: responseData.id,
+        payment_id: responseData.collector_id || '', // O payment_id real só será gerado após o pagamento
+        external_reference: responseData.external_reference || data.external_reference || transactionId
+      };
     } catch (error) {
       console.error('Erro ao criar link de pagamento:', error);
       return null;
