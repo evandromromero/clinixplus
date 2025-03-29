@@ -132,7 +132,7 @@ src/
    - Ícones representativos para cada tipo de informação
    - Tooltips estilizados nos gráficos
    - Cores temáticas consistentes
-   - Efeitos de hover e transições suaves
+   - Layout responsivo em todas as telas
 
 #### Sistema de Pacotes
 1. **Sistema de Desconto Flexível**:
@@ -309,6 +309,121 @@ Esta solução não alterará o layout ou a lógica de negócios existente, apen
    - Manutenção centralizada do nome da empresa
    - Melhor performance com sistema de cache
    - UX consistente em todo o sistema
+
+## Migração do Sistema de Assinaturas para Firestore
+
+### Visão Geral
+Realizamos uma migração completa do sistema de assinaturas do Base44 para o Firestore, eliminando todas as dependências do Base44 no componente de assinaturas. Esta migração resolve problemas de erro 404 ao excluir ou atualizar assinaturas e melhora a confiabilidade do sistema.
+
+### Modificações Realizadas
+
+#### 1. Carregamento de Dados
+- Modificamos o método `loadData` em `Subscriptions.jsx` para carregar assinaturas diretamente do Firestore
+- Implementamos um sistema de logs detalhados para facilitar o diagnóstico de problemas
+- Adicionamos tratamento de erros robusto com feedback visual para o usuário
+
+```javascript
+// Carregar assinaturas diretamente do Firestore
+const { db } = await import('@/firebase/config');
+const { collection, getDocs } = await import('firebase/firestore');
+
+const subscriptionsRef = collection(db, 'client_subscriptions');
+const querySnapshot = await getDocs(subscriptionsRef);
+
+subscriptionsData = [];
+querySnapshot.forEach((doc) => {
+  subscriptionsData.push({
+    id: doc.id,
+    ...doc.data()
+  });
+});
+```
+
+#### 2. Criação e Atualização de Assinaturas
+- Reescrevemos o método `handleSaveSubscription` para usar diretamente o Firestore
+- Implementamos um sistema de fallback que tenta métodos alternativos quando a primeira tentativa falha
+- Adicionamos timestamps automáticos para rastrear quando as assinaturas são criadas e atualizadas
+
+```javascript
+// Criar nova assinatura no Firestore
+const subscriptionsRef = collection(db, 'client_subscriptions');
+const docRef = await addDoc(subscriptionsRef, subscriptionData);
+
+// Fallback se addDoc falhar
+try {
+  const newId = Date.now().toString();
+  const subscriptionRef = doc(db, 'client_subscriptions', newId);
+  await setDoc(subscriptionRef, subscriptionData);
+}
+```
+
+#### 3. Cancelamento de Assinaturas
+- Modificamos o método `handleDeleteItem` para cancelar assinaturas diretamente no Firestore
+- Adicionamos feedback visual para o usuário sobre o resultado da operação
+
+```javascript
+// Atualizar o status da assinatura para "cancelada"
+const subscriptionRef = doc(db, 'client_subscriptions', itemToDelete.id);
+await updateDoc(subscriptionRef, {
+  status: "cancelada",
+  updated_at: new Date().toISOString()
+});
+```
+
+#### 4. Verificação de Status de Pagamento
+- Criamos um novo método `handleCheckSubscriptionStatus` que verifica o status diretamente no Mercado Pago
+- Implementamos a atualização da assinatura no Firestore com base no status retornado
+
+```javascript
+// Obter informações do pagamento do Mercado Pago
+const paymentInfo = await MercadoPagoService.getPaymentInfo(subscriptionData.mercadopago_payment_id);
+
+// Atualizar o status da assinatura no Firestore
+await updateDoc(subscriptionRef, {
+  status: newStatus,
+  mercadopago_status: mercadopago_status,
+  payment_status_detail: paymentInfo.status_detail || "",
+  updated_at: new Date().toISOString()
+});
+```
+
+#### 5. Verificação Periódica de Assinaturas
+- Implementamos um sistema de verificação periódica que usa diretamente o Firestore
+- Melhoramos o filtro de assinaturas pendentes para usar comparações case-insensitive
+- Adicionamos logs detalhados para facilitar o diagnóstico de problemas
+
+```javascript
+// Verificar periodicamente assinaturas pendentes
+const checkInterval = setInterval(() => {
+  checkPendingSubscriptionsStatus();
+}, 300000); // Verificar a cada 5 minutos
+```
+
+#### 6. Verificação de Assinaturas Vencidas
+- Atualizamos o método `checkSubscriptionsStatus` para verificar assinaturas vencidas
+- Implementamos a atualização automática do status para "vencida" diretamente no Firestore
+
+```javascript
+// Atualizar o status da assinatura para "vencida" no Firestore
+const subscriptionRef = doc(db, 'client_subscriptions', sub.id);
+await updateDoc(subscriptionRef, {
+  status: "vencida",
+  updated_at: new Date().toISOString()
+});
+```
+
+### Benefícios da Migração
+1. **Independência do Base44**: O sistema de assinaturas agora funciona de forma independente do Base44
+2. **Maior Confiabilidade**: Eliminação de erros 404 ao excluir ou atualizar assinaturas
+3. **Melhor Desempenho**: Acesso direto ao Firestore sem camadas intermediárias
+4. **Tratamento de Erros Robusto**: Sistema de fallback para garantir que as operações sejam concluídas
+5. **Logs Detalhados**: Facilita o diagnóstico e resolução de problemas
+6. **Feedback Visual**: Notificações toast para informar o usuário sobre o resultado das operações
+
+### Próximos Passos
+1. **Monitoramento**: Acompanhar o desempenho do sistema após a migração
+2. **Otimização**: Identificar e otimizar áreas que possam apresentar gargalos
+3. **Expansão**: Aplicar a mesma abordagem a outros componentes que ainda dependem do Base44
 
 ## Atualizações Recentes
 

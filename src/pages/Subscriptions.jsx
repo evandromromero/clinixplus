@@ -32,7 +32,6 @@ import { ptBR } from 'date-fns/locale';
 import { SubscriptionPlan, ClientSubscription, Client, Service, Product, FinancialTransaction, CompanySettings } from "@/firebase/entities";
 import RateLimitHandler from '@/components/RateLimitHandler';
 import MercadoPagoService from '@/services/mercadoPagoService';
-import SubscriptionStatusChecker from '@/services/subscriptionStatusChecker';
 import { useToast } from "@/components/ui/use-toast";
 
 export default function Subscriptions() {
@@ -95,27 +94,57 @@ export default function Subscriptions() {
   const { toast } = useToast();
   
   useEffect(() => {
+    // Carregar dados iniciais
     loadData();
     loadCompanySettings();
     
     // Iniciar verificação periódica de status das assinaturas
-    SubscriptionStatusChecker.startPeriodicCheck();
+    const checkInterval = setInterval(() => {
+      checkPendingSubscriptionsStatus();
+    }, 300000); // Verificar a cada 5 minutos
     
     // Limpar ao desmontar o componente
     return () => {
-      SubscriptionStatusChecker.stopPeriodicCheck();
+      clearInterval(checkInterval);
     };
   }, []);
   
   const loadData = async () => {
     try {
-      const [plansData, subscriptionsData, servicesData, productsData, clientsData] = await Promise.all([
+      // Carregar planos, serviços, produtos e clientes usando as entidades existentes
+      const [plansData, servicesData, productsData, clientsData] = await Promise.all([
         SubscriptionPlan.list(),
-        ClientSubscription.list(),
         Service.list(),
         Product.list(),
         Client.list()
       ]);
+      
+      // Carregar assinaturas diretamente do Firestore
+      let subscriptionsData = [];
+      try {
+        const { db } = await import('@/firebase/config');
+        const { collection, getDocs } = await import('firebase/firestore');
+        
+        const subscriptionsRef = collection(db, 'client_subscriptions');
+        const querySnapshot = await getDocs(subscriptionsRef);
+        
+        subscriptionsData = [];
+        querySnapshot.forEach((doc) => {
+          subscriptionsData.push({
+            id: doc.id,
+            ...doc.data()
+          });
+        });
+        
+        console.log(`${subscriptionsData.length} assinaturas carregadas diretamente do Firestore`);
+      } catch (firestoreError) {
+        console.error('Erro ao carregar assinaturas do Firestore:', firestoreError);
+        toast({
+          title: "Erro ao carregar assinaturas",
+          description: "Não foi possível carregar as assinaturas do sistema.",
+          variant: "destructive"
+        });
+      }
       
       setPlans(plansData);
       setSubscriptions(subscriptionsData);
@@ -127,6 +156,11 @@ export default function Subscriptions() {
       checkSubscriptionsStatus(subscriptionsData);
     } catch (error) {
       console.error("Erro ao carregar dados:", error);
+      toast({
+        title: "Erro ao carregar dados",
+        description: "Ocorreu um erro ao carregar os dados. Por favor, recarregue a página.",
+        variant: "destructive"
+      });
     }
   };
   
@@ -168,20 +202,38 @@ export default function Subscriptions() {
   };
   
   // Verifica status das assinaturas para renovação e controle
-  const checkSubscriptionsStatus = (subscriptionsData) => {
-    const today = new Date();
-    const needsRenewal = [];
-    
-    subscriptionsData.forEach(sub => {
-      if (sub.status === 'ativa') {
-        const endDate = new Date(sub.end_date);
-        if (isBefore(endDate, today)) {
-          // Assinatura vencida
-          console.log("Assinatura vencida:", sub.id);
-          // Aqui poderia executar ações de renovação/cobrança automaticamente
+  const checkSubscriptionsStatus = async (subscriptionsData) => {
+    try {
+      const today = new Date();
+      const needsRenewal = [];
+      
+      // Importar funções do Firestore
+      const { db } = await import('@/firebase/config');
+      const { doc, updateDoc } = await import('firebase/firestore');
+      
+      for (const sub of subscriptionsData) {
+        if (sub.status === 'ativa') {
+          const endDate = new Date(sub.end_date);
+          if (endDate < today) {
+            console.log("Assinatura vencida:", sub.id);
+            
+            // Atualizar o status da assinatura para "vencida" no Firestore
+            try {
+              const subscriptionRef = doc(db, 'client_subscriptions', sub.id);
+              await updateDoc(subscriptionRef, {
+                status: "vencida",
+                updated_at: new Date().toISOString()
+              });
+              console.log(`Assinatura ${sub.id} marcada como vencida`);
+            } catch (updateError) {
+              console.error(`Erro ao atualizar status da assinatura ${sub.id}:`, updateError);
+            }
+          }
         }
       }
-    });
+    } catch (error) {
+      console.error("Erro ao verificar status das assinaturas:", error);
+    }
   };
   
   // Funções para manipulação de planos
@@ -420,17 +472,93 @@ export default function Subscriptions() {
         status: "ativa",
         services_used: [],
         products_received: [],
-        payment_history: []
+        payment_history: [],
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       };
+      
+      // Importar funções do Firestore
+      const { db } = await import('@/firebase/config');
+      const { doc, setDoc, collection, addDoc, updateDoc } = await import('firebase/firestore');
       
       let subscription;
       
       if (currentSubscription) {
-        await ClientSubscription.update(currentSubscription.id, subscriptionData);
-        subscription = { ...currentSubscription, ...subscriptionData };
+        // Atualizar assinatura existente
+        try {
+          const subscriptionRef = doc(db, 'client_subscriptions', currentSubscription.id);
+          await updateDoc(subscriptionRef, {
+            ...subscriptionData,
+            updated_at: new Date().toISOString()
+          });
+          
+          subscription = { 
+            id: currentSubscription.id, 
+            ...subscriptionData 
+          };
+          
+          console.log(`Assinatura ${currentSubscription.id} atualizada com sucesso via Firestore`);
+          toast({
+            title: "Assinatura atualizada",
+            description: "A assinatura foi atualizada com sucesso.",
+            variant: "success"
+          });
+        } catch (updateError) {
+          console.error(`Erro ao atualizar assinatura via Firestore: ${updateError.message}`);
+          toast({
+            title: "Erro ao atualizar assinatura",
+            description: "Não foi possível atualizar a assinatura. Por favor, tente novamente.",
+            variant: "destructive"
+          });
+          throw updateError;
+        }
       } else {
-        // Criar assinatura
-        subscription = await ClientSubscription.create(subscriptionData);
+        // Criar nova assinatura
+        try {
+          const subscriptionsRef = collection(db, 'client_subscriptions');
+          const docRef = await addDoc(subscriptionsRef, subscriptionData);
+          
+          subscription = { 
+            id: docRef.id, 
+            ...subscriptionData 
+          };
+          
+          console.log(`Nova assinatura criada com ID ${docRef.id} via Firestore`);
+          toast({
+            title: "Assinatura criada",
+            description: "A nova assinatura foi criada com sucesso.",
+            variant: "success"
+          });
+        } catch (createError) {
+          console.error(`Erro ao criar assinatura via Firestore: ${createError.message}`);
+          
+          // Tentar método alternativo com setDoc se addDoc falhar
+          try {
+            const newId = Date.now().toString();
+            const subscriptionRef = doc(db, 'client_subscriptions', newId);
+            await setDoc(subscriptionRef, subscriptionData);
+            
+            subscription = { 
+              id: newId, 
+              ...subscriptionData 
+            };
+            
+            console.log(`Nova assinatura criada com ID ${newId} via Firestore (fallback)`);
+            toast({
+              title: "Assinatura criada",
+              description: "A nova assinatura foi criada com sucesso.",
+              variant: "success"
+            });
+          } catch (fallbackError) {
+            console.error(`Erro no fallback ao criar assinatura: ${fallbackError.message}`);
+            toast({
+              title: "Erro ao criar assinatura",
+              description: "Não foi possível criar a assinatura. Por favor, tente novamente.",
+              variant: "destructive"
+            });
+            throw fallbackError;
+          }
+        }
         
         // Calcular valor total
         const monthlyPrice = plan.monthly_price;
@@ -474,14 +602,41 @@ export default function Subscriptions() {
             });
             
             if (paymentLink) {
-              // Atualizar a assinatura com os dados do Mercado Pago
-              await ClientSubscription.update(subscription.id, {
-                payment_link: paymentLink,
-                mercadopago_status: "pending"
+              // Atualizar a assinatura com os dados do Mercado Pago diretamente no Firestore
+              try {
+                const subscriptionRef = doc(db, 'client_subscriptions', subscription.id);
+                await updateDoc(subscriptionRef, {
+                  payment_link: paymentLink,
+                  mercadopago_status: "pending",
+                  mercadopago_payment_id: paymentLink.payment_id || '',
+                  mercadopago_preference_id: paymentLink.preference_id || '',
+                  updated_at: new Date().toISOString()
+                });
+                console.log('Assinatura atualizada com dados do pagamento no Firestore');
+              } catch (firestoreError) {
+                console.error('Erro ao atualizar assinatura no Firestore:', firestoreError);
+                
+                // Fallback: tentar usar ClientSubscription.update
+                await ClientSubscription.update(subscription.id, {
+                  payment_link: paymentLink,
+                  mercadopago_status: "pending",
+                  mercadopago_payment_id: paymentLink.payment_id || '',
+                  mercadopago_preference_id: paymentLink.preference_id || ''
+                });
+              }
+              
+              // Exibir mensagem de sucesso
+              toast({
+                title: "Link de pagamento gerado",
+                description: "O link de pagamento foi gerado com sucesso e abrirá em uma nova aba",
+                variant: "success"
               });
               
               // Abrir o link de pagamento em uma nova aba
               window.open(paymentLink, '_blank');
+              
+              // Recarregar dados
+              await loadData();
             } else {
               throw new Error("Não foi possível gerar o link de pagamento");
             }
@@ -545,12 +700,39 @@ export default function Subscriptions() {
       if (itemToDelete.type === 'plan') {
         await SubscriptionPlan.delete(itemToDelete.id);
       } else if (itemToDelete.type === 'subscription') {
-        await ClientSubscription.update(itemToDelete.id, {status: "cancelada"});
+        try {
+          // Usar diretamente o Firestore para atualizar a assinatura
+          const { db } = await import('@/firebase/config');
+          const { doc, updateDoc } = await import('firebase/firestore');
+          
+          // Atualizar o status da assinatura para "cancelada"
+          const subscriptionRef = doc(db, 'client_subscriptions', itemToDelete.id);
+          await updateDoc(subscriptionRef, {
+            status: "cancelada",
+            updated_at: new Date().toISOString()
+          });
+          
+          console.log(`Assinatura ${itemToDelete.id} cancelada com sucesso via Firestore`);
+        } catch (firestoreError) {
+          console.error(`Erro ao cancelar assinatura via Firestore: ${firestoreError.message}`);
+          toast({
+            title: "Erro ao cancelar assinatura",
+            description: "Não foi possível cancelar a assinatura. Por favor, tente novamente.",
+            variant: "destructive"
+          });
+          throw firestoreError;
+        }
       }
       
       setShowDeleteConfirmDialog(false);
       setItemToDelete(null);
       await loadData();
+      
+      toast({
+        title: "Operação concluída",
+        description: itemToDelete.type === 'plan' ? "Plano excluído com sucesso." : "Assinatura cancelada com sucesso.",
+        variant: "success"
+      });
     } catch (error) {
       console.error("Erro ao excluir item:", error);
     }
@@ -693,24 +875,76 @@ export default function Subscriptions() {
     try {
       setLoading({ [subscription.id]: true });
       
-      const success = await SubscriptionStatusChecker.checkSubscriptionById(subscription.id);
+      // Importar funções do Firestore e serviços necessários
+      const { db } = await import('@/firebase/config');
+      const { doc, getDoc, updateDoc } = await import('firebase/firestore');
       
-      if (success) {
+      // Verificar se a assinatura existe no Firestore
+      const subscriptionRef = doc(db, 'client_subscriptions', subscription.id);
+      const subscriptionDoc = await getDoc(subscriptionRef);
+      
+      if (!subscriptionDoc.exists()) {
         toast({
-          title: "Status verificado",
-          description: "O status da assinatura foi verificado com sucesso",
-          variant: "success"
-        });
-        
-        // Recarregar dados
-        await loadData();
-      } else {
-        toast({
-          title: "Erro ao verificar status",
-          description: "Não foi possível verificar o status da assinatura",
+          title: "Assinatura não encontrada",
+          description: "Não foi possível encontrar a assinatura no banco de dados",
           variant: "destructive"
         });
+        return false;
       }
+      
+      const subscriptionData = subscriptionDoc.data();
+      
+      // Verificar se há um ID de pagamento do Mercado Pago
+      if (!subscriptionData.mercadopago_payment_id && !subscriptionData.mercadopago_preference_id) {
+        toast({
+          title: "Sem informações de pagamento",
+          description: "Esta assinatura não possui informações de pagamento para verificar",
+          variant: "warning"
+        });
+        return false;
+      }
+      
+      // Obter informações do pagamento do Mercado Pago
+      const paymentInfo = await MercadoPagoService.getPaymentInfo(subscriptionData.mercadopago_payment_id);
+      
+      if (!paymentInfo) {
+        toast({
+          title: "Erro ao verificar pagamento",
+          description: "Não foi possível obter informações do pagamento no Mercado Pago",
+          variant: "destructive"
+        });
+        return false;
+      }
+      
+      // Atualizar o status da assinatura com base nas informações do pagamento
+      let newStatus = subscriptionData.status;
+      let mercadopago_status = paymentInfo.status || "pending";
+      
+      if (paymentInfo.status === "approved") {
+        newStatus = "ativa";
+      } else if (paymentInfo.status === "rejected" || paymentInfo.status === "cancelled") {
+        newStatus = "cancelada";
+      }
+      
+      // Atualizar a assinatura no Firestore
+      await updateDoc(subscriptionRef, {
+        status: newStatus,
+        mercadopago_status: mercadopago_status,
+        payment_status_detail: paymentInfo.status_detail || "",
+        updated_at: new Date().toISOString()
+      });
+      
+      console.log(`Assinatura ${subscription.id} atualizada com status: ${newStatus} (${mercadopago_status})`);
+      
+      toast({
+        title: "Status verificado",
+        description: `O status da assinatura foi atualizado para: ${newStatus}`,
+        variant: "success"
+      });
+      
+      // Recarregar dados
+      await loadData();
+      return true;
     } catch (error) {
       console.error("Erro ao verificar status da assinatura:", error);
       toast({
@@ -718,12 +952,52 @@ export default function Subscriptions() {
         description: "Ocorreu um erro ao verificar o status da assinatura",
         variant: "destructive"
       });
+      return false;
     } finally {
       setLoading({ [subscription.id]: false });
     }
   };
   
-  // Filtrar planos e assinaturas com base na busca
+  // Função para verificar periodicamente assinaturas pendentes
+  const checkPendingSubscriptionsStatus = async () => {
+    try {
+      console.log('Verificando assinaturas pendentes...');
+      
+      // Carregar assinaturas diretamente do Firestore
+      const { db } = await import('@/firebase/config');
+      const { collection, query, where, getDocs } = await import('firebase/firestore');
+      
+      // Buscar assinaturas pendentes
+      const subscriptionsRef = collection(db, 'client_subscriptions');
+      const querySnapshot = await getDocs(subscriptionsRef);
+      
+      const pendingSubscriptions = [];
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        // Verificar se a assinatura está pendente (usando string lowercase para comparação)
+        if (doc.id && (
+          (data.status && data.status.toLowerCase() === 'pendente') || 
+          (data.mercadopago_status && data.mercadopago_status.toLowerCase() === 'pending') || 
+          !data.mercadopago_status
+        )) {
+          pendingSubscriptions.push({
+            id: doc.id,
+            ...data
+          });
+        }
+      });
+      
+      console.log(`${pendingSubscriptions.length} assinaturas pendentes encontradas`);
+      
+      // Verificar cada assinatura pendente
+      for (const subscription of pendingSubscriptions) {
+        await handleCheckSubscriptionStatus(subscription);
+      }
+    } catch (error) {
+      console.error('Erro ao verificar assinaturas pendentes:', error);
+    }
+  };
+  
   const filteredPlans = plans.filter(plan => 
     plan.name.toLowerCase().includes(searchTerm.toLowerCase())
   );

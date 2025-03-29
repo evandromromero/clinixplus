@@ -64,17 +64,22 @@ class SubscriptionStatusChecker {
         // Buscar todas as assinaturas
         const allSubscriptions = await ClientSubscription.list();
         console.log('Total de assinaturas encontradas:', allSubscriptions.length);
+        console.log('Assinaturas brutas:', allSubscriptions.map(sub => ({
+          id: sub.id,
+          status: sub.status,
+          mercadopago_status: sub.mercadopago_status
+        })));
         
         // Filtrar assinaturas pendentes com um filtro menos restritivo
         pendingSubscriptions = allSubscriptions.filter(sub => {
           // Verificar se a assinatura tem um ID válido
           const hasValidId = sub && sub.id;
           
-          // Verificar se a assinatura está pendente
+          // Verificar se a assinatura está pendente (usando string lowercase para comparação)
           const isPending = 
-            (sub.status === 'pendente' || 
-             sub.mercadopago_status === 'pending' || 
-             !sub.mercadopago_status);
+            (sub.status && sub.status.toLowerCase() === 'pendente') || 
+            (sub.mercadopago_status && sub.mercadopago_status.toLowerCase() === 'pending') || 
+            !sub.mercadopago_status;
           
           return hasValidId && isPending;
         });
@@ -96,8 +101,12 @@ class SubscriptionStatusChecker {
           
           querySnapshot.forEach((doc) => {
             const data = doc.data();
-            // Usar o mesmo critério de filtragem que acima
-            if (doc.id && (data.status === 'pendente' || data.mercadopago_status === 'pending' || !data.mercadopago_status)) {
+            // Usar o mesmo critério de filtragem que acima, mas com comparação case-insensitive
+            if (doc.id && (
+              (data.status && data.status.toLowerCase() === 'pendente') || 
+              (data.mercadopago_status && data.mercadopago_status.toLowerCase() === 'pending') || 
+              !data.mercadopago_status
+            )) {
               pendingSubscriptions.push({
                 id: doc.id,
                 ...data
