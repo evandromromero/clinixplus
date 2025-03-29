@@ -1648,14 +1648,16 @@ export default function Appointments() {
                                   </Button>
                                 )}
                                 
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="text-red-600 border-red-600 hover:bg-red-50"
-                                  onClick={() => showConfirmDialog('delete', app.id)}
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
+                                {app.status !== 'agendado' && app.status !== 'cancelado' && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="text-red-600 border-red-600 hover:bg-red-50"
+                                    onClick={() => showConfirmDialog('delete', app.id)}
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                )}
                               </div>
                             </div>
                           </CardContent>

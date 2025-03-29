@@ -26,11 +26,13 @@ import {
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, UserPlus, Edit, Trash2, Check, X, Clock, AlertTriangle } from "lucide-react";
+import { Search, Plus, UserPlus, Edit, Trash2, Check, X, Clock, AlertTriangle, CreditCard } from "lucide-react";
 import { format, addMonths, addDays, isBefore } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { SubscriptionPlan, ClientSubscription, Client, Service, Product, FinancialTransaction } from "@/firebase/entities";
+import { SubscriptionPlan, ClientSubscription, Client, Service, Product, FinancialTransaction, CompanySettings } from "@/firebase/entities";
 import RateLimitHandler from '@/components/RateLimitHandler';
+import MercadoPagoService from '@/services/mercadoPagoService';
+import { useToast } from "@/components/ui/use-toast";
 
 export default function Subscriptions() {
   const [activeTab, setActiveTab] = useState("planos");
@@ -85,8 +87,13 @@ export default function Subscriptions() {
   const [selectedProductQty, setSelectedProductQty] = useState(1);
   const [newBenefit, setNewBenefit] = useState("");
   
+  const [companySettings, setCompanySettings] = useState(null);
+  
+  const toast = useToast();
+  
   useEffect(() => {
     loadData();
+    loadCompanySettings();
   }, []);
   
   const loadData = async () => {
@@ -109,6 +116,39 @@ export default function Subscriptions() {
       checkSubscriptionsStatus(subscriptionsData);
     } catch (error) {
       console.error("Erro ao carregar dados:", error);
+    }
+  };
+  
+  const loadCompanySettings = async () => {
+    try {
+      const settingsList = await CompanySettings.list();
+      if (settingsList && settingsList.length > 0) {
+        const settings = settingsList[0];
+        
+        // Garantir que payment_settings exista
+        const loadedSettings = {
+          ...settings,
+          payment_settings: settings.payment_settings || {
+            mercadopago_enabled: false,
+            mercadopago_public_key: "",
+            mercadopago_access_token: "",
+            mercadopago_client_id: "",
+            mercadopago_client_secret: "",
+            mercadopago_sandbox: true
+          }
+        };
+        
+        setCompanySettings(loadedSettings);
+        
+        // Inicializar o serviço do Mercado Pago se estiver habilitado
+        if (loadedSettings.payment_settings.mercadopago_enabled) {
+          MercadoPagoService.initialize(loadedSettings.payment_settings);
+          console.log('Mercado Pago service initialized');
+        }
+      }
+    } catch (error) {
+      console.error("Erro ao carregar configurações da empresa:", error);
+      toast.error("Erro ao carregar configurações da empresa");
     }
   };
   
@@ -368,13 +408,16 @@ export default function Subscriptions() {
         payment_history: []
       };
       
+      let subscription;
+      
       if (currentSubscription) {
         await ClientSubscription.update(currentSubscription.id, subscriptionData);
+        subscription = { ...currentSubscription, ...subscriptionData };
       } else {
         // Criar assinatura
-        const subscription = await ClientSubscription.create(subscriptionData);
+        subscription = await ClientSubscription.create(subscriptionData);
         
-        // Criar registro financeiro para a primeira cobrança
+        // Calcular valor total
         const monthlyPrice = plan.monthly_price;
         let totalPrice = monthlyPrice;
         let cycles = 1;
@@ -395,28 +438,77 @@ export default function Subscriptions() {
         // Aplicar desconto
         totalPrice = totalPrice * (1 - (discount / 100));
         
-        await FinancialTransaction.create({
-          type: "receita",
-          category: "assinatura",
-          description: `Assinatura ${plan.name} - ${subscriptionForm.billing_cycle}`,
-          amount: totalPrice,
-          payment_method: subscriptionForm.payment_method,
-          status: "pendente",
-          due_date: subscriptionForm.start_date,
-          client_id: subscriptionForm.client_id,
-          reference_id: subscription.id,
-          installment_info: {
-            total_installments: subscriptionForm.installments,
-            installment_number: 1
+        // Verificar se o Mercado Pago está habilitado
+        if (companySettings?.payment_settings?.mercadopago_enabled) {
+          try {
+            // Obter dados do cliente
+            const client = clients.find(c => c.id === subscriptionForm.client_id);
+            if (!client) throw new Error("Cliente não encontrado");
+            
+            // Criar link de pagamento no Mercado Pago
+            const paymentLink = await MercadoPagoService.createPaymentLink({
+              plan_name: `${plan.name} - ${subscriptionForm.billing_cycle}`,
+              billing_cycle: subscriptionForm.billing_cycle,
+              amount: totalPrice,
+              payer_email: client.email || "cliente@exemplo.com",
+              external_reference: subscription.id,
+              client_id: client.id,
+              success_url: `${window.location.origin}/subscriptions?status=success&subscription_id=${subscription.id}`,
+              failure_url: `${window.location.origin}/subscriptions?status=failure&subscription_id=${subscription.id}`,
+              pending_url: `${window.location.origin}/subscriptions?status=pending&subscription_id=${subscription.id}`
+            });
+            
+            if (paymentLink) {
+              // Atualizar a assinatura com os dados do Mercado Pago
+              await ClientSubscription.update(subscription.id, {
+                payment_link: paymentLink,
+                mercadopago_status: "pending"
+              });
+              
+              // Abrir o link de pagamento em uma nova aba
+              window.open(paymentLink, '_blank');
+            } else {
+              throw new Error("Não foi possível gerar o link de pagamento");
+            }
+          } catch (mpError) {
+            console.error("Erro ao processar pagamento no Mercado Pago:", mpError);
+            toast.error("Erro ao processar pagamento no Mercado Pago. A assinatura foi criada, mas o pagamento deverá ser processado manualmente.");
+            
+            // Criar transação financeira mesmo com erro no Mercado Pago
+            await createFinancialTransaction(subscription, plan, totalPrice);
           }
-        });
+        } else {
+          // Criar transação financeira sem Mercado Pago
+          await createFinancialTransaction(subscription, plan, totalPrice);
+        }
       }
       
       setShowSubscriptionDialog(false);
       await loadData();
+      toast.success("Assinatura salva com sucesso!");
     } catch (error) {
       console.error("Erro ao salvar assinatura:", error);
+      toast.error("Erro ao salvar assinatura: " + error.message);
     }
+  };
+  
+  // Função auxiliar para criar transação financeira
+  const createFinancialTransaction = async (subscription, plan, totalPrice) => {
+    return await FinancialTransaction.create({
+      type: "receita",
+      category: "assinatura",
+      description: `Assinatura ${plan.name} - ${subscription.billing_cycle}`,
+      amount: totalPrice,
+      payment_method: subscription.payment_method,
+      status: "pendente",
+      due_date: subscription.start_date,
+      client_id: subscription.client_id,
+      reference_id: subscription.id,
+      installment_info: {
+        total_installments: subscription.installments,
+        installment_number: 1
+      }
+    });
   };
   
   const handleDeleteItem = async () => {
@@ -434,6 +526,78 @@ export default function Subscriptions() {
       await loadData();
     } catch (error) {
       console.error("Erro ao excluir item:", error);
+    }
+  };
+  
+  // Função para processar pagamento de uma assinatura existente
+  const handleProcessPayment = async (subscription) => {
+    try {
+      if (!companySettings?.payment_settings?.mercadopago_enabled) {
+        toast.error("O Mercado Pago não está configurado. Verifique as configurações do sistema.");
+        return;
+      }
+      
+      const plan = plans.find(p => p.id === subscription.plan_id);
+      if (!plan) {
+        toast.error("Plano não encontrado");
+        return;
+      }
+      
+      const client = clients.find(c => c.id === subscription.client_id);
+      if (!client) {
+        toast.error("Cliente não encontrado");
+        return;
+      }
+      
+      // Calcular valor total
+      const monthlyPrice = plan.monthly_price;
+      let totalPrice = monthlyPrice;
+      let cycles = 1;
+      
+      switch(subscription.billing_cycle) {
+        case "trimestral":
+          cycles = 3;
+          break;
+        case "semestral":
+          cycles = 6;
+          break;
+        case "anual":
+          cycles = 12;
+          break;
+      }
+      
+      totalPrice = monthlyPrice * cycles;
+      // Aplicar desconto
+      totalPrice = totalPrice * (1 - (subscription.discount / 100));
+      
+      // Criar link de pagamento no Mercado Pago
+      const paymentLink = await MercadoPagoService.createPaymentLink({
+        plan_name: `${plan.name} - ${subscription.billing_cycle}`,
+        billing_cycle: subscription.billing_cycle,
+        amount: totalPrice,
+        payer_email: client.email || "cliente@exemplo.com",
+        external_reference: subscription.id,
+        client_id: client.id,
+        success_url: `${window.location.origin}/subscriptions?status=success&subscription_id=${subscription.id}`,
+        failure_url: `${window.location.origin}/subscriptions?status=failure&subscription_id=${subscription.id}`,
+        pending_url: `${window.location.origin}/subscriptions?status=pending&subscription_id=${subscription.id}`
+      });
+      
+      if (paymentLink) {
+        // Atualizar a assinatura com os dados do Mercado Pago
+        await ClientSubscription.update(subscription.id, {
+          payment_link: paymentLink,
+          mercadopago_status: "pending"
+        });
+        
+        // Abrir o link de pagamento em uma nova aba
+        window.open(paymentLink, '_blank');
+      } else {
+        throw new Error("Não foi possível gerar o link de pagamento");
+      }
+    } catch (error) {
+      console.error("Erro ao processar pagamento:", error);
+      toast.error("Erro ao processar pagamento: " + error.message);
     }
   };
   
@@ -763,6 +927,16 @@ export default function Subscriptions() {
                             }}
                           >
                             <X className="h-4 w-4" />
+                          </Button>
+                        )}
+                        {companySettings?.payment_settings?.mercadopago_enabled && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-blue-500"
+                            onClick={() => handleProcessPayment(subscription)}
+                          >
+                            <CreditCard className="h-4 w-4" />
                           </Button>
                         )}
                       </TableCell>

@@ -73,7 +73,15 @@ export default function Settings() {
     website_secondary_color: "#69D2CD",
     about_image_url: "",
     about_full_description: "",
-    whatsapp_message: "Olá! Gostaria de agendar um horário."
+    whatsapp_message: "Olá! Gostaria de agendar um horário.",
+    payment_settings: {
+      mercadopago_enabled: false,
+      mercadopago_public_key: "",
+      mercadopago_access_token: "",
+      mercadopago_client_id: "",
+      mercadopago_client_secret: "",
+      mercadopago_sandbox: true
+    }
   });
   
   const [testimonials, setTestimonials] = useState([]);
@@ -159,10 +167,24 @@ export default function Settings() {
       
       if (settings && settings.length > 0) {
         console.log('Found existing settings:', settings[0]);
-        setCompanySettings(settings[0]);
-        setPreviewLogo(settings[0].logo_url || '');
-        setPreviewAboutImage(settings[0].about_image_url || '');
-        return settings[0];
+        
+        // Garantir que payment_settings exista
+        const loadedSettings = {
+          ...settings[0],
+          payment_settings: settings[0].payment_settings || {
+            mercadopago_enabled: false,
+            mercadopago_public_key: "",
+            mercadopago_access_token: "",
+            mercadopago_client_id: "",
+            mercadopago_client_secret: "",
+            mercadopago_sandbox: true
+          }
+        };
+        
+        setCompanySettings(loadedSettings);
+        setPreviewLogo(loadedSettings.logo_url || '');
+        setPreviewAboutImage(loadedSettings.about_image_url || '');
+        return loadedSettings;
       } else {
         console.log('No settings found, will use defaults');
         return null;
@@ -548,7 +570,7 @@ export default function Settings() {
       )}
 
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-1 md:grid-cols-4">
+        <TabsList className="grid w-full grid-cols-1 md:grid-cols-5">
           <TabsTrigger 
             value="business" 
             className="flex items-center gap-2"
@@ -576,6 +598,13 @@ export default function Settings() {
             onClick={() => handleTabChange("whatsapp")}
           >
             <SettingsIcon className="h-4 w-4" /> WhatsApp
+          </TabsTrigger>
+          <TabsTrigger 
+            value="payments" 
+            className="flex items-center gap-2"
+            onClick={() => handleTabChange("payments")}
+          >
+            <SettingsIcon className="h-4 w-4" /> Pagamentos
           </TabsTrigger>
         </TabsList>
 
@@ -1141,6 +1170,139 @@ export default function Settings() {
                       Salvando...
                     </>
                   ) : 'Salvar Configurações de WhatsApp'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+        <TabsContent value="payments" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Configurações de Pagamento</CardTitle>
+              <CardDescription>Configure as configurações de pagamento para seu site</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Habilitar Mercado Pago</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="mercadopago_enabled"
+                      name="mercadopago_enabled"
+                      checked={companySettings.payment_settings?.mercadopago_enabled}
+                      onChange={(e) => setCompanySettings({
+                        ...companySettings,
+                        payment_settings: {
+                          ...companySettings.payment_settings,
+                          mercadopago_enabled: e.target.checked
+                        }
+                      })}
+                      className="rounded border-gray-300"
+                    />
+                    <label htmlFor="mercadopago_enabled" className="text-sm font-medium">
+                      Habilitar Mercado Pago
+                    </label>
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Chave Pública do Mercado Pago</label>
+                  <Input
+                    value={companySettings.payment_settings?.mercadopago_public_key || ""}
+                    onChange={(e) => setCompanySettings({
+                      ...companySettings,
+                      payment_settings: {
+                        ...companySettings.payment_settings,
+                        mercadopago_public_key: e.target.value
+                      }
+                    })}
+                    placeholder="Chave pública do Mercado Pago"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Token de Acesso do Mercado Pago</label>
+                  <Input
+                    value={companySettings.payment_settings?.mercadopago_access_token || ""}
+                    onChange={(e) => setCompanySettings({
+                      ...companySettings,
+                      payment_settings: {
+                        ...companySettings.payment_settings,
+                        mercadopago_access_token: e.target.value
+                      }
+                    })}
+                    placeholder="Token de acesso do Mercado Pago"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">ID do Cliente do Mercado Pago</label>
+                  <Input
+                    value={companySettings.payment_settings?.mercadopago_client_id || ""}
+                    onChange={(e) => setCompanySettings({
+                      ...companySettings,
+                      payment_settings: {
+                        ...companySettings.payment_settings,
+                        mercadopago_client_id: e.target.value
+                      }
+                    })}
+                    placeholder="ID do cliente do Mercado Pago"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Segredo do Cliente do Mercado Pago</label>
+                  <Input
+                    value={companySettings.payment_settings?.mercadopago_client_secret || ""}
+                    onChange={(e) => setCompanySettings({
+                      ...companySettings,
+                      payment_settings: {
+                        ...companySettings.payment_settings,
+                        mercadopago_client_secret: e.target.value
+                      }
+                    })}
+                    placeholder="Segredo do cliente do Mercado Pago"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Modo Sandbox do Mercado Pago</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="mercadopago_sandbox"
+                      name="mercadopago_sandbox"
+                      checked={companySettings.payment_settings?.mercadopago_sandbox}
+                      onChange={(e) => setCompanySettings({
+                        ...companySettings,
+                        payment_settings: {
+                          ...companySettings.payment_settings,
+                          mercadopago_sandbox: e.target.checked
+                        }
+                      })}
+                      className="rounded border-gray-300"
+                    />
+                    <label htmlFor="mercadopago_sandbox" className="text-sm font-medium">
+                      Modo Sandbox do Mercado Pago
+                    </label>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="pt-4 flex justify-end">
+                <Button
+                  onClick={handleSaveCompanySettings}
+                  className="bg-[#294380] hover:bg-[#0D0F36]"
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                      Salvando...
+                    </>
+                  ) : 'Salvar Configurações de Pagamento'}
                 </Button>
               </div>
             </CardContent>

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Card,
   CardContent,
@@ -8,20 +8,113 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Check, Star, CircleDollarSign, Clock } from "lucide-react";
+import { Check, Star, CircleDollarSign, Clock, Loader2 } from "lucide-react";
 import {
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
+import { useToast } from "@/components/ui/use-toast";
+import MercadoPagoService from '@/services/mercadoPagoService';
+import { CompanySettings } from "@/firebase/entities";
 
 export default function SubscriptionPlansSection({ plans = [] }) {
-  const [cycleType, setCycleType] = React.useState("mensal");
+  const [cycleType, setCycleType] = useState("mensal");
+  const [companySettings, setCompanySettings] = useState(null);
+  const [loading, setLoading] = useState({});
+  const { toast } = useToast();
+  
+  useEffect(() => {
+    loadCompanySettings();
+  }, []);
+  
+  const loadCompanySettings = async () => {
+    try {
+      const settingsList = await CompanySettings.list();
+      if (settingsList && settingsList.length > 0) {
+        const settings = settingsList[0];
+        
+        // Garantir que payment_settings exista
+        const loadedSettings = {
+          ...settings,
+          payment_settings: settings.payment_settings || {
+            mercadopago_enabled: false,
+            mercadopago_public_key: "",
+            mercadopago_access_token: "",
+            mercadopago_client_id: "",
+            mercadopago_client_secret: "",
+            mercadopago_sandbox: true
+          }
+        };
+        
+        setCompanySettings(loadedSettings);
+        
+        // Inicializar o serviço do Mercado Pago se estiver habilitado
+        if (loadedSettings.payment_settings.mercadopago_enabled) {
+          MercadoPagoService.initialize(loadedSettings.payment_settings);
+          console.log('Mercado Pago service initialized');
+        }
+      }
+    } catch (error) {
+      console.error("Erro ao carregar configurações da empresa:", error);
+    }
+  };
   
   const openWhatsApp = (planName, cycleType) => {
     const message = encodeURIComponent(`Olá! Gostaria de mais informações sobre o ${planName} no plano ${cycleType}.`);
     window.open(`https://wa.me/5511988889999?text=${message}`, '_blank');
+  };
+
+  const handleSubscription = async (plan, cycleType) => {
+    // Se o Mercado Pago não estiver configurado, usar WhatsApp como fallback
+    if (!companySettings?.payment_settings?.mercadopago_enabled) {
+      openWhatsApp(plan.name, cycleType);
+      return;
+    }
+    
+    try {
+      setLoading({ [plan.id]: true });
+      
+      const cyclePrice = calculateCyclePrice(plan, cycleType);
+      
+      // Inicializar o serviço do Mercado Pago com as configurações atuais
+      const mpInitialized = MercadoPagoService.initialize(companySettings.payment_settings);
+      
+      if (!mpInitialized) {
+        throw new Error("Não foi possível inicializar o Mercado Pago");
+      }
+      
+      // Criar link de pagamento no Mercado Pago
+      const paymentLink = await MercadoPagoService.createPaymentLink({
+        plan_name: `${plan.name} - ${cycleType}`,
+        billing_cycle: cycleType,
+        amount: cyclePrice,
+        payer_email: "", // Será preenchido no checkout do Mercado Pago
+        external_reference: plan.id,
+        success_url: `${window.location.origin}/subscription-success?plan_id=${plan.id}&cycle=${cycleType}`,
+        failure_url: `${window.location.origin}/subscription-failure?plan_id=${plan.id}&cycle=${cycleType}`,
+        pending_url: `${window.location.origin}/subscription-pending?plan_id=${plan.id}&cycle=${cycleType}`
+      });
+      
+      if (paymentLink) {
+        // Abrir o link de pagamento em uma nova aba
+        window.open(paymentLink, '_blank');
+      } else {
+        throw new Error("Não foi possível gerar o link de pagamento");
+      }
+    } catch (error) {
+      console.error("Erro ao processar pagamento:", error);
+      toast({
+        title: "Erro ao processar pagamento",
+        description: "Não foi possível processar o pagamento. Por favor, tente novamente ou entre em contato conosco.",
+        variant: "destructive"
+      });
+      // Fallback para WhatsApp em caso de erro
+      openWhatsApp(plan.name, cycleType);
+    } finally {
+      setLoading({ [plan.id]: false });
+    }
   };
 
   const formatCurrency = (value) => {
@@ -199,9 +292,17 @@ export default function SubscriptionPlansSection({ plans = [] }) {
                 <CardFooter>
                   <Button 
                     className="w-full"
-                    onClick={() => openWhatsApp(plan.name, cycleType)}
+                    onClick={() => handleSubscription(plan, cycleType)}
+                    disabled={loading[plan.id]}
                   >
-                    Assinar Agora
+                    {loading[plan.id] ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Processando...
+                      </>
+                    ) : (
+                      "Assinar Agora"
+                    )}
                   </Button>
                 </CardFooter>
               </Card>
