@@ -300,8 +300,54 @@ class MercadoPagoService {
     if (!this.checkInitialized()) return null;
 
     try {
+      // Verificar se o ID de pagamento é válido
+      if (!paymentId) {
+        console.error('ID de pagamento inválido ou não fornecido');
+        return {
+          id: 'unknown',
+          status: "error",
+          status_detail: "invalid_payment_id",
+          error_message: "ID de pagamento inválido ou não fornecido",
+          date_created: new Date().toISOString()
+        };
+      }
+      
+      // Normalizar o ID do pagamento (remover prefixos, sufixos, etc.)
+      let normalizedPaymentId = String(paymentId); // Converter para string
+      
+      // Se o ID contiver hífen, pegar apenas a primeira parte (geralmente é o ID numérico)
+      if (normalizedPaymentId.includes && normalizedPaymentId.includes('-')) {
+        normalizedPaymentId = normalizedPaymentId.split('-')[0];
+      }
+      
+      // Verificar se estamos em ambiente de desenvolvimento
+      const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      
+      if (isDevelopment) {
+        console.log(`Ambiente de desenvolvimento detectado. Simulando resposta para pagamento ${normalizedPaymentId}`);
+        
+        // Retornar dados simulados em ambiente de desenvolvimento
+        return {
+          id: normalizedPaymentId,
+          status: "approved", // Simular aprovação para testes
+          status_detail: "accredited",
+          external_reference: `test_${normalizedPaymentId}`,
+          date_created: new Date().toISOString(),
+          date_approved: new Date().toISOString(),
+          payment_method_id: "visa",
+          payment_type_id: "credit_card",
+          transaction_amount: 100,
+          installments: 1,
+          processing_mode: "aggregator",
+          description: "Pagamento simulado para ambiente de desenvolvimento"
+        };
+      }
+      
+      // Em produção, fazer a requisição real para a API do Mercado Pago
+      console.log(`Buscando informações do pagamento ${normalizedPaymentId} na API do Mercado Pago`);
+      
       // Fazer uma requisição direta para a API do Mercado Pago
-      const response = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+      const response = await fetch(`https://api.mercadopago.com/v1/payments/${normalizedPaymentId}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${this.config.mercadopago_access_token}`
@@ -311,6 +357,23 @@ class MercadoPagoService {
       if (!response.ok) {
         const errorData = await response.json();
         console.error('Erro na resposta do Mercado Pago:', errorData);
+        
+        // Se o pagamento não for encontrado, retornar um objeto com status "pending"
+        if (response.status === 404) {
+          console.log(`Pagamento ${normalizedPaymentId} não encontrado. Assumindo status pendente.`);
+          return {
+            id: normalizedPaymentId,
+            status: "pending",
+            status_detail: "pending_payment",
+            external_reference: `unknown_${normalizedPaymentId}`,
+            date_created: new Date().toISOString(),
+            payment_method_id: "unknown",
+            payment_type_id: "unknown",
+            transaction_amount: 0,
+            description: "Pagamento pendente ou não encontrado"
+          };
+        }
+        
         throw new Error(`Erro na API do Mercado Pago: ${response.status}`);
       }
       
@@ -320,7 +383,15 @@ class MercadoPagoService {
       return paymentData;
     } catch (error) {
       console.error('Erro ao obter informações do pagamento:', error);
-      return null;
+      
+      // Retornar um objeto com status de erro para evitar falhas no processamento
+      return {
+        id: paymentId,
+        status: "error",
+        status_detail: "processing_error",
+        error_message: error.message,
+        date_created: new Date().toISOString()
+      };
     }
   }
 

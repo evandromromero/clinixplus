@@ -57,22 +57,83 @@ class SubscriptionStatusChecker {
         return;
       }
       
-      // Buscar todas as assinaturas
-      const allSubscriptions = await ClientSubscription.list();
+      // Tentar buscar assinaturas pendentes via ClientSubscription
+      let pendingSubscriptions = [];
       
-      // Filtrar manualmente as assinaturas pendentes
-      const pendingSubscriptions = allSubscriptions.filter(subscription => 
-        (subscription.status === 'pendente' || subscription.status === 'processando') && 
-        subscription.mercadopago_payment_id
-      );
-      
-      console.log(`Encontradas ${pendingSubscriptions?.length || 0} assinaturas pendentes`);
+      try {
+        // Buscar todas as assinaturas
+        const allSubscriptions = await ClientSubscription.list();
+        console.log('Total de assinaturas encontradas:', allSubscriptions.length);
+        
+        // Filtrar assinaturas pendentes com um filtro menos restritivo
+        pendingSubscriptions = allSubscriptions.filter(sub => {
+          // Verificar se a assinatura tem um ID válido
+          const hasValidId = sub && sub.id;
+          
+          // Verificar se a assinatura está pendente
+          const isPending = 
+            (sub.status === 'pendente' || 
+             sub.mercadopago_status === 'pending' || 
+             !sub.mercadopago_status);
+          
+          return hasValidId && isPending;
+        });
+        
+        console.log(`${pendingSubscriptions.length} assinaturas pendentes encontradas via ClientSubscription`);
+      } catch (listError) {
+        console.error('Erro ao listar assinaturas via ClientSubscription:', listError);
+        
+        // Fallback: buscar diretamente no Firestore
+        try {
+          const { db } = await import('@/firebase/config');
+          const { collection, getDocs } = await import('firebase/firestore');
+          
+          // Buscar todas as assinaturas (sem filtro para garantir que encontramos todas)
+          const subscriptionsRef = collection(db, 'client_subscriptions');
+          const querySnapshot = await getDocs(subscriptionsRef);
+          
+          pendingSubscriptions = [];
+          
+          querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            // Usar o mesmo critério de filtragem que acima
+            if (doc.id && (data.status === 'pendente' || data.mercadopago_status === 'pending' || !data.mercadopago_status)) {
+              pendingSubscriptions.push({
+                id: doc.id,
+                ...data
+              });
+            }
+          });
+          
+          console.log(`${pendingSubscriptions.length} assinaturas pendentes encontradas via Firestore`);
+        } catch (firestoreError) {
+          console.error('Erro ao buscar assinaturas pendentes no Firestore:', firestoreError);
+          return;
+        }
+      }
       
       // Verificar cada assinatura
       if (pendingSubscriptions && pendingSubscriptions.length > 0) {
+        // Registrar as assinaturas para debug
+        console.log('Assinaturas pendentes a serem verificadas:', 
+          pendingSubscriptions.map(sub => ({
+            id: sub.id,
+            status: sub.status,
+            mercadopago_status: sub.mercadopago_status,
+            mercadopago_payment_id: sub.mercadopago_payment_id
+          }))
+        );
+        
         for (const subscription of pendingSubscriptions) {
-          await this.checkSubscriptionStatus(subscription);
+          // Verificação básica apenas para garantir que a assinatura tem um ID
+          if (subscription && subscription.id) {
+            await this.checkSubscriptionStatus(subscription);
+          } else {
+            console.error('Assinatura inválida encontrada na lista de pendentes:', subscription);
+          }
         }
+      } else {
+        console.log('Nenhuma assinatura pendente encontrada');
       }
       
       console.log('Verificação de assinaturas pendentes concluída');
@@ -87,6 +148,12 @@ class SubscriptionStatusChecker {
    */
   async checkSubscriptionStatus(subscription) {
     try {
+      // Verificar se a assinatura é válida
+      if (!subscription || !subscription.id) {
+        console.error('Assinatura inválida ou sem ID');
+        return;
+      }
+      
       console.log(`Verificando status da assinatura: ${subscription.id}`);
       
       // Se não tiver ID de pagamento, não há o que verificar
@@ -107,7 +174,7 @@ class SubscriptionStatusChecker {
       // Atualizar status da assinatura
       await this.updateSubscriptionStatus(subscription.id, paymentInfo);
     } catch (error) {
-      console.error(`Erro ao verificar status da assinatura ${subscription.id}:`, error);
+      console.error(`Erro ao verificar status da assinatura ${subscription?.id || 'desconhecida'}:`, error);
     }
   }
 
@@ -154,32 +221,67 @@ class SubscriptionStatusChecker {
   }
 
   /**
-   * Atualiza o status da assinatura com base nas informações do pagamento
+   * Atualiza o status de uma assinatura com base nas informações do pagamento
    * @param {string} subscriptionId - ID da assinatura
    * @param {Object} paymentInfo - Informações do pagamento
+   * @returns {boolean} - Sucesso da operação
    */
   async updateSubscriptionStatus(subscriptionId, paymentInfo) {
     try {
-      // Obter a assinatura
-      const subscription = await ClientSubscription.get(subscriptionId);
-      if (!subscription) {
-        console.error('Assinatura não encontrada:', subscriptionId);
-        return;
+      // Verificar se o ID da assinatura é válido
+      if (!subscriptionId) {
+        console.error('ID de assinatura inválido ou não fornecido');
+        return false;
       }
       
-      // Se o status já foi atualizado, não fazer nada
-      if (subscription.mercadopago_status === paymentInfo.status) {
-        console.log(`Status da assinatura ${subscriptionId} já está atualizado: ${paymentInfo.status}`);
-        return;
+      console.log(`Atualizando status da assinatura ${subscriptionId} com base no pagamento ${paymentInfo.id}`);
+      
+      // Buscar a assinatura
+      let subscription;
+      
+      try {
+        subscription = await ClientSubscription.get(subscriptionId);
+        if (!subscription) {
+          console.error(`Assinatura não encontrada: ${subscriptionId}`);
+          return false;
+        }
+      } catch (getError) {
+        console.error(`Erro ao buscar assinatura via ClientSubscription: ${getError.message}`);
+        
+        // Tentar buscar diretamente no Firestore
+        try {
+          const { db } = await import('@/firebase/config');
+          const { doc, getDoc } = await import('firebase/firestore');
+          
+          // Verificar se o caminho do documento é válido
+          if (typeof subscriptionId !== 'string' || subscriptionId.trim() === '') {
+            console.error('ID de assinatura inválido para Firestore:', subscriptionId);
+            return false;
+          }
+          
+          const subscriptionRef = doc(db, 'client_subscriptions', subscriptionId);
+          const subscriptionSnap = await getDoc(subscriptionRef);
+          
+          if (!subscriptionSnap.exists()) {
+            console.error(`Assinatura não encontrada no Firestore: ${subscriptionId}`);
+            return false;
+          }
+          
+          subscription = {
+            id: subscriptionId,
+            ...subscriptionSnap.data()
+          };
+        } catch (firestoreError) {
+          console.error(`Erro ao buscar assinatura no Firestore: ${firestoreError.message}`);
+          return false;
+        }
       }
       
-      console.log(`Atualizando status da assinatura ${subscriptionId} de ${subscription.mercadopago_status} para ${paymentInfo.status}`);
-      
-      // Mapear status do Mercado Pago para status da assinatura
+      // Mapear o status do pagamento para o status da assinatura
       let subscriptionStatus = subscription.status;
       let transactionStatus = 'pendente';
       
-      switch (paymentInfo.status) {
+      switch(paymentInfo.status) {
         case 'approved':
           subscriptionStatus = 'ativa';
           transactionStatus = 'pago';
@@ -193,8 +295,8 @@ class SubscriptionStatusChecker {
           transactionStatus = 'processando';
           break;
         case 'rejected':
-          subscriptionStatus = 'cancelada';
-          transactionStatus = 'cancelado';
+          subscriptionStatus = 'rejeitada';
+          transactionStatus = 'rejeitado';
           break;
         case 'refunded':
           subscriptionStatus = 'cancelada';
@@ -212,6 +314,10 @@ class SubscriptionStatusChecker {
           subscriptionStatus = 'cancelada';
           transactionStatus = 'estornado';
           break;
+        case 'error':
+          // Não alterar o status da assinatura em caso de erro na verificação
+          console.log(`Erro na verificação do pagamento: ${paymentInfo.error_message}`);
+          return false;
         default:
           console.log(`Status de pagamento não mapeado: ${paymentInfo.status}`);
           break;
@@ -228,13 +334,32 @@ class SubscriptionStatusChecker {
             date: new Date().toISOString(),
             status: paymentInfo.status,
             payment_id: paymentInfo.id,
-            amount: paymentInfo.transaction_amount
+            amount: paymentInfo.transaction_amount || 0,
+            details: paymentInfo.status_detail || ''
           }
         ]
       };
       
-      await ClientSubscription.update(subscriptionId, updateData);
-      console.log('Assinatura atualizada com sucesso:', subscriptionId);
+      // Tentar atualizar via ClientSubscription primeiro
+      try {
+        await ClientSubscription.update(subscriptionId, updateData);
+        console.log('Assinatura atualizada com sucesso via ClientSubscription:', subscriptionId);
+      } catch (updateError) {
+        console.error(`Erro ao atualizar assinatura via ClientSubscription: ${updateError.message}`);
+        
+        // Fallback: atualizar diretamente no Firestore
+        try {
+          const { db } = await import('@/firebase/config');
+          const { doc, updateDoc } = await import('firebase/firestore');
+          
+          const subscriptionRef = doc(db, 'client_subscriptions', subscriptionId);
+          await updateDoc(subscriptionRef, updateData);
+          console.log('Assinatura atualizada com sucesso via Firestore:', subscriptionId);
+        } catch (firestoreError) {
+          console.error(`Erro ao atualizar assinatura no Firestore: ${firestoreError.message}`);
+          return false;
+        }
+      }
       
       // Atualizar ou criar transação financeira
       await this.updateFinancialTransaction(subscription, paymentInfo, transactionStatus);
@@ -251,41 +376,59 @@ class SubscriptionStatusChecker {
    * @param {Object} subscription - Assinatura
    * @param {Object} paymentInfo - Informações do pagamento
    * @param {string} transactionStatus - Status da transação
+   * @returns {boolean} - Sucesso da operação
    */
   async updateFinancialTransaction(subscription, paymentInfo, transactionStatus) {
     try {
-      // Buscar todas as transações
-      const allTransactions = await FinancialTransaction.list();
+      // Verificar se a assinatura é válida
+      if (!subscription || !subscription.id) {
+        console.error('Assinatura inválida para atualizar transação financeira');
+        return false;
+      }
       
-      // Filtrar transações relacionadas a esta assinatura
-      const transactions = allTransactions.filter(transaction => 
-        transaction.reference_id === subscription.id && 
-        transaction.type === 'receita' && 
-        transaction.category === 'assinatura'
-      );
+      // Verificar se o pagamento é válido
+      if (!paymentInfo || !paymentInfo.id) {
+        console.error('Informações de pagamento inválidas para atualizar transação financeira');
+        return false;
+      }
       
-      if (transactions && transactions.length > 0) {
-        // Atualizar transação existente
-        const transaction = transactions[0];
-        await FinancialTransaction.update(transaction.id, {
-          status: transactionStatus,
-          payment_date: transactionStatus === 'pago' ? new Date().toISOString() : null,
-          payment_method: 'mercado_pago',
-          external_reference: paymentInfo.id
-        });
-        console.log('Transação financeira atualizada:', transaction.id);
+      // Buscar transações existentes para esta assinatura
+      const existingTransactions = await FinancialTransaction.list({
+        reference_id: subscription.id,
+        external_reference: paymentInfo.id
+      });
+      
+      // Se já existe uma transação, atualizar o status
+      if (existingTransactions && existingTransactions.length > 0) {
+        const transaction = existingTransactions[0];
+        
+        // Atualizar apenas se o status for diferente
+        if (transaction.status !== transactionStatus) {
+          await FinancialTransaction.update(transaction.id, {
+            status: transactionStatus,
+            payment_date: transactionStatus === 'pago' ? new Date().toISOString() : null
+          });
+          console.log('Transação financeira atualizada para assinatura:', subscription.id);
+        }
       } else {
         // Criar nova transação
+        // Garantir que todos os valores necessários estejam presentes
+        const amount = paymentInfo.transaction_amount || 0;
+        const billingCycle = subscription.billing_cycle || 'mensal';
+        const planName = subscription.plan_name || 'Plano';
+        const clientId = subscription.client_id || '';
+        const nextBillingDate = subscription.next_billing_date || new Date().toISOString();
+        
         await FinancialTransaction.create({
           type: 'receita',
           category: 'assinatura',
-          description: `Assinatura ${subscription.plan_name || 'Plano'} - ${subscription.billing_cycle}`,
-          amount: paymentInfo.transaction_amount,
+          description: `Assinatura ${planName} - ${billingCycle}`,
+          amount: amount,
           payment_method: 'mercado_pago',
           status: transactionStatus,
-          due_date: subscription.next_billing_date,
+          due_date: nextBillingDate,
           payment_date: transactionStatus === 'pago' ? new Date().toISOString() : null,
-          client_id: subscription.client_id,
+          client_id: clientId,
           reference_id: subscription.id,
           external_reference: paymentInfo.id
         });
@@ -305,6 +448,14 @@ class SubscriptionStatusChecker {
    */
   async checkSubscriptionById(subscriptionId) {
     try {
+      // Verificar se o ID é válido
+      if (!subscriptionId) {
+        console.error('ID de assinatura inválido ou não fornecido');
+        return false;
+      }
+      
+      console.log(`Verificando assinatura específica com ID: ${subscriptionId}`);
+      
       // Inicializar o serviço do Mercado Pago
       const settings = await this.initializeMercadoPago();
       if (!settings) {
@@ -313,9 +464,45 @@ class SubscriptionStatusChecker {
       }
       
       // Buscar a assinatura
-      const subscription = await ClientSubscription.get(subscriptionId);
+      let subscription = null;
+      
+      // Tentar buscar via ClientSubscription primeiro
+      try {
+        subscription = await ClientSubscription.get(subscriptionId);
+        if (subscription) {
+          console.log('Assinatura encontrada via ClientSubscription:', subscription.id);
+        }
+      } catch (getError) {
+        console.error(`Erro ao buscar assinatura via ClientSubscription: ${getError.message}`);
+      }
+      
+      // Se não encontrou, tentar buscar diretamente no Firestore
       if (!subscription) {
-        console.error('Assinatura não encontrada:', subscriptionId);
+        try {
+          const { db } = await import('@/firebase/config');
+          const { doc, getDoc } = await import('firebase/firestore');
+          
+          const subscriptionRef = doc(db, 'client_subscriptions', subscriptionId);
+          const subscriptionSnap = await getDoc(subscriptionRef);
+          
+          if (subscriptionSnap.exists()) {
+            subscription = {
+              id: subscriptionId,
+              ...subscriptionSnap.data()
+            };
+            console.log('Assinatura encontrada via Firestore:', subscription.id);
+          } else {
+            console.error(`Assinatura não encontrada no Firestore: ${subscriptionId}`);
+            return false;
+          }
+        } catch (firestoreError) {
+          console.error(`Erro ao buscar assinatura no Firestore: ${firestoreError.message}`);
+          return false;
+        }
+      }
+      
+      if (!subscription) {
+        console.error(`Não foi possível encontrar a assinatura: ${subscriptionId}`);
         return false;
       }
       

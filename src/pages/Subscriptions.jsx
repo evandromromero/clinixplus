@@ -92,7 +92,7 @@ export default function Subscriptions() {
   
   const [loading, setLoading] = useState({});
   
-  const toast = useToast();
+  const { toast } = useToast();
   
   useEffect(() => {
     loadData();
@@ -159,7 +159,11 @@ export default function Subscriptions() {
       }
     } catch (error) {
       console.error("Erro ao carregar configurações da empresa:", error);
-      toast.error("Erro ao carregar configurações da empresa");
+      toast({
+        title: "Erro ao carregar configurações da empresa",
+        description: error.message,
+        variant: "destructive"
+      });
     }
   };
   
@@ -483,7 +487,11 @@ export default function Subscriptions() {
             }
           } catch (mpError) {
             console.error("Erro ao processar pagamento no Mercado Pago:", mpError);
-            toast.error("Erro ao processar pagamento no Mercado Pago. A assinatura foi criada, mas o pagamento deverá ser processado manualmente.");
+            toast({
+              title: "Erro ao processar pagamento no Mercado Pago",
+              description: mpError.message,
+              variant: "destructive"
+            });
             
             // Criar transação financeira mesmo com erro no Mercado Pago
             await createFinancialTransaction(subscription, plan, totalPrice);
@@ -496,10 +504,18 @@ export default function Subscriptions() {
       
       setShowSubscriptionDialog(false);
       await loadData();
-      toast.success("Assinatura salva com sucesso!");
+      toast({
+        title: "Assinatura salva com sucesso!",
+        description: "",
+        variant: "success"
+      });
     } catch (error) {
       console.error("Erro ao salvar assinatura:", error);
-      toast.error("Erro ao salvar assinatura: " + error.message);
+      toast({
+        title: "Erro ao salvar assinatura",
+        description: error.message,
+        variant: "destructive"
+      });
     }
   };
   
@@ -544,19 +560,31 @@ export default function Subscriptions() {
   const handleProcessPayment = async (subscription) => {
     try {
       if (!companySettings?.payment_settings?.mercadopago_enabled) {
-        toast.error("O Mercado Pago não está configurado. Verifique as configurações do sistema.");
+        toast({
+          title: "O Mercado Pago não está configurado",
+          description: "Verifique as configurações do sistema",
+          variant: "destructive"
+        });
         return;
       }
       
       const plan = plans.find(p => p.id === subscription.plan_id);
       if (!plan) {
-        toast.error("Plano não encontrado");
+        toast({
+          title: "Plano não encontrado",
+          description: "",
+          variant: "destructive"
+        });
         return;
       }
       
       const client = clients.find(c => c.id === subscription.client_id);
       if (!client) {
-        toast.error("Cliente não encontrado");
+        toast({
+          title: "Cliente não encontrado",
+          description: "",
+          variant: "destructive"
+        });
         return;
       }
       
@@ -582,7 +610,7 @@ export default function Subscriptions() {
       totalPrice = totalPrice * (1 - (subscription.discount / 100));
       
       // Criar link de pagamento no Mercado Pago
-      const paymentLink = await MercadoPagoService.createPaymentLink({
+      const paymentData = await MercadoPagoService.createPaymentLink({
         plan_name: `${plan.name} - ${subscription.billing_cycle}`,
         billing_cycle: subscription.billing_cycle,
         amount: totalPrice,
@@ -594,21 +622,69 @@ export default function Subscriptions() {
         pending_url: `${window.location.origin}/subscriptions?status=pending&subscription_id=${subscription.id}`
       });
       
-      if (paymentLink) {
-        // Atualizar a assinatura com os dados do Mercado Pago
-        await ClientSubscription.update(subscription.id, {
-          payment_link: paymentLink,
-          mercadopago_status: "pending"
-        });
-        
-        // Abrir o link de pagamento em uma nova aba
-        window.open(paymentLink, '_blank');
+      if (paymentData && paymentData.url) {
+        try {
+          // Atualizar a assinatura com os dados do Mercado Pago diretamente no Firestore
+          const { db } = await import('@/firebase/config');
+          const { doc, updateDoc } = await import('firebase/firestore');
+          
+          // Tentar atualizar diretamente no Firestore primeiro
+          try {
+            const subscriptionRef = doc(db, 'client_subscriptions', subscription.id);
+            await updateDoc(subscriptionRef, {
+              payment_link: paymentData.url,
+              mercadopago_status: "pending",
+              mercadopago_payment_id: paymentData.payment_id || '',
+              mercadopago_preference_id: paymentData.preference_id || '',
+              updated_at: new Date().toISOString()
+            });
+            console.log('Assinatura atualizada com dados do pagamento no Firestore');
+          } catch (firestoreError) {
+            console.error('Erro ao atualizar assinatura no Firestore:', firestoreError);
+            
+            // Fallback: tentar usar ClientSubscription.update
+            await ClientSubscription.update(subscription.id, {
+              payment_link: paymentData.url,
+              mercadopago_status: "pending",
+              mercadopago_payment_id: paymentData.payment_id || '',
+              mercadopago_preference_id: paymentData.preference_id || ''
+            });
+          }
+          
+          // Exibir mensagem de sucesso
+          toast({
+            title: "Link de pagamento gerado",
+            description: "O link de pagamento foi gerado com sucesso e abrirá em uma nova aba",
+            variant: "success"
+          });
+          
+          // Abrir o link de pagamento em uma nova aba
+          window.open(paymentData.url, '_blank');
+          
+          // Recarregar dados
+          await loadData();
+        } catch (updateError) {
+          console.error("Erro ao atualizar assinatura:", updateError);
+          
+          // Mesmo com erro na atualização, abrir o link de pagamento
+          window.open(paymentData.url, '_blank');
+          
+          toast({
+            title: "Aviso",
+            description: "O link de pagamento foi gerado, mas não foi possível atualizar a assinatura. O status deverá ser atualizado manualmente.",
+            variant: "warning"
+          });
+        }
       } else {
         throw new Error("Não foi possível gerar o link de pagamento");
       }
     } catch (error) {
       console.error("Erro ao processar pagamento:", error);
-      toast.error("Erro ao processar pagamento: " + error.message);
+      toast({
+        title: "Erro ao processar pagamento",
+        description: error.message,
+        variant: "destructive"
+      });
     }
   };
   
@@ -622,8 +698,8 @@ export default function Subscriptions() {
       if (success) {
         toast({
           title: "Status verificado",
-          description: "O status da assinatura foi verificado com sucesso.",
-          variant: "default"
+          description: "O status da assinatura foi verificado com sucesso",
+          variant: "success"
         });
         
         // Recarregar dados
@@ -631,7 +707,7 @@ export default function Subscriptions() {
       } else {
         toast({
           title: "Erro ao verificar status",
-          description: "Não foi possível verificar o status da assinatura.",
+          description: "Não foi possível verificar o status da assinatura",
           variant: "destructive"
         });
       }
@@ -639,7 +715,7 @@ export default function Subscriptions() {
       console.error("Erro ao verificar status da assinatura:", error);
       toast({
         title: "Erro ao verificar status",
-        description: "Ocorreu um erro ao verificar o status da assinatura.",
+        description: "Ocorreu um erro ao verificar o status da assinatura",
         variant: "destructive"
       });
     } finally {
