@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Star } from 'lucide-react';
-import { Testimonial } from '@/api/entities';
+import { Testimonial } from '@/firebase/entities';
 
 export default function AddTestimonialDialog() {
   const [isOpen, setIsOpen] = useState(false);
