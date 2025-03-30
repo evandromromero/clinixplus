@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, forwardRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -37,7 +37,7 @@ const loadCompanySettings = async () => {
   return loadPromise;
 };
 
-export default function GiftCardTemplate({ giftCard, previewMode = false }) {
+export default forwardRef(({ giftCard, previewMode = false }, ref) => {
   const [companyName, setCompanyName] = useState(globalCompanyName);
 
   useEffect(() => {
@@ -72,7 +72,7 @@ export default function GiftCardTemplate({ giftCard, previewMode = false }) {
   const template = templates[giftCard.design_template || "padrao"];
 
   return (
-    <Card className={`overflow-hidden border-2 ${template.borderColor} shadow-lg ${previewMode ? 'w-full max-w-sm' : 'w-full'}`}>
+    <Card ref={ref} className={`overflow-hidden border-2 ${template.borderColor} shadow-lg ${previewMode ? 'w-full max-w-sm' : 'w-full'}`}>
       <div className={`relative ${template.bgColor} p-6 ${template.textColor}`}>
         <div className="absolute top-3 right-3 opacity-50">
           <Sparkles className="h-24 w-24" />
@@ -122,4 +122,4 @@ export default function GiftCardTemplate({ giftCard, previewMode = false }) {
       </div>
     </Card>
   );
-}
+});

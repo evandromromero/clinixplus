@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { GiftCard, Client, Sale, CompanySettings } from '@/firebase/entities';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,7 +48,10 @@ import {
   Copy, 
   RefreshCw, 
   X,
-  ChevronRight
+  ChevronRight,
+  Send,
+  Printer,
+  Share2
 } from "lucide-react";
 import { format, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -58,6 +61,8 @@ import GiftCardTemplate from '../components/giftcard/GiftCardTemplate';
 import RateLimitHandler from '@/components/RateLimitHandler';
 import { toast } from 'react-hot-toast';
 import { Toaster } from 'react-hot-toast';
+import html2canvas from 'html2canvas';
+import html2pdf from 'html2pdf.js';
 
 export default function GiftCards() {
   const [giftCards, setGiftCards] = useState([]);
@@ -72,7 +77,9 @@ export default function GiftCards() {
   const [searchClient, setSearchClient] = useState("");
   const [clientSearchResults, setClientSearchResults] = useState([]);
   const [companyName, setCompanyName] = useState("");
+  const [showReceiptDialog, setShowReceiptDialog] = useState(false);
   
+  const giftCardTemplateRef = useRef(null);
   const navigate = useNavigate();
 
   const [newGiftCard, setNewGiftCard] = useState({
@@ -158,6 +165,20 @@ export default function GiftCards() {
     return code;
   };
 
+  // Função para capturar o Gift Card como imagem base64
+  const captureGiftCardAsBase64 = async () => {
+    if (!giftCardTemplateRef.current) return null;
+    
+    try {
+      const canvas = await html2canvas(giftCardTemplateRef.current);
+      return canvas.toDataURL('image/png');
+    } catch (error) {
+      console.error("Erro ao capturar imagem do gift card:", error);
+      toast.error("Erro ao gerar imagem do gift card");
+      return null;
+    }
+  };
+
   const handleCreateGiftCard = async () => {
     try {
       if (!newGiftCard.client_id) {
@@ -170,20 +191,41 @@ export default function GiftCards() {
         return;
       }
 
-      const giftCardData = await GiftCard.create(newGiftCard);
-      
-      // Enviar por WhatsApp se tiver número
-      if (newGiftCard.recipient_phone) {
-        const message = `Olá${newGiftCard.recipient_name ? ' ' + newGiftCard.recipient_name : ''}! Você recebeu um Gift Card da Esthétique no valor de ${formatCurrency(newGiftCard.value)}. Código: ${giftCardData.code}${newGiftCard.message ? '\n\nMensagem: ' + newGiftCard.message : ''}`;
-        const phone = newGiftCard.recipient_phone.replace(/\D/g, '');
-        const whatsappUrl = `https://wa.me/55${phone}?text=${encodeURIComponent(message)}`;
-        window.open(whatsappUrl, '_blank');
+      if (!newGiftCard.expiration_date) {
+        toast.error("Informe uma data de expiração");
+        return;
       }
 
+      // Capturar a imagem do gift card como base64
+      const imageBase64 = await captureGiftCardAsBase64();
+
+      // Gerar código aleatório
+      const code = generateRandomCode();
+
+      // Criar o gift card
+      const giftCardData = await GiftCard.create({
+        ...newGiftCard,
+        code,
+        status: 'active',
+        image_base64: imageBase64,
+        created_date: new Date().toISOString(),
+        updated_date: new Date().toISOString()
+      });
+
+      toast.success("Gift Card criado com sucesso!");
+      
+      // Fechar o diálogo
       resetForm();
       setShowCreateDialog(false);
+      
+      // Redirecionar para a página de vendas com o ID do gift card
+      navigate(`/sales-register?gift_card=${giftCardData.id}`);
+      
+      // Armazenar o código para uso posterior (opcional)
+      localStorage.setItem('last_giftcard_code', code);
+      
+      // Recarregar os gift cards
       await loadData();
-      toast.success("Gift Card criado com sucesso!");
     } catch (error) {
       console.error("Erro ao criar gift card:", error);
       toast.error("Erro ao criar gift card");
@@ -259,25 +301,27 @@ export default function GiftCards() {
   };
 
   const getStatusBadge = (status) => {
-    switch (status) {
-      case "ativo":
-        return <Badge className="bg-green-100 text-green-700">Ativo</Badge>;
-      case "usado":
-        return <Badge className="bg-blue-100 text-blue-700">Utilizado</Badge>;
-      case "expirado":
-        return <Badge className="bg-amber-100 text-amber-700">Expirado</Badge>;
-      case "cancelado":
-        return <Badge className="bg-red-100 text-red-700">Cancelado</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
+    // Normalizar o status para lidar com versões em inglês e português
+    const statusLower = status.toLowerCase();
+    
+    if (statusLower === "ativo" || statusLower === "active") {
+      return <Badge className="bg-green-100 text-green-700">Ativo</Badge>;
+    } else if (statusLower === "usado" || statusLower === "used") {
+      return <Badge className="bg-blue-100 text-blue-700">Utilizado</Badge>;
+    } else if (statusLower === "expirado" || statusLower === "expired") {
+      return <Badge className="bg-amber-100 text-amber-700">Expirado</Badge>;
+    } else if (statusLower === "cancelado" || statusLower === "canceled") {
+      return <Badge className="bg-red-100 text-red-700">Cancelado</Badge>;
+    } else {
+      return <Badge variant="outline">{status}</Badge>;
     }
   };
 
   const filteredGiftCards = giftCards.filter(card => {
     // Filtrar por status
-    if (activeTab === "ativos" && card.status !== "ativo") return false;
-    if (activeTab === "usados" && card.status !== "usado") return false;
-    if (activeTab === "cancelados" && card.status !== "cancelado") return false;
+    if (activeTab === "ativos" && card.status !== "ativo" && card.status !== "active") return false;
+    if (activeTab === "usados" && card.status !== "usado" && card.status !== "used") return false;
+    if (activeTab === "cancelados" && card.status !== "cancelado" && card.status !== "canceled") return false;
     
     // Filtrar por termo de busca
     if (searchTerm) {
@@ -298,6 +342,70 @@ export default function GiftCards() {
       style: 'currency', 
       currency: 'BRL' 
     }).format(value);
+  };
+
+  // Função para enviar o gift card para WhatsApp
+  const sendToWhatsApp = (card) => {
+    if (!card) return;
+    
+    try {
+      // Construir a mensagem
+      const message = `Olá${card.recipient_name ? ' ' + card.recipient_name : ''}! Você recebeu um Gift Card da ${card.company_name || companyName} no valor de ${formatCurrency(card.value)}. Código: ${card.code}${card.message ? '\n\nMensagem: ' + card.message : ''}`;
+      
+      // Obter o número de telefone (se disponível) ou pedir para digitar
+      let phone = card.recipient_phone;
+      
+      if (!phone) {
+        phone = prompt("Digite o número de WhatsApp para enviar o Gift Card (apenas números):");
+        if (!phone) return; // Usuário cancelou
+      }
+      
+      // Remover caracteres não numéricos
+      phone = phone.replace(/\D/g, '');
+      
+      // Abrir WhatsApp Web com a mensagem
+      const whatsappUrl = `https://wa.me/55${phone}?text=${encodeURIComponent(message)}`;
+      window.open(whatsappUrl, '_blank');
+      
+      toast.success("WhatsApp aberto com o Gift Card");
+    } catch (error) {
+      console.error("Erro ao enviar para WhatsApp:", error);
+      toast.error("Erro ao abrir WhatsApp");
+    }
+  };
+
+  // Função para gerar e imprimir o recibo do gift card
+  const generateReceipt = (card) => {
+    if (!card) return;
+    
+    try {
+      setSelectedGiftCard(card);
+      setShowReceiptDialog(true);
+    } catch (error) {
+      console.error("Erro ao gerar recibo:", error);
+      toast.error("Erro ao gerar recibo");
+    }
+  };
+
+  // Função para imprimir o recibo
+  const printReceipt = () => {
+    try {
+      const element = document.getElementById('gift-card-receipt');
+      const opt = {
+        margin: 10,
+        filename: `Gift-Card-${selectedGiftCard?.code}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+      
+      html2pdf().from(element).set(opt).save().then(() => {
+        toast.success("Recibo gerado com sucesso!");
+      });
+    } catch (error) {
+      console.error("Erro ao imprimir recibo:", error);
+      toast.error("Erro ao imprimir recibo");
+    }
   };
 
   return (
@@ -395,6 +503,22 @@ export default function GiftCards() {
                           className="text-red-500"
                         >
                           <X className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => sendToWhatsApp(card)}
+                          className="text-green-500"
+                        >
+                          <Send className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => generateReceipt(card)}
+                          className="text-blue-500"
+                        >
+                          <Printer className="h-4 w-4" />
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -630,6 +754,7 @@ export default function GiftCards() {
             <div className="flex flex-col items-center justify-center">
               <h3 className="text-lg font-medium mb-4">Pré-visualização</h3>
               <GiftCardTemplate 
+                ref={giftCardTemplateRef}
                 giftCard={newGiftCard} 
                 previewMode={true} 
               />
@@ -707,6 +832,42 @@ export default function GiftCards() {
               variant="destructive"
             >
               Cancelar Gift Card
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Diálogo de impressão de recibo */}
+      <Dialog open={showReceiptDialog} onOpenChange={setShowReceiptDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Recibo do Gift Card</DialogTitle>
+          </DialogHeader>
+          
+          <div id="gift-card-receipt" className="py-4">
+            <h2 className="text-lg font-medium mb-2">Recibo do Gift Card</h2>
+            <p>
+              Código: <span className="font-mono">{selectedGiftCard?.code}</span>
+            </p>
+            <p>
+              Valor: {selectedGiftCard?.value ? formatCurrency(selectedGiftCard.value) : "N/A"}
+            </p>
+            <p>
+              Destinatário: {selectedGiftCard?.recipient_name || "Não especificado"}
+            </p>
+            <p>
+              Data de Expiração: {selectedGiftCard?.expiration_date ? 
+                format(new Date(selectedGiftCard.expiration_date), 'dd/MM/yyyy') : 
+                "Não especificada"}
+            </p>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowReceiptDialog(false)}>
+              Fechar
+            </Button>
+            <Button onClick={printReceipt} className="bg-blue-600 hover:bg-blue-700">
+              Imprimir Recibo
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -912,7 +912,119 @@ export const Role = createEnhancedEntity('roles', base44.entities.Role);
 export const PaymentMethod = createEnhancedEntity('payment_methods', base44.entities.PaymentMethod);
 export const SubscriptionPlan = createEnhancedEntity('subscription_plans', base44.entities.SubscriptionPlan);
 export const ClientSubscription = createEnhancedEntity('client_subscriptions', base44.entities.ClientSubscription);
-export const GiftCard = createEnhancedEntity('gift_cards', base44.entities.GiftCard);
+
+// Implementação completa da entidade GiftCard usando apenas Firebase
+export const GiftCard = {
+  collection: 'gift_cards',
+  
+  async create(data) {
+    try {
+      // Gerar ID único se não fornecido
+      const docRef = data.id 
+        ? doc(db, 'gift_cards', data.id)
+        : doc(collection(db, 'gift_cards'));
+      
+      // Preparar dados para salvar
+      const giftCardData = {
+        ...data,
+        id: docRef.id,
+        created_date: data.created_date || new Date().toISOString(),
+        updated_date: new Date().toISOString()
+      };
+      
+      // Salvar no Firebase
+      await setDoc(docRef, giftCardData);
+      
+      return giftCardData;
+    } catch (error) {
+      console.error('Error creating gift card:', error);
+      throw error;
+    }
+  },
+  
+  async update(id, data) {
+    try {
+      const docRef = doc(db, 'gift_cards', id);
+      
+      // Atualizar apenas os campos fornecidos
+      await updateDoc(docRef, {
+        ...data,
+        updated_date: new Date().toISOString()
+      });
+      
+      return {
+        id,
+        ...data
+      };
+    } catch (error) {
+      console.error('Error updating gift card:', error);
+      throw error;
+    }
+  },
+  
+  async delete(id) {
+    try {
+      await deleteDoc(doc(db, 'gift_cards', id));
+    } catch (error) {
+      console.error('Error deleting gift card:', error);
+      throw error;
+    }
+  },
+  
+  async get(id) {
+    try {
+      const docRef = doc(db, 'gift_cards', id);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        return {
+          id: docSnap.id,
+          ...docSnap.data()
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting gift card:', error);
+      throw error;
+    }
+  },
+  
+  async list() {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'gift_cards'));
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('Error listing gift cards:', error);
+      return [];
+    }
+  },
+  
+  async filter(filters) {
+    try {
+      let q = collection(db, 'gift_cards');
+      
+      // Aplicar filtros se fornecidos
+      if (filters) {
+        Object.entries(filters).forEach(([key, value]) => {
+          q = query(q, where(key, '==', value));
+        });
+      }
+      
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('Error filtering gift cards:', error);
+      return [];
+    }
+  }
+};
+
 export const ClientPackageSession = createEnhancedEntity('client_package_sessions', base44.entities.ClientPackageSession);
 export const Receipt = createEnhancedEntity('receipts', base44.entities.Receipt);
 export const UnfinishedSale = createEnhancedEntity('unfinished_sales', null); 

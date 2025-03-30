@@ -664,6 +664,7 @@ export default function SalesRegister() {
         const amount = params.get('amount');
         const clientPackageId = params.get('client_package_id');
         const unfinishedSaleId = params.get('unfinished_sale_id');
+        const giftCardId = params.get('gift_card');
 
         if (type) {
           setSaleType(type);
@@ -699,6 +700,87 @@ export default function SalesRegister() {
               amount: parseFloat(amount),
               installments: 1
             }]);
+          }
+        }
+
+        if (giftCardId) {
+          console.log("[SalesRegister] Gift Card ID detectado na URL:", giftCardId);
+          
+          // Carregar o gift card
+          try {
+            const giftCardData = await GiftCard.get(giftCardId);
+            if (giftCardData) {
+              console.log("[SalesRegister] Gift Card carregado:", giftCardData);
+              
+              // Selecionar o cliente associado ao gift card
+              if (giftCardData.client_id) {
+                // Verificar se os clientes já foram carregados
+                if (clients && clients.length > 0) {
+                  const clientData = clients.find(c => c.id === giftCardData.client_id);
+                  if (clientData) {
+                    console.log("[SalesRegister] Cliente encontrado e selecionado:", clientData.name);
+                    setSelectedClient(clientData);
+                  } else {
+                    // Se o cliente não for encontrado na lista atual, carregá-lo diretamente
+                    try {
+                      console.log("[SalesRegister] Cliente não encontrado na lista, carregando diretamente");
+                      const clientData = await Client.get(giftCardData.client_id);
+                      if (clientData) {
+                        console.log("[SalesRegister] Cliente carregado diretamente:", clientData.name);
+                        setSelectedClient(clientData);
+                      }
+                    } catch (error) {
+                      console.error("[SalesRegister] Erro ao carregar cliente:", error);
+                    }
+                  }
+                } else {
+                  // Se a lista de clientes ainda não foi carregada, carregar o cliente diretamente
+                  try {
+                    console.log("[SalesRegister] Lista de clientes vazia, carregando cliente diretamente");
+                    const clientData = await Client.get(giftCardData.client_id);
+                    if (clientData) {
+                      console.log("[SalesRegister] Cliente carregado diretamente:", clientData.name);
+                      setSelectedClient(clientData);
+                    }
+                  } catch (error) {
+                    console.error("[SalesRegister] Erro ao carregar cliente:", error);
+                  }
+                }
+              }
+              
+              // Definir o tipo de venda para gift card
+              setSaleType("giftcard");
+              
+              // Adicionar o gift card ao carrinho
+              const cartItem = {
+                id: giftCardData.id,
+                item_id: giftCardData.id,
+                name: `Gift Card ${giftCardData.code}`,
+                type: "giftcard",
+                price: parseFloat(giftCardData.value),
+                quantity: 1,
+                discount: 0,
+                unit_price: parseFloat(giftCardData.value)
+              };
+              
+              setCartItems([cartItem]);
+              
+              // Limpar o parâmetro da URL (opcional)
+              window.history.replaceState({}, document.title, window.location.pathname);
+              
+              toast({
+                title: "Gift Card adicionado",
+                description: `Gift Card no valor de ${formatCurrency(giftCardData.value)} adicionado ao carrinho`,
+                variant: "success"
+              });
+            }
+          } catch (error) {
+            console.error("[SalesRegister] Erro ao carregar gift card:", error);
+            toast({
+              title: "Erro",
+              description: "Não foi possível carregar o gift card solicitado",
+              variant: "destructive"
+            });
           }
         }
 
