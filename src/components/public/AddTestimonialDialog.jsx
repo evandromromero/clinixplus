@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Star } from 'lucide-react';
 import { Testimonial } from '@/firebase/entities';
+import { toast } from "sonner";
 
 export default function AddTestimonialDialog() {
   const [isOpen, setIsOpen] = useState(false);
@@ -30,17 +31,18 @@ export default function AddTestimonialDialog() {
         name,
         text,
         rating,
-        approved: false
+        approved: false,
+        created_at: new Date().toISOString()
       });
       
       setIsOpen(false);
       setName('');
       setText('');
       setRating(5);
-      alert('Obrigado pelo seu depoimento! Ele será exibido após aprovação.');
+      toast.success("Depoimento enviado com sucesso! Ele será exibido após aprovação.");
     } catch (error) {
       console.error('Erro ao enviar depoimento:', error);
-      alert('Erro ao enviar depoimento. Por favor, tente novamente.');
+      toast.error("Erro ao enviar depoimento. Por favor, tente novamente.");
     } finally {
       setIsSubmitting(false);
     }
