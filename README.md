@@ -475,4 +475,34 @@ await updateDoc(subscriptionRef, {
   - Melhorado o feedback ao usuário usando toast ao invés de alerts
   - Mantida a compatibilidade com a integração Firebase
 
+## Sistema de Controle de Acesso e Permissões
+
+### Controle de Acesso Baseado em Permissões
+- Sistema completo de filtragem de menu baseado nas permissões do usuário
+- Verificação dinâmica de permissões para cada item de menu e submenu
+- Suporte para permissões simples e múltiplas
+- Carregamento automático das permissões do usuário ao iniciar o sistema
+
+### Restrição de Acesso ao Cargo Administrador Geral
+- Visibilidade restrita: o cargo "Administrador Geral" só aparece para usuários com o mesmo cargo
+- Proteção contra modificações: apenas administradores podem criar/editar cargos de Administrador Geral
+- Proteção contra exclusão: verificações para impedir a exclusão não autorizada de cargos administrativos
+
+### Restrição de Edição para Usuários Administrador Geral
+- Apenas usuários com cargo de Administrador Geral podem editar outros usuários administradores
+- Proteção contra edição e exclusão não autorizada
+- Verificações em múltiplos pontos para garantir a segurança
+
+### Gerenciamento de Permissões Visíveis no Sistema
+- Controle sobre quais permissões estarão disponíveis no sistema
+- Interface de gerenciamento exclusiva para administradores
+- Permissões desabilitadas não aparecem para usuários não administradores
+- Botões para selecionar/desmarcar todas as permissões de uma vez
+
+### Controle de Visibilidade de Funcionalidades no Site Público
+- Ocultação automática de seções do site público baseada nas permissões habilitadas
+- Seção de planos de assinatura só aparece se a permissão "manage_subscriptions" estiver habilitada
+- Seção de gift cards só aparece se a permissão "manage_gift_cards" estiver habilitada
+- Links de navegação também são ocultados quando as permissões estão desabilitadas
+
 Para mais informações e suporte, please contact Base44 support at app@base44.com.
