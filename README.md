@@ -92,6 +92,46 @@ src/
 
 ### Atualizações (Março 2025)
 
+#### Sistema de Gerenciamento de Dados
+1. **Backup e Restauração de Dados**:
+   - Backup completo do banco de dados Firebase
+   - Download de arquivos de backup em formato JSON
+   - Upload e restauração de backups
+   - Dois modos de restauração: Substituir (deleta dados existentes) ou Mesclar (adiciona aos dados existentes)
+   - Seleção de entidades específicas para restauração
+   - Tratamento de rate limits do Firebase com delays e retentativas
+   - Indicadores de progresso durante operações
+
+2. **Interface Aprimorada**:
+   - Cards coloridos e intuitivos substituindo botões simples:
+     * Card Azul: Backup de Dados
+     * Card Âmbar: Exclusão Seletiva
+     * Card Vermelho: Exclusão Total
+     * Card Verde: Dados de Exemplo
+   - Ícones representativos para cada funcionalidade
+   - Títulos e descrições explicativas
+   - Efeitos de hover para melhor experiência do usuário
+   - Organização em abas para as 23 entidades do sistema
+
+3. **Dados de Exemplo**:
+   - Criação de dados para todas as 23 entidades do sistema:
+     * Clientes, Funcionários, Serviços, Produtos, Pacotes
+     * Pacotes de Clientes, Assinaturas, Planos de Assinatura
+     * Gift Cards, Agendamentos, Vendas, Vendas não Finalizadas
+     * Métodos de Pagamento, Transações Financeiras
+     * Serviços Pendentes, Funções, Fornecedores
+     * Depoimentos, Contratos, Modelos de Contratos
+     * Modelos de Anamnese, Configurações da Empresa
+   - Relações entre os dados para garantir integridade referencial
+   - Dados realistas para demonstração e testes
+
+4. **Correções e Melhorias**:
+   - Resolução de problemas com chaves (keys) em listas React
+   - Correção de erros de importação de entidades
+   - Tratamento adequado para erros de rate limit do Firebase
+   - Mensagens de feedback claras para o usuário
+   - Diálogos de confirmação para operações críticas
+
 #### Melhorias no Módulo Financeiro
 1. **Componente CashRegister**:
    - Aprimorada precisão nos cálculos usando `Number().toFixed(2)`
