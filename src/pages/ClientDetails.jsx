@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Client, Appointment, Sale, ClientPackage, Package, Service, Contract, ContractTemplate, AnamneseTemplate, PendingService, GiftCard } from "@/firebase/entities";
+import { Client, Appointment, Sale, ClientPackage, Package, Service, Contract, ContractTemplate, AnamneseTemplate, PendingService, GiftCard, ClientSubscription, SubscriptionPlan } from "@/firebase/entities";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -24,7 +24,8 @@ import {
   Phone,
   Plus,
   Printer,
-  Share,
+  RefreshCw,
+  Send,
   ShoppingCart,
   Trash2,
   Upload,
@@ -33,7 +34,7 @@ import {
   X,
   ImageIcon,
   Download,
-  Send
+  Edit
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -57,6 +58,8 @@ export default function ClientDetails() {
   const [pendingServices, setPendingServices] = useState([]);
   const [services, setServices] = useState([]);
   const [giftCards, setGiftCards] = useState([]);
+  const [clientSubscriptions, setClientSubscriptions] = useState([]);
+  const [subscriptionPlans, setSubscriptionPlans] = useState([]);
   const [showDependentForm, setShowDependentForm] = useState(false);
   const [editingDependent, setEditingDependent] = useState(null);
   const [loadError, setLoadError] = useState(null);
@@ -215,6 +218,46 @@ export default function ClientDetails() {
         const dateB = new Date(b.created_at || 0);
         return dateB - dateA;
       }));
+      
+      // Carregar assinaturas do cliente
+      try {
+        // Carregar planos de assinatura
+        const plansData = await SubscriptionPlan.list();
+        setSubscriptionPlans(plansData);
+        
+        // Carregar assinaturas do cliente diretamente do Firestore
+        const { db } = await import('@/firebase/config');
+        const { collection, query, where, getDocs } = await import('firebase/firestore');
+        
+        const subscriptionsRef = collection(db, 'client_subscriptions');
+        const clientSubscriptionsQuery = query(subscriptionsRef, where('client_id', '==', clientId));
+        const querySnapshot = await getDocs(clientSubscriptionsQuery);
+        
+        const subscriptionsData = [];
+        querySnapshot.forEach((doc) => {
+          subscriptionsData.push({
+            id: doc.id,
+            ...doc.data()
+          });
+        });
+        
+        // Ordenar assinaturas (ativas primeiro, depois por data de criação)
+        const sortedSubscriptions = subscriptionsData.sort((a, b) => {
+          // Primeiro as ativas
+          if (a.status === 'ativa' && b.status !== 'ativa') return -1;
+          if (a.status !== 'ativa' && b.status === 'ativa') return 1;
+          
+          // Depois por data de criação (mais recentes primeiro)
+          const dateA = new Date(a.created_at || 0);
+          const dateB = new Date(b.created_at || 0);
+          return dateB - dateA;
+        });
+        
+        setClientSubscriptions(sortedSubscriptions);
+        console.log(`${sortedSubscriptions.length} assinaturas encontradas para o cliente ${clientId}`);
+      } catch (subscriptionsError) {
+        console.error('Erro ao carregar assinaturas do cliente:', subscriptionsError);
+      }
       
       setAppointments(appointmentsData);
       setSales(salesData);
@@ -630,6 +673,65 @@ export default function ClientDetails() {
     );
   }
 
+  // Função para obter o nome do plano de assinatura
+  const getPlanName = (planId) => {
+    const plan = subscriptionPlans.find(p => p.id === planId);
+    return plan ? plan.name : 'Plano não encontrado';
+  };
+  
+  // Função para formatar o ciclo de cobrança
+  const formatBillingCycle = (cycle) => {
+    const cycles = {
+      mensal: 'Mensal',
+      trimestral: 'Trimestral',
+      semestral: 'Semestral',
+      anual: 'Anual'
+    };
+    return cycles[cycle] || cycle;
+  };
+  
+  // Função para formatar o método de pagamento
+  const formatPaymentMethod = (method) => {
+    const methods = {
+      cartao_credito: 'Cartão de Crédito',
+      boleto: 'Boleto',
+      pix: 'PIX',
+      dinheiro: 'Dinheiro',
+      transferencia: 'Transferência'
+    };
+    return methods[method] || method;
+  };
+  
+  // Função para formatar o status da assinatura
+  const formatSubscriptionStatus = (status) => {
+    const statuses = {
+      ativa: 'Ativa',
+      pendente: 'Pendente',
+      cancelada: 'Cancelada',
+      suspensa: 'Suspensa',
+      expirada: 'Expirada'
+    };
+    return statuses[status] || status;
+  };
+  
+  // Função para obter a cor do badge de status
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'ativa':
+        return 'bg-green-100 text-green-800';
+      case 'pendente':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'cancelada':
+        return 'bg-red-100 text-red-800';
+      case 'suspensa':
+        return 'bg-orange-100 text-orange-800';
+      case 'expirada':
+        return 'bg-gray-100 text-gray-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -815,6 +917,10 @@ export default function ClientDetails() {
           <TabsTrigger value="giftcards" className="data-[state=active]:bg-[#8BBAFF]/10 data-[state=active]:text-[#175EA0]">
             <Wallet className="w-4 h-4 mr-2" />
             Gift Cards
+          </TabsTrigger>
+          <TabsTrigger value="assinaturas" className="data-[state=active]:bg-[#8BBAFF]/10 data-[state=active]:text-[#175EA0]">
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Assinaturas
           </TabsTrigger>
           <TabsTrigger value="fotos" className="data-[state=active]:bg-[#8BBAFF]/10 data-[state=active]:text-[#175EA0]">
             <Camera className="w-4 h-4 mr-2" />
@@ -1289,6 +1395,157 @@ export default function ClientDetails() {
                 </div>
                 {giftCards.filter(card => card.status === 'used' || card.status === 'usado').length === 0 && (
                   <p className="text-center text-muted-foreground py-4">Nenhum Gift Card resgatado</p>
+                )}
+              </div>
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="assinaturas" className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-medium">Assinaturas do Cliente</h3>
+            <Link to={`/subscriptions?client_id=${clientId}`}>
+              <Button size="sm">
+                <Plus className="h-4 w-4 mr-2" />
+                Nova Assinatura
+              </Button>
+            </Link>
+          </div>
+          
+          {clientSubscriptions.length === 0 ? (
+            <Card>
+              <CardContent className="pt-6 text-center text-muted-foreground">
+                <RefreshCw className="h-12 w-12 mx-auto mb-2 opacity-20" />
+                <p>Este cliente não possui assinaturas</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              {/* Assinaturas Ativas */}
+              <div>
+                <h4 className="text-md font-medium mb-2">Assinaturas Ativas</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {clientSubscriptions
+                    .filter(subscription => subscription.status === 'ativa')
+                    .map(subscription => (
+                      <Card key={subscription.id} className="overflow-hidden">
+                        <CardHeader className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white p-4">
+                          <div className="flex justify-between items-start">
+                            <CardTitle className="text-lg">{getPlanName(subscription.plan_id)}</CardTitle>
+                            <div className="bg-white/20 text-white text-xs font-medium px-2 py-1 rounded-full">
+                              {formatBillingCycle(subscription.billing_cycle)}
+                            </div>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="p-4">
+                          <div className="space-y-2">
+                            <div className="flex justify-between">
+                              <span className="text-sm text-gray-500">Status:</span>
+                              <span className={`text-xs font-medium px-2 py-1 rounded-full ${getStatusColor(subscription.status)}`}>
+                                {formatSubscriptionStatus(subscription.status)}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-sm text-gray-500">Início:</span>
+                              <span>
+                                {subscription.start_date ? format(new Date(subscription.start_date), 'dd/MM/yyyy') : 'N/A'}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-sm text-gray-500">Próxima cobrança:</span>
+                              <span>
+                                {subscription.next_billing_date ? format(new Date(subscription.next_billing_date), 'dd/MM/yyyy') : 'N/A'}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-sm text-gray-500">Método de pagamento:</span>
+                              <span>{formatPaymentMethod(subscription.payment_method)}</span>
+                            </div>
+                            {subscription.discount > 0 && (
+                              <div className="flex justify-between">
+                                <span className="text-sm text-gray-500">Desconto:</span>
+                                <span className="text-green-600">{subscription.discount}%</span>
+                              </div>
+                            )}
+                          </div>
+                          
+                          <div className="mt-4 flex justify-end gap-2">
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={() => window.open(`/subscriptions?edit=${subscription.id}`, '_blank')}
+                            >
+                              <Edit className="h-4 w-4 mr-1" />
+                              Detalhes
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                </div>
+                {clientSubscriptions.filter(subscription => subscription.status === 'ativa').length === 0 && (
+                  <p className="text-center text-muted-foreground py-4">Nenhuma assinatura ativa</p>
+                )}
+              </div>
+              
+              {/* Assinaturas Inativas */}
+              <div>
+                <h4 className="text-md font-medium mb-2">Assinaturas Inativas</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {clientSubscriptions
+                    .filter(subscription => subscription.status !== 'ativa')
+                    .map(subscription => (
+                      <Card key={subscription.id} className="overflow-hidden">
+                        <CardHeader className="bg-gradient-to-r from-gray-500 to-gray-600 text-white p-4">
+                          <div className="flex justify-between items-start">
+                            <CardTitle className="text-lg">{getPlanName(subscription.plan_id)}</CardTitle>
+                            <div className="bg-white/20 text-white text-xs font-medium px-2 py-1 rounded-full">
+                              {formatBillingCycle(subscription.billing_cycle)}
+                            </div>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="p-4">
+                          <div className="space-y-2">
+                            <div className="flex justify-between">
+                              <span className="text-sm text-gray-500">Status:</span>
+                              <span className={`text-xs font-medium px-2 py-1 rounded-full ${getStatusColor(subscription.status)}`}>
+                                {formatSubscriptionStatus(subscription.status)}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-sm text-gray-500">Início:</span>
+                              <span>
+                                {subscription.start_date ? format(new Date(subscription.start_date), 'dd/MM/yyyy') : 'N/A'}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-sm text-gray-500">Término:</span>
+                              <span>
+                                {subscription.end_date ? format(new Date(subscription.end_date), 'dd/MM/yyyy') : 'N/A'}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-sm text-gray-500">Método de pagamento:</span>
+                              <span>{formatPaymentMethod(subscription.payment_method)}</span>
+                            </div>
+                          </div>
+                          
+                          <div className="mt-4 flex justify-end gap-2">
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={() => window.open(`/subscriptions?view=${subscription.id}`, '_blank')}
+                            >
+                              <Edit className="h-4 w-4 mr-1" />
+                              Detalhes
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                </div>
+                {clientSubscriptions.filter(subscription => subscription.status !== 'ativa').length === 0 && (
+                  <p className="text-center text-muted-foreground py-4">Nenhuma assinatura inativa</p>
                 )}
               </div>
             </div>
