@@ -926,42 +926,8 @@ export default function DataManager() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Gerenciamento de Dados</h1>
-        <div className="flex space-x-2">
-          <Button 
-            variant="outline" 
-            onClick={() => setShowBackupDialog(true)}
-            disabled={loading || backupInProgress}
-          >
-            <Database className="mr-2 h-4 w-4" />
-            Fazer Backup
-          </Button>
-          <Button 
-            variant="outline" 
-            onClick={() => setShowSelectiveDeleteDialog(true)}
-            disabled={loading || backupInProgress}
-          >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Excluir Dados Seletivamente
-          </Button>
-          <Button 
-            variant="outline" 
-            onClick={() => setShowDeleteDialog(true)}
-            disabled={loading || backupInProgress}
-          >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Excluir Todos os Dados
-          </Button>
-          <Button 
-            variant="outline" 
-            onClick={handleAddSampleData}
-            disabled={loading || backupInProgress}
-          >
-            <Save className="mr-2 h-4 w-4" />
-            Adicionar Dados de Exemplo
-          </Button>
-        </div>
       </div>
 
       {message && (
@@ -983,6 +949,117 @@ export default function DataManager() {
           <Progress value={((progress.current || backupProgress.current) / (progress.total || backupProgress.total)) * 100} />
         </div>
       )}
+
+      {/* Cards coloridos para as principais ações */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <Card className="bg-blue-50 border-blue-200 shadow-sm hover:shadow-md transition-all">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-blue-700 flex items-center gap-2">
+              <Database className="h-5 w-5" />
+              Backup de Dados
+            </CardTitle>
+            <CardDescription className="text-blue-600">
+              Crie cópias de segurança dos seus dados
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <p className="text-sm text-blue-600 mb-4">
+              Faça backup completo do banco de dados para restauração futura.
+            </p>
+          </CardContent>
+          <CardFooter className="pt-0">
+            <Button 
+              className="w-full bg-blue-600 hover:bg-blue-700"
+              onClick={() => setShowBackupDialog(true)}
+              disabled={loading || backupInProgress}
+            >
+              <Database className="mr-2 h-4 w-4" />
+              Fazer Backup
+            </Button>
+          </CardFooter>
+        </Card>
+
+        <Card className="bg-amber-50 border-amber-200 shadow-sm hover:shadow-md transition-all">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-amber-700 flex items-center gap-2">
+              <Filter className="h-5 w-5" />
+              Exclusão Seletiva
+            </CardTitle>
+            <CardDescription className="text-amber-600">
+              Selecione dados específicos para excluir
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <p className="text-sm text-amber-600 mb-4">
+              Escolha exatamente quais dados deseja remover do Firebase.
+            </p>
+          </CardContent>
+          <CardFooter className="pt-0">
+            <Button 
+              className="w-full bg-amber-600 hover:bg-amber-700"
+              onClick={() => setShowSelectiveDeleteDialog(true)}
+              disabled={loading || backupInProgress}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Excluir Dados Seletivamente
+            </Button>
+          </CardFooter>
+        </Card>
+
+        <Card className="bg-red-50 border-red-200 shadow-sm hover:shadow-md transition-all">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-red-700 flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5" />
+              Exclusão Total
+            </CardTitle>
+            <CardDescription className="text-red-600">
+              Remove todos os dados do sistema
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <p className="text-sm text-red-600 mb-4">
+              Exclui permanentemente todos os dados cadastrados no Firebase.
+            </p>
+          </CardContent>
+          <CardFooter className="pt-0">
+            <Button 
+              className="w-full bg-red-600 hover:bg-red-700"
+              onClick={() => setShowDeleteDialog(true)}
+              disabled={loading || backupInProgress}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Excluir Todos os Dados
+            </Button>
+          </CardFooter>
+        </Card>
+
+        <Card className="bg-green-50 border-green-200 shadow-sm hover:shadow-md transition-all">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-green-700 flex items-center gap-2">
+              <Save className="h-5 w-5" />
+              Dados de Exemplo
+            </CardTitle>
+            <CardDescription className="text-green-600">
+              Adiciona dados para teste do sistema
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <p className="text-sm text-green-600 mb-4">
+              Preenche o sistema com dados de exemplo para testes e demonstrações.
+            </p>
+          </CardContent>
+          <CardFooter className="pt-0">
+            <Button 
+              className="w-full bg-green-600 hover:bg-green-700"
+              onClick={handleAddSampleData}
+              disabled={loading || backupInProgress}
+            >
+              <Save className="mr-2 h-4 w-4" />
+              Adicionar Dados de Exemplo
+            </Button>
+          </CardFooter>
+        </Card>
+      </div>
 
       {/* Dialog para backup */}
       <Dialog open={showBackupDialog} onOpenChange={setShowBackupDialog}>
@@ -1056,46 +1133,66 @@ export default function DataManager() {
               <h3 className="text-lg font-medium mb-4">Backups Disponíveis</h3>
               
               {backups.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  <FileDown className="mx-auto h-12 w-12 opacity-20 mb-2" />
-                  <p>Nenhum backup disponível. Clique em "Fazer Backup Completo" para criar um novo ou "Carregar Backup" para importar um arquivo.</p>
+                <div className="text-center py-12 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                  <FileDown className="mx-auto h-16 w-16 text-gray-300 mb-4" />
+                  <p className="text-gray-500">Nenhum backup disponível. Clique em "Fazer Backup Completo" para criar um novo ou "Carregar Backup" para importar um arquivo.</p>
                 </div>
               ) : (
-                <ScrollArea className="h-[300px]">
-                  <div className="space-y-2">
-                    {backups.map((backup) => (
-                      <Card key={backup.id}>
-                        <CardHeader className="py-4">
-                          <div className="flex justify-between items-center">
-                            <div>
-                              <CardTitle className="text-base">{backup.fileName}</CardTitle>
-                              <CardDescription>
-                                Criado em: {format(new Date(backup.timestamp), 'dd/MM/yyyy HH:mm:ss')}
-                              </CardDescription>
+                <ScrollArea className="h-[350px]">
+                  <div className="space-y-4">
+                    {backups.map((backup, index) => {
+                      // Definir cores alternadas para os cards
+                      const colors = [
+                        { bg: "bg-blue-50", border: "border-blue-200", accent: "text-blue-600" },
+                        { bg: "bg-purple-50", border: "border-purple-200", accent: "text-purple-600" },
+                        { bg: "bg-green-50", border: "border-green-200", accent: "text-green-600" },
+                        { bg: "bg-amber-50", border: "border-amber-200", accent: "text-amber-600" },
+                        { bg: "bg-rose-50", border: "border-rose-200", accent: "text-rose-600" }
+                      ];
+                      const colorSet = colors[index % colors.length];
+                      
+                      return (
+                        <Card 
+                          key={backup.id} 
+                          className={`${colorSet.bg} border ${colorSet.border} shadow-sm transition-all hover:shadow-md`}
+                        >
+                          <CardHeader className="py-5">
+                            <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+                              <div>
+                                <CardTitle className={`text-lg ${colorSet.accent} flex items-center gap-2`}>
+                                  <Database className="h-5 w-5" />
+                                  {backup.fileName}
+                                </CardTitle>
+                                <CardDescription className="mt-1 text-sm">
+                                  Criado em: {format(new Date(backup.timestamp), 'dd/MM/yyyy HH:mm:ss')}
+                                </CardDescription>
+                              </div>
+                              <div className="flex space-x-3">
+                                <Button 
+                                  className={`${colorSet.accent} bg-white hover:bg-gray-50`}
+                                  variant="outline" 
+                                  size="sm" 
+                                  onClick={() => handlePrepareRestore(backup)}
+                                  disabled={backupInProgress || restoreInProgress}
+                                >
+                                  <FileUp className="h-4 w-4 mr-2" />
+                                  Restaurar
+                                </Button>
+                                <Button 
+                                  className={`${colorSet.accent} bg-white hover:bg-gray-50`}
+                                  variant="outline" 
+                                  size="sm" 
+                                  onClick={() => handleDownloadBackup(backup)}
+                                >
+                                  <Download className="h-4 w-4 mr-2" />
+                                  Download ({formatFileSize(backup.size)})
+                                </Button>
+                              </div>
                             </div>
-                            <div className="flex space-x-2">
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={() => handlePrepareRestore(backup)}
-                                disabled={backupInProgress || restoreInProgress}
-                              >
-                                <FileUp className="h-4 w-4 mr-2" />
-                                Restaurar
-                              </Button>
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={() => handleDownloadBackup(backup)}
-                              >
-                                <Download className="h-4 w-4 mr-2" />
-                                Download ({formatFileSize(backup.size)})
-                              </Button>
-                            </div>
-                          </div>
-                        </CardHeader>
-                      </Card>
-                    ))}
+                          </CardHeader>
+                        </Card>
+                      );
+                    })}
                   </div>
                 </ScrollArea>
               )}
@@ -1125,14 +1222,17 @@ export default function DataManager() {
 
           <div className="space-y-4">
             {selectedBackup && (
-              <div className="flex items-center justify-between bg-muted p-3 rounded-md">
+              <div className="flex items-center justify-between bg-blue-50 p-4 rounded-md border border-blue-200">
                 <div>
-                  <h4 className="font-medium">{selectedBackup.fileName}</h4>
-                  <p className="text-sm text-muted-foreground">
+                  <h4 className="font-medium text-blue-700 flex items-center gap-2">
+                    <Database className="h-5 w-5" />
+                    {selectedBackup.fileName}
+                  </h4>
+                  <p className="text-sm text-blue-600">
                     Criado em: {format(new Date(selectedBackup.timestamp), 'dd/MM/yyyy HH:mm:ss')}
                   </p>
                 </div>
-                <Badge variant="outline">
+                <Badge variant="outline" className="bg-white text-blue-600 border-blue-200">
                   {formatFileSize(selectedBackup.size)}
                 </Badge>
               </div>
@@ -1163,40 +1263,55 @@ export default function DataManager() {
               </div>
 
               {restoreData ? (
-                <ScrollArea className="h-[200px] border rounded-md p-4">
-                  <div className="space-y-2">
-                    {Object.keys(restoreData.data).map(entityName => (
-                      <div key={entityName} className="flex items-center justify-between">
-                        <div className="flex items-center space-x-2">
-                          <Checkbox
-                            id={`entity-${entityName}`}
-                            checked={selectedEntitiesToRestore[entityName] || false}
-                            onCheckedChange={() => toggleEntitySelection(entityName)}
-                          />
-                          <label
-                            htmlFor={`entity-${entityName}`}
-                            className="text-sm font-medium leading-none"
-                          >
-                            {getEntityLabel(entityName)}
-                          </label>
+                <ScrollArea className="h-[250px] border rounded-md p-4 bg-gray-50">
+                  <div className="space-y-3">
+                    {Object.keys(restoreData.data).map((entityName, index) => {
+                      // Definir cores alternadas para os itens
+                      const colors = [
+                        { bg: "bg-blue-50", text: "text-blue-700", badge: "border-blue-200 text-blue-600" },
+                        { bg: "bg-purple-50", text: "text-purple-700", badge: "border-purple-200 text-purple-600" },
+                        { bg: "bg-green-50", text: "text-green-700", badge: "border-green-200 text-green-600" },
+                        { bg: "bg-amber-50", text: "text-amber-700", badge: "border-amber-200 text-amber-600" },
+                        { bg: "bg-rose-50", text: "text-rose-700", badge: "border-rose-200 text-rose-600" }
+                      ];
+                      const colorSet = colors[index % colors.length];
+                      
+                      return (
+                        <div 
+                          key={entityName} 
+                          className={`flex items-center justify-between p-3 rounded-md ${colorSet.bg} border border-gray-200`}
+                        >
+                          <div className="flex items-center space-x-3">
+                            <Checkbox
+                              id={`entity-${entityName}`}
+                              checked={selectedEntitiesToRestore[entityName] || false}
+                              onCheckedChange={() => toggleEntitySelection(entityName)}
+                            />
+                            <label
+                              htmlFor={`entity-${entityName}`}
+                              className={`text-sm font-medium ${colorSet.text}`}
+                            >
+                              {getEntityLabel(entityName)}
+                            </label>
+                          </div>
+                          <Badge variant="outline" className={`bg-white ${colorSet.badge}`}>
+                            {restoreData.data[entityName].length} itens
+                          </Badge>
                         </div>
-                        <Badge variant="outline">
-                          {restoreData.data[entityName].length} itens
-                        </Badge>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </ScrollArea>
               ) : (
-                <div className="text-center py-4 text-gray-500">
-                  <p>Nenhum dado disponível para restauração</p>
+                <div className="text-center py-8 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                  <p className="text-gray-500">Nenhum dado disponível para restauração</p>
                 </div>
               )}
             </div>
 
             <div className="border-t pt-4">
-              <h3 className="text-lg font-medium mb-2">Modo de Restauração</h3>
-              <div className="flex space-x-4">
+              <h3 className="text-lg font-medium mb-3">Modo de Restauração</h3>
+              <div className="flex space-x-6 bg-gray-50 p-4 rounded-md border border-gray-200">
                 <div className="flex items-center space-x-2">
                   <input
                     type="radio"
@@ -1205,10 +1320,10 @@ export default function DataManager() {
                     value="replace"
                     checked={restoreMode === 'replace'}
                     onChange={() => setRestoreMode('replace')}
-                    className="h-4 w-4 text-primary"
+                    className="h-4 w-4 text-blue-600"
                   />
                   <label htmlFor="mode-replace" className="text-sm font-medium">
-                    Substituir Dados Existentes
+                    <span className="text-blue-700">Substituir Dados Existentes</span>
                   </label>
                 </div>
                 <div className="flex items-center space-x-2">
@@ -1219,24 +1334,24 @@ export default function DataManager() {
                     value="merge"
                     checked={restoreMode === 'merge'}
                     onChange={() => setRestoreMode('merge')}
-                    className="h-4 w-4 text-primary"
+                    className="h-4 w-4 text-green-600"
                   />
                   <label htmlFor="mode-merge" className="text-sm font-medium">
-                    Mesclar com Dados Existentes
+                    <span className="text-green-700">Mesclar com Dados Existentes</span>
                   </label>
                 </div>
               </div>
-              <p className="text-sm text-muted-foreground mt-2">
+              <p className="text-sm text-gray-600 mt-2 pl-2 border-l-2 border-gray-300">
                 {restoreMode === 'replace' 
                   ? 'Os dados existentes serão excluídos antes da restauração.'
                   : 'Os dados do backup serão mesclados com os dados existentes.'}
               </p>
             </div>
 
-            <div className="flex items-center gap-2 bg-amber-50 p-3 rounded-md border border-amber-200">
-              <AlertTriangle className="h-5 w-5 text-amber-500 flex-shrink-0" />
+            <div className="flex items-center gap-3 bg-amber-50 p-4 rounded-md border border-amber-200 mt-4">
+              <AlertTriangle className="h-6 w-6 text-amber-500 flex-shrink-0" />
               <p className="text-sm text-amber-700">
-                Atenção: A restauração de dados pode substituir ou modificar dados existentes no sistema.
+                <span className="font-medium">Atenção:</span> A restauração de dados pode substituir ou modificar dados existentes no sistema.
                 Recomendamos fazer um backup antes de prosseguir.
               </p>
             </div>
