@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "@/components/ui/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { RefreshCw, Trash2, Download, Save, Database, FileDown, Filter, AlertTriangle, Clock, Info, CheckCircle, Search } from "lucide-react";
+import { RefreshCw, Trash2, Download, Save, Database, FileDown, Filter, AlertTriangle, Clock, Info, CheckCircle, Search, Upload, FileUp } from "lucide-react";
 import { format } from 'date-fns';
 import RateLimitHandler from '../components/RateLimitHandler';
 
@@ -63,6 +63,14 @@ export default function DataManager() {
   const [showBackupDialog, setShowBackupDialog] = useState(false);
   const [backupProgress, setBackupProgress] = useState({ current: 0, total: 0, entity: '' });
   const [backupInProgress, setBackupInProgress] = useState(false);
+  const [showRestoreDialog, setShowRestoreDialog] = useState(false);
+  const [restoreProgress, setRestoreProgress] = useState({ current: 0, total: 0, entity: '' });
+  const [restoreInProgress, setRestoreInProgress] = useState(false);
+  const [selectedBackup, setSelectedBackup] = useState(null);
+  const [restoreData, setRestoreData] = useState(null);
+  const [selectedEntitiesToRestore, setSelectedEntitiesToRestore] = useState({});
+  const [restoreMode, setRestoreMode] = useState('replace'); // 'replace' ou 'merge'
+  const fileInputRef = useRef(null);
 
   // Definir as entidades disponíveis para exclusão
   const entities = [
@@ -443,6 +451,259 @@ export default function DataManager() {
     }
   };
 
+  // Função para fazer upload de um arquivo de backup
+  const handleUploadBackup = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const backupData = JSON.parse(e.target.result);
+        
+        // Validar o formato do backup
+        if (!backupData.metadata || !backupData.data) {
+          toast({
+            title: "Erro no arquivo de backup",
+            description: "O arquivo não está no formato correto de backup",
+            variant: "destructive"
+          });
+          return;
+        }
+        
+        // Criar um objeto de backup para a lista
+        const newBackup = {
+          id: Date.now().toString(),
+          fileName: file.name,
+          timestamp: backupData.metadata.timestamp || new Date().toISOString(),
+          url: URL.createObjectURL(file),
+          size: file.size,
+          data: backupData
+        };
+        
+        setBackups(prev => [newBackup, ...prev]);
+        
+        toast({
+          title: "Backup carregado com sucesso",
+          description: `${file.name} (${formatFileSize(file.size)})`,
+          variant: "default"
+        });
+        
+        // Limpar o input de arquivo
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      } catch (error) {
+        console.error('Erro ao processar arquivo de backup:', error);
+        toast({
+          title: "Erro ao processar backup",
+          description: "O arquivo não contém dados JSON válidos",
+          variant: "destructive"
+        });
+      }
+    };
+    
+    reader.readAsText(file);
+  };
+
+  // Função para preparar a restauração de um backup
+  const handlePrepareRestore = (backup) => {
+    setSelectedBackup(backup);
+    
+    // Extrair dados do backup
+    let backupData;
+    if (backup.data) {
+      backupData = backup.data;
+    } else {
+      try {
+        // Se o backup não tiver dados pré-carregados, tentar ler do URL
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', backup.url, false); // síncrono para simplificar
+        xhr.send(null);
+        backupData = JSON.parse(xhr.responseText);
+      } catch (error) {
+        console.error('Erro ao ler dados do backup:', error);
+        toast({
+          title: "Erro ao ler backup",
+          description: "Não foi possível ler os dados do backup",
+          variant: "destructive"
+        });
+        return;
+      }
+    }
+    
+    setRestoreData(backupData);
+    
+    // Inicializar as entidades selecionadas para restauração
+    const initialSelectedEntities = {};
+    Object.keys(backupData.data).forEach(entityName => {
+      initialSelectedEntities[entityName] = true;
+    });
+    
+    setSelectedEntitiesToRestore(initialSelectedEntities);
+    setShowRestoreDialog(true);
+  };
+
+  // Função para restaurar dados de um backup
+  const handleRestoreBackup = async () => {
+    if (!restoreData || !selectedBackup) {
+      toast({
+        title: "Erro na restauração",
+        description: "Dados de backup não encontrados",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    try {
+      setRestoreInProgress(true);
+      setMessage(null);
+      setRateLimitError(null);
+      
+      // Filtrar apenas as entidades selecionadas para restauração
+      const entitiesToRestore = Object.keys(restoreData.data)
+        .filter(entityName => selectedEntitiesToRestore[entityName])
+        .map(entityName => ({
+          name: entityName,
+          data: restoreData.data[entityName],
+          entity: getEntityApiByName(entityName)
+        }))
+        .filter(item => item.entity); // Filtrar apenas entidades válidas
+      
+      setRestoreProgress({ 
+        current: 0, 
+        total: entitiesToRestore.length, 
+        entity: '' 
+      });
+      
+      let totalRestoredItems = 0;
+      
+      for (let i = 0; i < entitiesToRestore.length; i++) {
+        const { name, data, entity } = entitiesToRestore[i];
+        
+        setRestoreProgress({ 
+          current: i + 1, 
+          total: entitiesToRestore.length, 
+          entity: getEntityLabel(name) 
+        });
+        
+        if (restoreMode === 'replace') {
+          // Modo substituição: excluir dados existentes primeiro
+          try {
+            const existingItems = await fetchWithRetry(async () => {
+              await delay(delayBetweenRequests);
+              return await entity.list();
+            });
+            
+            for (const item of existingItems) {
+              await fetchWithRetry(async () => {
+                await delay(delayBetweenRequests);
+                return await entity.delete(item.id);
+              });
+            }
+          } catch (error) {
+            console.error(`Erro ao limpar dados existentes de ${name}:`, error);
+          }
+        }
+        
+        // Restaurar os dados do backup
+        for (const item of data) {
+          try {
+            if (restoreMode === 'merge' && item.id) {
+              // No modo mesclagem, verificar se o item já existe
+              try {
+                const existingItem = await entity.get(item.id);
+                if (existingItem) {
+                  // Atualizar item existente
+                  await fetchWithRetry(async () => {
+                    await delay(delayBetweenRequests);
+                    return await entity.update(item.id, item);
+                  });
+                  totalRestoredItems++;
+                  continue;
+                }
+              } catch (error) {
+                // Item não existe, continuar para criação
+              }
+            }
+            
+            // Criar novo item
+            await fetchWithRetry(async () => {
+              await delay(delayBetweenRequests);
+              // Se tiver ID, usar o mesmo ID
+              if (item.id) {
+                return await entity.create(item);
+              } else {
+                // Se não tiver ID, deixar o Firebase gerar um novo
+                const newItem = await entity.create(item);
+                return newItem;
+              }
+            });
+            
+            totalRestoredItems++;
+          } catch (error) {
+            console.error(`Erro ao restaurar item de ${name}:`, error);
+            
+            if (error.message?.includes('429') || 
+                error.message?.includes('Rate limit') || 
+                error.toString().includes('429')) {
+              
+              setRateLimitError(error);
+              await delay(10000);
+              setDelayBetweenRequests(prev => prev * 2);
+            }
+          }
+          
+          await delay(delayBetweenRequests);
+        }
+      }
+      
+      setMessage({ 
+        type: 'success', 
+        text: `Restauração concluída com sucesso! ${totalRestoredItems} itens restaurados.` 
+      });
+      
+      // Fechar o diálogo de restauração
+      setShowRestoreDialog(false);
+      
+    } catch (error) {
+      console.error('Erro ao restaurar backup:', error);
+      setMessage({ 
+        type: 'error', 
+        text: 'Erro ao restaurar backup: ' + (error.message || 'Erro desconhecido') 
+      });
+      
+      if (error.message?.includes('429') || 
+          error.message?.includes('Rate limit') || 
+          error.toString().includes('429')) {
+        setRateLimitError(error);
+      }
+    } finally {
+      setRestoreInProgress(false);
+      setRestoreProgress({ current: 0, total: 0, entity: '' });
+    }
+  };
+
+  // Função para alternar a seleção de uma entidade para restauração
+  const toggleEntitySelection = (entityName) => {
+    setSelectedEntitiesToRestore(prev => ({
+      ...prev,
+      [entityName]: !prev[entityName]
+    }));
+  };
+
+  // Função para selecionar/desselecionar todas as entidades para restauração
+  const toggleAllEntitiesSelection = (checked) => {
+    if (!restoreData) return;
+    
+    const newSelection = {};
+    Object.keys(restoreData.data).forEach(entityName => {
+      newSelection[entityName] = checked;
+    });
+    
+    setSelectedEntitiesToRestore(newSelection);
+  };
+
   // Função para fazer download de um backup
   const handleDownloadBackup = (backup) => {
     const a = document.createElement('a');
@@ -727,31 +988,48 @@ export default function DataManager() {
       <Dialog open={showBackupDialog} onOpenChange={setShowBackupDialog}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Backup de Dados</DialogTitle>
+            <DialogTitle>Backup e Restauração de Dados</DialogTitle>
             <DialogDescription>
-              Faça backup completo do banco de dados ou baixe backups anteriores.
+              Faça backup completo do banco de dados, restaure a partir de backups ou carregue um arquivo de backup.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
             <div className="flex justify-between items-center">
-              <h3 className="text-lg font-medium">Criar Novo Backup</h3>
-              <Button 
-                onClick={handleBackupAllData} 
-                disabled={backupInProgress}
-              >
-                {backupInProgress ? (
-                  <>
-                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                    Processando...
-                  </>
-                ) : (
-                  <>
-                    <Database className="mr-2 h-4 w-4" />
-                    Fazer Backup Completo
-                  </>
-                )}
-              </Button>
+              <h3 className="text-lg font-medium">Gerenciar Backups</h3>
+              <div className="flex space-x-2">
+                <Button 
+                  variant="outline"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={backupInProgress || restoreInProgress}
+                >
+                  <Upload className="mr-2 h-4 w-4" />
+                  Carregar Backup
+                </Button>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleUploadBackup}
+                  accept=".json"
+                  className="hidden"
+                />
+                <Button 
+                  onClick={handleBackupAllData} 
+                  disabled={backupInProgress || restoreInProgress}
+                >
+                  {backupInProgress ? (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                      Processando...
+                    </>
+                  ) : (
+                    <>
+                      <Database className="mr-2 h-4 w-4" />
+                      Fazer Backup Completo
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
 
             {backupInProgress && backupProgress.total > 0 && (
@@ -764,13 +1042,23 @@ export default function DataManager() {
               </div>
             )}
 
+            {restoreInProgress && restoreProgress.total > 0 && (
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span>Restaurando {restoreProgress.entity}...</span>
+                  <span>{restoreProgress.current} de {restoreProgress.total}</span>
+                </div>
+                <Progress value={(restoreProgress.current / restoreProgress.total) * 100} />
+              </div>
+            )}
+
             <div className="border-t pt-4">
               <h3 className="text-lg font-medium mb-4">Backups Disponíveis</h3>
               
               {backups.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
                   <FileDown className="mx-auto h-12 w-12 opacity-20 mb-2" />
-                  <p>Nenhum backup disponível. Clique em "Fazer Backup Completo" para criar um novo.</p>
+                  <p>Nenhum backup disponível. Clique em "Fazer Backup Completo" para criar um novo ou "Carregar Backup" para importar um arquivo.</p>
                 </div>
               ) : (
                 <ScrollArea className="h-[300px]">
@@ -785,14 +1073,25 @@ export default function DataManager() {
                                 Criado em: {format(new Date(backup.timestamp), 'dd/MM/yyyy HH:mm:ss')}
                               </CardDescription>
                             </div>
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              onClick={() => handleDownloadBackup(backup)}
-                            >
-                              <Download className="h-4 w-4 mr-2" />
-                              Download ({formatFileSize(backup.size)})
-                            </Button>
+                            <div className="flex space-x-2">
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={() => handlePrepareRestore(backup)}
+                                disabled={backupInProgress || restoreInProgress}
+                              >
+                                <FileUp className="h-4 w-4 mr-2" />
+                                Restaurar
+                              </Button>
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={() => handleDownloadBackup(backup)}
+                              >
+                                <Download className="h-4 w-4 mr-2" />
+                                Download ({formatFileSize(backup.size)})
+                              </Button>
+                            </div>
                           </div>
                         </CardHeader>
                       </Card>
@@ -811,6 +1110,170 @@ export default function DataManager() {
         </DialogContent>
       </Dialog>
 
+      {/* Dialog para restauração de backup */}
+      <Dialog open={showRestoreDialog} onOpenChange={setShowRestoreDialog}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileUp className="h-5 w-5" />
+              Restaurar Backup
+            </DialogTitle>
+            <DialogDescription>
+              Selecione quais dados deseja restaurar a partir do backup.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {selectedBackup && (
+              <div className="flex items-center justify-between bg-muted p-3 rounded-md">
+                <div>
+                  <h4 className="font-medium">{selectedBackup.fileName}</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Criado em: {format(new Date(selectedBackup.timestamp), 'dd/MM/yyyy HH:mm:ss')}
+                  </p>
+                </div>
+                <Badge variant="outline">
+                  {formatFileSize(selectedBackup.size)}
+                </Badge>
+              </div>
+            )}
+
+            <div className="border-t pt-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium">Dados a Restaurar</h3>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="select-all-entities"
+                    checked={
+                      restoreData && 
+                      Object.keys(selectedEntitiesToRestore).length > 0 && 
+                      Object.keys(restoreData.data).every(
+                        name => selectedEntitiesToRestore[name]
+                      )
+                    }
+                    onCheckedChange={toggleAllEntitiesSelection}
+                  />
+                  <label
+                    htmlFor="select-all-entities"
+                    className="text-sm font-medium leading-none"
+                  >
+                    Selecionar Todos
+                  </label>
+                </div>
+              </div>
+
+              {restoreData ? (
+                <ScrollArea className="h-[200px] border rounded-md p-4">
+                  <div className="space-y-2">
+                    {Object.keys(restoreData.data).map(entityName => (
+                      <div key={entityName} className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`entity-${entityName}`}
+                            checked={selectedEntitiesToRestore[entityName] || false}
+                            onCheckedChange={() => toggleEntitySelection(entityName)}
+                          />
+                          <label
+                            htmlFor={`entity-${entityName}`}
+                            className="text-sm font-medium leading-none"
+                          >
+                            {getEntityLabel(entityName)}
+                          </label>
+                        </div>
+                        <Badge variant="outline">
+                          {restoreData.data[entityName].length} itens
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              ) : (
+                <div className="text-center py-4 text-gray-500">
+                  <p>Nenhum dado disponível para restauração</p>
+                </div>
+              )}
+            </div>
+
+            <div className="border-t pt-4">
+              <h3 className="text-lg font-medium mb-2">Modo de Restauração</h3>
+              <div className="flex space-x-4">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    id="mode-replace"
+                    name="restore-mode"
+                    value="replace"
+                    checked={restoreMode === 'replace'}
+                    onChange={() => setRestoreMode('replace')}
+                    className="h-4 w-4 text-primary"
+                  />
+                  <label htmlFor="mode-replace" className="text-sm font-medium">
+                    Substituir Dados Existentes
+                  </label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    id="mode-merge"
+                    name="restore-mode"
+                    value="merge"
+                    checked={restoreMode === 'merge'}
+                    onChange={() => setRestoreMode('merge')}
+                    className="h-4 w-4 text-primary"
+                  />
+                  <label htmlFor="mode-merge" className="text-sm font-medium">
+                    Mesclar com Dados Existentes
+                  </label>
+                </div>
+              </div>
+              <p className="text-sm text-muted-foreground mt-2">
+                {restoreMode === 'replace' 
+                  ? 'Os dados existentes serão excluídos antes da restauração.'
+                  : 'Os dados do backup serão mesclados com os dados existentes.'}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 bg-amber-50 p-3 rounded-md border border-amber-200">
+              <AlertTriangle className="h-5 w-5 text-amber-500 flex-shrink-0" />
+              <p className="text-sm text-amber-700">
+                Atenção: A restauração de dados pode substituir ou modificar dados existentes no sistema.
+                Recomendamos fazer um backup antes de prosseguir.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setShowRestoreDialog(false)}
+              disabled={restoreInProgress}
+            >
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleRestoreBackup}
+              disabled={
+                restoreInProgress || 
+                !restoreData || 
+                Object.keys(selectedEntitiesToRestore).every(key => !selectedEntitiesToRestore[key])
+              }
+            >
+              {restoreInProgress ? (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  Restaurando...
+                </>
+              ) : (
+                <>
+                  <FileUp className="mr-2 h-4 w-4" />
+                  Iniciar Restauração
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Dialog para exclusão seletiva */}
       <Dialog open={showSelectiveDeleteDialog} onOpenChange={setShowSelectiveDeleteDialog}>
         <DialogContent className="max-w-4xl max-h-[90vh]">
@@ -823,7 +1286,7 @@ export default function DataManager() {
               Selecione os dados que deseja excluir do Firebase. Esta ação não pode ser desfeita.
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="mt-4">
             <Tabs defaultValue="clients" value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="grid grid-cols-4 gap-2 mb-4 overflow-auto max-h-60">
@@ -1037,7 +1500,7 @@ export default function DataManager() {
           <div className="flex flex-col gap-4 py-4">
             <div className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-amber-500" />
-              <p className="text-sm font-medium text-amber-500">
+              <p className="text-sm text-amber-500">
                 Aviso: Esta operação irá excluir todos os dados do Firebase.
               </p>
             </div>
