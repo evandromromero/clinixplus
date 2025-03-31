@@ -70,7 +70,24 @@ export default function Roles() {
     { id: "manage_finances", name: "Gerenciar Finanças", description: "Acesso ao módulo financeiro" },
     { id: "view_reports", name: "Visualizar Relatórios", description: "Acesso aos relatórios do sistema" },
     { id: "manage_gift_cards", name: "Gerenciar Gift Cards", description: "Criar e gerenciar gift cards" },
-    { id: "manage_subscriptions", name: "Gerenciar Assinaturas", description: "Gerenciar planos e assinaturas" }
+    { id: "manage_subscriptions", name: "Gerenciar Assinaturas", description: "Gerenciar planos e assinaturas" },
+    { id: "manage_suppliers", name: "Gerenciar Fornecedores", description: "Cadastrar, editar e excluir fornecedores" },
+    { id: "view_birthdays", name: "Visualizar Aniversariantes", description: "Acesso à lista de aniversariantes" },
+    { id: "manage_client_returns", name: "Gerenciar Retornos", description: "Gerenciar retornos de clientes" },
+    { id: "manage_roles", name: "Gerenciar Cargos", description: "Configurar cargos e permissões" },
+    { id: "manage_payment_methods", name: "Gerenciar Formas de Pagamento", description: "Configurar métodos de pagamento" },
+    { id: "manage_contract_templates", name: "Gerenciar Modelos de Contrato", description: "Criar e editar modelos de contrato" },
+    { id: "manage_anamnese_templates", name: "Gerenciar Modelos de Anamnese", description: "Criar e editar modelos de anamnese" },
+    { id: "manage_inventory", name: "Gerenciar Estoque", description: "Controlar entradas e saídas de estoque" },
+    { id: "manage_packages", name: "Gerenciar Pacotes", description: "Criar e editar pacotes de serviços" },
+    { id: "manage_client_packages", name: "Gerenciar Pacotes de Clientes", description: "Atribuir e gerenciar pacotes de clientes" },
+    { id: "manage_accounts_payable", name: "Gerenciar Contas a Pagar", description: "Registrar e gerenciar contas a pagar" },
+    { id: "manage_accounts_receivable", name: "Gerenciar Contas a Receber", description: "Registrar e gerenciar contas a receber" },
+    { id: "manage_cash_register", name: "Gerenciar Caixa", description: "Abrir, fechar e gerenciar o caixa" },
+    { id: "manage_settings", name: "Gerenciar Configurações", description: "Acesso às configurações gerais do sistema" },
+    { id: "manage_data", name: "Gerenciar Dados", description: "Acesso ao gerenciador de dados (backup, restauração, etc.)" },
+    { id: "view_dashboard", name: "Visualizar Dashboard", description: "Acesso ao painel principal com indicadores" },
+    { id: "manage_users", name: "Gerenciar Usuários", description: "Cadastrar, editar e excluir usuários do sistema" }
   ];
 
   useEffect(() => {
