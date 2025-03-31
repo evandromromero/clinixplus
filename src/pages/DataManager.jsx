@@ -1,33 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { toast } from "@/components/ui/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Database, Upload, Trash2, AlertTriangle, RefreshCw, Info, Clock, Filter, CheckCircle, Search } from 'lucide-react';
+import { RefreshCw, Trash2, Download, Save, Database, FileDown, Filter, AlertTriangle, Clock, Info, CheckCircle, Search } from "lucide-react";
+import { format } from 'date-fns';
 import RateLimitHandler from '../components/RateLimitHandler';
 
 // Importar todas as entidades do Firebase ao invés do Base44
@@ -62,21 +46,23 @@ import {
 } from '@/firebase/entities';
 
 export default function DataManager() {
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [showSelectiveDeleteDialog, setShowSelectiveDeleteDialog] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showSelectiveDeleteDialog, setShowSelectiveDeleteDialog] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0, entity: '' });
   const [rateLimitError, setRateLimitError] = useState(null);
   const [delayBetweenRequests, setDelayBetweenRequests] = useState(500);
+  const [activeTab, setActiveTab] = useState('clients');
   const [entityData, setEntityData] = useState([]);
   const [currentEntity, setCurrentEntity] = useState('');
-  const [deleteProgress, setDeleteProgress] = useState({ current: 0, total: 0 });
-  const [entityToDelete, setEntityToDelete] = useState('');
   const [selectedItems, setSelectedItems] = useState({});
-  const [activeTab, setActiveTab] = useState('clients');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectAll, setSelectAll] = useState(false);
+  const [backups, setBackups] = useState([]);
+  const [showBackupDialog, setShowBackupDialog] = useState(false);
+  const [backupProgress, setBackupProgress] = useState({ current: 0, total: 0, entity: '' });
+  const [backupInProgress, setBackupInProgress] = useState(false);
 
   // Definir as entidades disponíveis para exclusão
   const entities = [
@@ -221,8 +207,9 @@ export default function DataManager() {
         if (isRateLimit) {
           console.error("Erro de rate limit detectado. Aumentando o atraso entre requisições.");
           setRateLimitError(error);
-          setDelayBetweenRequests(prev => prev * 2);
           await delay(5000);
+          setDelayBetweenRequests(prev => prev * 2);
+          attempt--;
         }
       }
     }
@@ -325,7 +312,7 @@ export default function DataManager() {
       }
       
       setLoading(true);
-      setDeleteProgress({current: 0, total: selectedIds.length});
+      setProgress({current: 0, total: selectedIds.length});
       setMessage({type: 'info', text: `Excluindo ${selectedIds.length} itens de ${getEntityLabel(currentEntity)}...`});
       
       const entityApi = getEntityApiByName(currentEntity);
@@ -336,7 +323,7 @@ export default function DataManager() {
           await fetchWithRetry(() => entityApi.delete(id));
           
           // Atualizar progresso
-          setDeleteProgress({current: i + 1, total: selectedIds.length});
+          setProgress({current: i + 1, total: selectedIds.length});
           
           // Pausa entre requisições para evitar rate limit
           if (i < selectedIds.length - 1) {
@@ -359,8 +346,118 @@ export default function DataManager() {
       setMessage({type: 'error', text: `Erro ao excluir itens de ${getEntityLabel(currentEntity)}: ${error.message}`});
     } finally {
       setLoading(false);
-      setDeleteProgress({current: 0, total: 0});
+      setProgress({current: 0, total: 0});
     }
+  };
+
+  // Função para fazer backup de todas as entidades
+  const handleBackupAllData = async () => {
+    try {
+      setBackupInProgress(true);
+      setMessage(null);
+      setRateLimitError(null);
+      setBackupProgress({ current: 0, total: entities.length, entity: '' });
+
+      const backupData = {};
+      const timestamp = format(new Date(), 'yyyy-MM-dd_HH-mm-ss');
+      const backupFileName = `clinixplus_backup_${timestamp}.json`;
+
+      for (let i = 0; i < entities.length; i++) {
+        const { entity, label, name } = entities[i];
+        
+        setBackupProgress({ 
+          current: i + 1, 
+          total: entities.length, 
+          entity: label 
+        });
+        
+        try {
+          const items = await fetchWithRetry(async () => {
+            await delay(delayBetweenRequests);
+            return await entity.list();
+          });
+          
+          console.log(`Backup: Encontrados ${items.length} registros de ${label}`);
+          backupData[name] = items;
+          
+          await delay(delayBetweenRequests);
+        } catch (entityError) {
+          console.error(`Erro ao fazer backup de ${label}:`, entityError);
+          
+          if (entityError.message?.includes('429') || 
+              entityError.message?.includes('Rate limit') || 
+              entityError.toString().includes('429')) {
+            
+            setRateLimitError(entityError);
+            await delay(10000);
+            setDelayBetweenRequests(prev => prev * 2);
+            i--;
+          }
+        }
+      }
+
+      // Criar o objeto de backup com metadados
+      const fullBackup = {
+        metadata: {
+          timestamp: new Date().toISOString(),
+          version: '1.0',
+          totalEntities: entities.length,
+          totalRecords: Object.values(backupData).reduce((acc, items) => acc + items.length, 0)
+        },
+        data: backupData
+      };
+
+      // Criar um blob com os dados
+      const backupBlob = new Blob([JSON.stringify(fullBackup, null, 2)], { type: 'application/json' });
+      
+      // Criar URL para download
+      const backupUrl = URL.createObjectURL(backupBlob);
+      
+      // Adicionar à lista de backups
+      const newBackup = {
+        id: Date.now().toString(),
+        fileName: backupFileName,
+        timestamp: new Date().toISOString(),
+        url: backupUrl,
+        size: backupBlob.size
+      };
+      
+      setBackups(prev => [newBackup, ...prev]);
+      
+      setMessage({ type: 'success', text: 'Backup concluído com sucesso!' });
+    } catch (error) {
+      console.error('Erro ao fazer backup:', error);
+      setMessage({ 
+        type: 'error', 
+        text: 'Erro ao fazer backup: ' + (error.message || 'Erro desconhecido') 
+      });
+      
+      if (error.message?.includes('429') || 
+          error.message?.includes('Rate limit') || 
+          error.toString().includes('429')) {
+        setRateLimitError(error);
+      }
+    } finally {
+      setBackupInProgress(false);
+      setBackupProgress({ current: 0, total: 0, entity: '' });
+    }
+  };
+
+  // Função para fazer download de um backup
+  const handleDownloadBackup = (backup) => {
+    const a = document.createElement('a');
+    a.href = backup.url;
+    a.download = backup.fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  // Função para formatar o tamanho do arquivo
+  const formatFileSize = (bytes) => {
+    if (bytes < 1024) return bytes + ' bytes';
+    else if (bytes < 1048576) return (bytes / 1024).toFixed(2) + ' KB';
+    else return (bytes / 1048576).toFixed(2) + ' MB';
   };
 
   // Filtrar os dados com base no termo de pesquisa
@@ -569,126 +666,157 @@ export default function DataManager() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Gerenciador de Dados</h1>
+        <h1 className="text-2xl font-bold">Gerenciamento de Dados</h1>
+        <div className="flex space-x-2">
+          <Button 
+            variant="outline" 
+            onClick={() => setShowBackupDialog(true)}
+            disabled={loading || backupInProgress}
+          >
+            <Database className="mr-2 h-4 w-4" />
+            Fazer Backup
+          </Button>
+          <Button 
+            variant="outline" 
+            onClick={() => setShowSelectiveDeleteDialog(true)}
+            disabled={loading || backupInProgress}
+          >
+            <Trash2 className="mr-2 h-4 w-4" />
+            Excluir Dados Seletivamente
+          </Button>
+          <Button 
+            variant="outline" 
+            onClick={() => setShowDeleteDialog(true)}
+            disabled={loading || backupInProgress}
+          >
+            <Trash2 className="mr-2 h-4 w-4" />
+            Excluir Todos os Dados
+          </Button>
+          <Button 
+            variant="outline" 
+            onClick={handleAddSampleData}
+            disabled={loading || backupInProgress}
+          >
+            <Save className="mr-2 h-4 w-4" />
+            Adicionar Dados de Exemplo
+          </Button>
+        </div>
       </div>
 
-      {rateLimitError && (
-        <RateLimitHandler 
-          error={rateLimitError} 
-          onRetry={() => {
-            setRateLimitError(null);
-            setDelayBetweenRequests(1000);
-          }}
-          className="mb-4"
-        />
-      )}
-
       {message && (
-        <div className={`p-4 rounded-md ${
-          message.type === 'success' ? 'bg-green-50 text-green-700' : 
-          message.type === 'error' ? 'bg-red-50 text-red-700' :
-          'bg-blue-50 text-blue-700'
-        }`}>
+        <div className={`p-4 rounded-md ${message.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
           {message.text}
         </div>
       )}
 
-      <div className="grid gap-6 md:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Upload className="h-5 w-5" />
-              Adicionar Dados de Exemplo
-            </CardTitle>
-            <CardDescription>
-              Adiciona dados de exemplo ao sistema para testes
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button 
-              onClick={handleAddSampleData} 
-              disabled={loading}
-              className="w-full"
-            >
-              {loading ? (
-                <>
-                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                  Adicionando...
-                </>
-              ) : "Adicionar Dados de Exemplo"}
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-amber-600">
-              <Filter className="h-5 w-5" />
-              Excluir Dados Seletivamente
-            </CardTitle>
-            <CardDescription>
-              Selecione quais dados deseja excluir do Firebase
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button 
-              variant="outline"
-              onClick={() => setShowSelectiveDeleteDialog(true)}
-              disabled={loading}
-              className="w-full border-amber-300 text-amber-700 hover:bg-amber-50"
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Excluir Dados Seletivamente
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-red-600">
-              <Database className="h-5 w-5" />
-              Deletar Todos os Dados
-            </CardTitle>
-            <CardDescription>
-              Remove todos os dados cadastrados no sistema
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button 
-              variant="destructive"
-              onClick={() => setShowDeleteDialog(true)}
-              disabled={loading}
-              className="w-full"
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Deletar Todos os Dados
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-
-      {delayBetweenRequests > 500 && (
-        <Card className="border-amber-200 bg-amber-50">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-amber-700 flex items-center">
-              <Clock className="h-4 w-4 mr-2" /> 
-              Modo de Prevenção de Rate Limit Ativado
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-xs text-amber-600">
-            Para evitar erros de limite de requisições, as operações estão sendo executadas 
-            com um intervalo de {delayBetweenRequests}ms entre elas. Isto pode fazer com que 
-            as operações levem mais tempo para serem concluídas.
-          </CardContent>
-        </Card>
+      {rateLimitError && (
+        <RateLimitHandler error={rateLimitError} />
       )}
 
-      {/* Diálogo para exclusão seletiva de dados */}
+      {(loading || backupInProgress) && progress.total > 0 && (
+        <div className="space-y-2">
+          <div className="flex justify-between text-sm">
+            <span>Processando {progress.entity || backupProgress.entity}...</span>
+            <span>{progress.current || backupProgress.current} de {progress.total || backupProgress.total}</span>
+          </div>
+          <Progress value={((progress.current || backupProgress.current) / (progress.total || backupProgress.total)) * 100} />
+        </div>
+      )}
+
+      {/* Dialog para backup */}
+      <Dialog open={showBackupDialog} onOpenChange={setShowBackupDialog}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Backup de Dados</DialogTitle>
+            <DialogDescription>
+              Faça backup completo do banco de dados ou baixe backups anteriores.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <h3 className="text-lg font-medium">Criar Novo Backup</h3>
+              <Button 
+                onClick={handleBackupAllData} 
+                disabled={backupInProgress}
+              >
+                {backupInProgress ? (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                    Processando...
+                  </>
+                ) : (
+                  <>
+                    <Database className="mr-2 h-4 w-4" />
+                    Fazer Backup Completo
+                  </>
+                )}
+              </Button>
+            </div>
+
+            {backupInProgress && backupProgress.total > 0 && (
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span>Fazendo backup de {backupProgress.entity}...</span>
+                  <span>{backupProgress.current} de {backupProgress.total}</span>
+                </div>
+                <Progress value={(backupProgress.current / backupProgress.total) * 100} />
+              </div>
+            )}
+
+            <div className="border-t pt-4">
+              <h3 className="text-lg font-medium mb-4">Backups Disponíveis</h3>
+              
+              {backups.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <FileDown className="mx-auto h-12 w-12 opacity-20 mb-2" />
+                  <p>Nenhum backup disponível. Clique em "Fazer Backup Completo" para criar um novo.</p>
+                </div>
+              ) : (
+                <ScrollArea className="h-[300px]">
+                  <div className="space-y-2">
+                    {backups.map((backup) => (
+                      <Card key={backup.id}>
+                        <CardHeader className="py-4">
+                          <div className="flex justify-between items-center">
+                            <div>
+                              <CardTitle className="text-base">{backup.fileName}</CardTitle>
+                              <CardDescription>
+                                Criado em: {format(new Date(backup.timestamp), 'dd/MM/yyyy HH:mm:ss')}
+                              </CardDescription>
+                            </div>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={() => handleDownloadBackup(backup)}
+                            >
+                              <Download className="h-4 w-4 mr-2" />
+                              Download ({formatFileSize(backup.size)})
+                            </Button>
+                          </div>
+                        </CardHeader>
+                      </Card>
+                    ))}
+                  </div>
+                </ScrollArea>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBackupDialog(false)}>
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog para exclusão seletiva */}
       <Dialog open={showSelectiveDeleteDialog} onOpenChange={setShowSelectiveDeleteDialog}>
         <DialogContent className="max-w-4xl max-h-[90vh]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-amber-600">
-              <Filter className="h-5 w-5" />
+              <Search className="h-5 w-5" />
               Exclusão Seletiva de Dados
             </DialogTitle>
             <DialogDescription>
@@ -717,22 +845,26 @@ export default function DataManager() {
                     <div className="flex items-center space-x-4">
                       <div className="relative">
                         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
-                        <input
-                          type="text"
-                          placeholder="Pesquisar..."
-                          className="pl-8 h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors"
+                        <Input
+                          placeholder="Buscar..."
                           value={searchTerm}
                           onChange={(e) => setSearchTerm(e.target.value)}
+                          className="h-8 w-[250px]"
                         />
                       </div>
                       
                       <div className="flex items-center space-x-2">
                         <Checkbox 
-                          id="select-all" 
                           checked={selectAll}
                           onCheckedChange={toggleSelectAll}
+                          id="select-all"
                         />
-                        <Label htmlFor="select-all">Selecionar todos</Label>
+                        <label
+                          htmlFor="select-all"
+                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                        >
+                          Selecionar Todos
+                        </label>
                       </div>
                     </div>
                   </div>
@@ -830,20 +962,20 @@ export default function DataManager() {
             </Tabs>
           </div>
           
-          {loading && deleteProgress.total > 0 && (
+          {loading && progress.total > 0 && (
             <div className="my-4">
               <div className="flex justify-between items-center mb-2">
                 <span className="text-sm font-medium">
                   Excluindo itens selecionados...
                 </span>
                 <span className="text-sm text-gray-500">
-                  {deleteProgress.current}/{deleteProgress.total}
+                  {progress.current}/{progress.total}
                 </span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2.5">
                 <div 
                   className="bg-amber-500 h-2.5 rounded-full" 
-                  style={{ width: `${(deleteProgress.current / deleteProgress.total) * 100}%` }}
+                  style={{ width: `${(progress.current / progress.total) * 100}%` }}
                 ></div>
               </div>
             </div>
@@ -879,7 +1011,7 @@ export default function DataManager() {
         </DialogContent>
       </Dialog>
 
-      {/* Diálogo para exclusão de todos os dados */}
+      {/* Dialog para exclusão de todos os dados */}
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <DialogContent>
           <DialogHeader>
@@ -892,30 +1024,34 @@ export default function DataManager() {
             </DialogDescription>
           </DialogHeader>
           
-          {loading && (
-            <div className="my-4">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-sm font-medium">
-                  Excluindo {progress.entity}...
-                </span>
-                <span className="text-sm text-gray-500">
-                  {progress.current}/{progress.total}
-                </span>
+          {loading && progress.total > 0 && (
+            <div className="space-y-2 my-4">
+              <div className="flex justify-between text-sm">
+                <span>Deletando {progress.entity}...</span>
+                <span>{progress.current} de {progress.total}</span>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-2.5">
-                <div 
-                  className="bg-red-600 h-2.5 rounded-full" 
-                  style={{ width: `${(progress.current / progress.total) * 100}%` }}
-                ></div>
-              </div>
-              {delayBetweenRequests > 500 && (
-                <p className="text-xs text-amber-600 mt-2 flex items-center">
-                  <Clock className="h-3 w-3 mr-1" /> 
-                  Modo lento ativado para evitar limite de requisições ({delayBetweenRequests}ms entre operações)
-                </p>
-              )}
+              <Progress value={(progress.current / progress.total) * 100} />
             </div>
           )}
+          
+          <div className="flex flex-col gap-4 py-4">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              <p className="text-sm font-medium text-amber-500">
+                Aviso: Esta operação irá excluir todos os dados do Firebase.
+              </p>
+            </div>
+            
+            <p className="text-sm text-gray-500">
+              Todos os dados serão removidos permanentemente do banco de dados, incluindo:
+            </p>
+            
+            <ul className="list-disc pl-5 text-sm text-gray-500 space-y-1">
+              {entities.map(({ label }) => (
+                <li key={label}>{label}</li>
+              ))}
+            </ul>
+          </div>
           
           <DialogFooter>
             <Button 
@@ -933,7 +1069,7 @@ export default function DataManager() {
               {loading ? (
                 <>
                   <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                  Excluindo...
+                  Deletando...
                 </>
               ) : (
                 <>
