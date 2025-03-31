@@ -154,7 +154,7 @@ export default function Public() {
     {
       name: "Massagens Terapêuticas",
       description: "Técnicas avançadas de massagem para relaxar, regenerar e revitalizar seu corpo.",
-      image_url: "https://images.unsplash.com/photo-1519823551278-64ac92734fb1?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=500&q=80"
+      image_url: "https://images.unsplash.com/photo-1519824145371-296894a0daa9?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=500&q=80"
     },
     {
       name: "Tratamentos Corporais",
@@ -183,7 +183,7 @@ export default function Public() {
     {
       title: "Bem-estar e relaxamento para corpo e mente",
       description: "Nossas massagens terapêuticas promovem o relaxamento profundo e restauram o equilíbrio do seu corpo.",
-      image_url: "https://images.unsplash.com/photo-1519824145371-296894a0daa9?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80",
+      image_url: "https://images.unsplash.com/photo-1519823551278-64ac92734fb1?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80",
       button_text: "Ver todas as terapias",
       button_url: "#services"
     }
@@ -307,7 +307,7 @@ export default function Public() {
               <a href={company.facebook_url} className="text-white hover:text-[#69D2CD]">
                 <Facebook className="w-4 h-4" />
               </a>
-              <Link to={createPageUrl("Dashboard")} className="bg-[#69D2CD] text-[#0D0F36] px-3 py-1 rounded-full text-xs font-semibold hover:bg-white transition-colors flex items-center">
+              <Link to={createPageUrl("Login")} className="bg-[#69D2CD] text-[#0D0F36] px-3 py-1 rounded-full text-xs font-semibold hover:bg-white transition-colors flex items-center">
                 <Shield className="w-3 h-3 mr-1" />
                 Painel Administrativo
               </Link>

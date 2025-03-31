@@ -6,7 +6,9 @@ import {
   Appointment as FirebaseAppointment,
   Employee as FirebaseEmployee,
   Product as FirebaseProduct,
-  Inventory as FirebaseInventory
+  Inventory as FirebaseInventory,
+  User as FirebaseUser,
+  Role as FirebaseRole
 } from '../firebase/entities';
 
 // Entidades do Firebase
@@ -15,6 +17,8 @@ export const Appointment = FirebaseAppointment; // Usando a versão do Firebase
 export const Employee = FirebaseEmployee; // Usando a versão do Firebase
 export const Product = FirebaseProduct; // Usando a versão do Firebase
 export const Inventory = FirebaseInventory; // Usando a versão do Firebase
+export const User = FirebaseUser; // Usando a versão do Firebase
+export const Role = FirebaseRole; // Usando a versão do Firebase
 
 // Entidades do Base44
 // export const Appointment = base44.entities.Appointment; // Comentado para usar a versão do Firebase
@@ -27,14 +31,14 @@ export const Service = base44.entities.Service;
 // export const Product = base44.entities.Product; // Comentado para usar a versão do Firebase
 export const Package = base44.entities.Package;
 export const Supplier = base44.entities.Supplier;
-export const Role = base44.entities.Role;
+// export const Role = base44.entities.Role; // Comentado para usar a versão do Firebase
 export const PaymentMethod = base44.entities.PaymentMethod;
 // export const Inventory = base44.entities.Inventory; // Comentado para usar a versão do Firebase
 export const Sale = FirebaseSale;
 export const UnfinishedSale = FirebaseUnfinishedSale;
 
 // Auth e autenticação
-export const User = base44.auth;
+// export const User = base44.auth; // Comentado para usar a versão do Firebase
 export const ClientPackage = base44.entities.ClientPackage;
 export const SubscriptionPlan = base44.entities.SubscriptionPlan;
 export const ClientSubscription = base44.entities.ClientSubscription;

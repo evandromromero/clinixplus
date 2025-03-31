@@ -908,7 +908,7 @@ export const ClientPackage = createEnhancedEntity('client_packages', {
 export const Package = createEnhancedEntity('packages', base44.entities.Package);
 export const Service = createEnhancedEntity('services', base44.entities.Service);
 export const Supplier = createEnhancedEntity('suppliers', base44.entities.Supplier);
-export const Role = createEnhancedEntity('roles', base44.entities.Role);
+// export const Role = createEnhancedEntity('roles', base44.entities.Role); // Comentado para usar a implementação completa abaixo
 export const PaymentMethod = createEnhancedEntity('payment_methods', base44.entities.PaymentMethod);
 export const SubscriptionPlan = createEnhancedEntity('subscription_plans', base44.entities.SubscriptionPlan);
 export const ClientSubscription = createEnhancedEntity('client_subscriptions', base44.entities.ClientSubscription);
@@ -1048,11 +1048,183 @@ export const Anamnesis = createEnhancedEntity('anamnesis', {
   }
 });
 
+// Implementação da entidade User usando Firebase
+export const User = {
+  collection: 'users',
+  
+  create: async function(data) {
+    try {
+      // Validar dados obrigatórios
+      if (!data.email || !data.password || !data.name || !data.roleId) {
+        throw new Error('Dados incompletos: email, senha, nome e cargo são obrigatórios');
+      }
+      
+      // Verificar se já existe um usuário com este email
+      const existingUsers = await this.filter({ email: data.email });
+      if (existingUsers.length > 0) {
+        throw new Error('Já existe um usuário com este email');
+      }
+      
+      // Preparar dados para salvar
+      const userData = {
+        ...data,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        active: data.active !== undefined ? data.active : true
+      };
+      
+      // Criar documento no Firestore
+      const collectionRef = collection(db, this.collection);
+      const docRef = await addDoc(collectionRef, userData);
+      
+      return { id: docRef.id, ...userData };
+    } catch (error) {
+      console.error('Erro ao criar usuário:', error);
+      throw error;
+    }
+  },
+  
+  update: async function(id, data) {
+    try {
+      if (!id) {
+        throw new Error('ID do usuário não fornecido');
+      }
+      
+      // Atualizar timestamp
+      const updatedData = {
+        ...data,
+        updated_at: new Date().toISOString()
+      };
+      
+      // Atualizar documento no Firestore
+      const docRef = doc(db, this.collection, id);
+      await updateDoc(docRef, updatedData);
+      
+      return { id, ...updatedData };
+    } catch (error) {
+      console.error('Erro ao atualizar usuário:', error);
+      throw error;
+    }
+  },
+  
+  delete: async function(id) {
+    try {
+      if (!id) {
+        throw new Error('ID do usuário não fornecido');
+      }
+      
+      // Excluir documento no Firestore
+      const docRef = doc(db, this.collection, id);
+      await deleteDoc(docRef);
+      
+      return true;
+    } catch (error) {
+      console.error('Erro ao excluir usuário:', error);
+      throw error;
+    }
+  },
+  
+  get: async function(id) {
+    try {
+      if (!id) {
+        throw new Error('ID do usuário não fornecido');
+      }
+      
+      // Buscar documento no Firestore
+      const docRef = doc(db, this.collection, id);
+      const docSnap = await getDoc(docRef);
+      
+      if (!docSnap.exists()) {
+        throw new Error('Usuário não encontrado');
+      }
+      
+      return { id: docSnap.id, ...docSnap.data() };
+    } catch (error) {
+      console.error('Erro ao buscar usuário:', error);
+      throw error;
+    }
+  },
+  
+  list: async function() {
+    try {
+      // Buscar todos os documentos na coleção
+      const collectionRef = collection(db, this.collection);
+      const snapshot = await getDocs(collectionRef);
+      
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('Erro ao listar usuários:', error);
+      throw error;
+    }
+  },
+  
+  filter: async function(filters) {
+    try {
+      let q = collection(db, this.collection);
+      
+      // Aplicar filtros
+      if (filters) {
+        Object.entries(filters).forEach(([key, value]) => {
+          if (value !== undefined && value !== null && value !== '') {
+            q = query(q, where(key, '==', value));
+          }
+        });
+      }
+      
+      const snapshot = await getDocs(q);
+      
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('Erro ao filtrar usuários:', error);
+      throw error;
+    }
+  },
+  
+  // Método para autenticação
+  login: async function(email, password) {
+    try {
+      if (!email || !password) {
+        throw new Error('Email e senha são obrigatórios');
+      }
+      
+      // Buscar usuário pelo email
+      const users = await this.filter({ email });
+      
+      if (users.length === 0) {
+        throw new Error('Usuário não encontrado');
+      }
+      
+      const user = users[0];
+      
+      // Verificar senha (em produção, usar hash)
+      if (user.password !== password) {
+        throw new Error('Senha incorreta');
+      }
+      
+      // Verificar se o usuário está ativo
+      if (user.active === false) {
+        throw new Error('Usuário inativo');
+      }
+      
+      return user;
+    } catch (error) {
+      console.error('Erro ao fazer login:', error);
+      throw error;
+    }
+  }
+};
+
 // Exporta as entidades originais para as demais (que serão migradas gradualmente)
 export const ClientAuth = base44.entities.ClientAuth;
 
 // Auth SDK
-export const User = base44.auth;
+export const Auth = base44.auth;
 
 export const FIREBASE_ONLY_ENTITIES = [
   'appointments',
@@ -1174,6 +1346,139 @@ export const Appointment = {
     } catch (error) {
       console.error('Error filtering appointments:', error);
       return [];
+    }
+  }
+};
+
+// Implementação da entidade Role usando Firebase
+export const Role = {
+  collection: 'roles',
+  
+  create: async function(data) {
+    try {
+      // Validar dados obrigatórios
+      if (!data.name) {
+        throw new Error('Nome do cargo é obrigatório');
+      }
+      
+      // Preparar dados para salvar
+      const roleData = {
+        ...data,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        active: data.active !== undefined ? data.active : true
+      };
+      
+      // Criar documento no Firestore
+      const collectionRef = collection(db, this.collection);
+      const docRef = await addDoc(collectionRef, roleData);
+      
+      return { id: docRef.id, ...roleData };
+    } catch (error) {
+      console.error('Erro ao criar cargo:', error);
+      throw error;
+    }
+  },
+  
+  update: async function(id, data) {
+    try {
+      if (!id) {
+        throw new Error('ID do cargo não fornecido');
+      }
+      
+      // Atualizar timestamp
+      const updatedData = {
+        ...data,
+        updated_at: new Date().toISOString()
+      };
+      
+      // Atualizar documento no Firestore
+      const docRef = doc(db, this.collection, id);
+      await updateDoc(docRef, updatedData);
+      
+      return { id, ...updatedData };
+    } catch (error) {
+      console.error('Erro ao atualizar cargo:', error);
+      throw error;
+    }
+  },
+  
+  delete: async function(id) {
+    try {
+      if (!id) {
+        throw new Error('ID do cargo não fornecido');
+      }
+      
+      // Excluir documento no Firestore
+      const docRef = doc(db, this.collection, id);
+      await deleteDoc(docRef);
+      
+      return true;
+    } catch (error) {
+      console.error('Erro ao excluir cargo:', error);
+      throw error;
+    }
+  },
+  
+  get: async function(id) {
+    try {
+      if (!id) {
+        throw new Error('ID do cargo não fornecido');
+      }
+      
+      // Buscar documento no Firestore
+      const docRef = doc(db, this.collection, id);
+      const docSnap = await getDoc(docRef);
+      
+      if (!docSnap.exists()) {
+        throw new Error('Cargo não encontrado');
+      }
+      
+      return { id: docSnap.id, ...docSnap.data() };
+    } catch (error) {
+      console.error('Erro ao buscar cargo:', error);
+      throw error;
+    }
+  },
+  
+  list: async function() {
+    try {
+      // Buscar todos os documentos na coleção
+      const collectionRef = collection(db, this.collection);
+      const snapshot = await getDocs(collectionRef);
+      
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('Erro ao listar cargos:', error);
+      throw error;
+    }
+  },
+  
+  filter: async function(filters) {
+    try {
+      let q = collection(db, this.collection);
+      
+      // Aplicar filtros
+      if (filters) {
+        Object.entries(filters).forEach(([key, value]) => {
+          if (value !== undefined && value !== null && value !== '') {
+            q = query(q, where(key, '==', value));
+          }
+        });
+      }
+      
+      const snapshot = await getDocs(q);
+      
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('Erro ao filtrar cargos:', error);
+      throw error;
     }
   }
 };

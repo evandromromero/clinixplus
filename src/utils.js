@@ -32,6 +32,8 @@ export function createPageUrl(pageName, params) {
     DataManager: '/data-manager',
     'contract-templates': '/contract-templates',
     AnamneseTemplates: '/anamnese-templates',
+    Users: '/users',
+    Login: '/login',
     Public: '/'
   };
 

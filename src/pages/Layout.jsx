@@ -52,6 +52,7 @@ export default function Layout() {
         { name: "Clientes", url: "Clients" },
         { name: "Funcionários", url: "Employees" },
         { name: "Fornecedores", url: "Suppliers" },
+        { name: "Usuários", url: "Users" },
         { name: "Aniversariantes", url: "Birthdays" },
         { name: "Retornos", url: "ClientReturns" }
       ]

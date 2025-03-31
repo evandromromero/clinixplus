@@ -1,5 +1,6 @@
 import React from 'react';
 import { Routes, Route } from 'react-router-dom';
+import ProtectedRoute from './components/ProtectedRoute';
 
 // Importando as páginas
 import Public from './pages/Public';
@@ -32,15 +33,23 @@ import PaymentMethods from './pages/PaymentMethods';
 import DataManager from './pages/DataManager';
 import ContractTemplates from './pages/ContractTemplates';
 import AnamneseTemplates from './pages/AnamneseTemplates';
+import Users from './pages/Users';
+import Login from './pages/Login';
 
 export default function AppRoutes() {
   return (
     <Routes>
-      {/* Rota pública */}
+      {/* Rotas públicas */}
       <Route path="/" element={<Public />} />
+      <Route path="/login" element={<Login />} />
+      <Route path="/client-portal" element={<ClientPortal />} />
       
-      {/* Rotas administrativas com layout comum */}
-      <Route element={<Layout />}>
+      {/* Rotas administrativas com layout comum - protegidas por autenticação */}
+      <Route element={
+        <ProtectedRoute>
+          <Layout />
+        </ProtectedRoute>
+      }>
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/appointments" element={<Appointments />} />
         <Route path="/clients" element={<Clients />} />
@@ -68,10 +77,8 @@ export default function AppRoutes() {
         <Route path="/data-manager" element={<DataManager />} />
         <Route path="/contract-templates" element={<ContractTemplates />} />
         <Route path="/anamnese-templates" element={<AnamneseTemplates />} />
+        <Route path="/users" element={<Users />} />
       </Route>
-      
-      {/* Rota do portal do cliente */}
-      <Route path="/client-portal" element={<ClientPortal />} />
       
       {/* Rota de fallback para páginas não encontradas */}
       <Route path="*" element={<Public />} />
