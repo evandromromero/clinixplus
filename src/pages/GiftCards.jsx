@@ -221,12 +221,6 @@ export default function GiftCards() {
       resetForm();
       setShowCreateDialog(false);
       
-      // Redirecionar para a página de vendas com o ID do gift card
-      navigate(`/sales-register?gift_card=${giftCardData.id}`);
-      
-      // Armazenar o código para uso posterior (opcional)
-      localStorage.setItem('last_giftcard_code', code);
-      
       // Recarregar os gift cards
       await loadData();
     } catch (error) {
@@ -282,11 +276,8 @@ export default function GiftCards() {
           
           toast.success("Gift Card resgatado com sucesso!");
           
-          // Redirecionar para a página de vendas com desconto do gift card
-          console.log("Redirecionando para:", `/sales-register?apply_giftcard=${foundGiftCard.id}`);
-          
-          // Usar window.location para garantir o redirecionamento
-          window.location.href = `/sales-register?apply_giftcard=${foundGiftCard.id}`;
+          // Recarregar a lista de gift cards para refletir a mudança
+          await loadData();
           return;
         } catch (updateError) {
           console.error("Erro ao atualizar status do gift card:", updateError);
@@ -324,11 +315,8 @@ export default function GiftCards() {
           
           toast.success("Gift Card resgatado com sucesso!");
           
-          // Redirecionar para a página de vendas com desconto do gift card
-          console.log("Redirecionando para:", `/sales-register?apply_giftcard=${firebaseGiftCard.id}`);
-          
-          // Usar window.location para garantir o redirecionamento
-          window.location.href = `/sales-register?apply_giftcard=${firebaseGiftCard.id}`;
+          // Recarregar a lista de gift cards para refletir a mudança
+          await loadData();
           return;
         } else {
           console.log("Gift card não encontrado no Firebase");
