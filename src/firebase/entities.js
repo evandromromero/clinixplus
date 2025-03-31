@@ -1549,3 +1549,27 @@ export const SystemConfig = {
     }
   }
 };
+
+// Função auxiliar para verificar permissões habilitadas
+export const checkEnabledPermission = async (permissionId) => {
+  try {
+    // Buscar permissões habilitadas
+    const configsRef = collection(db, 'system_configs');
+    const q = query(configsRef, where("key", "==", "enabled_permissions"));
+    const querySnapshot = await getDocs(q);
+    
+    if (querySnapshot.empty) {
+      // Se não existir configuração, todas as permissões estão habilitadas por padrão
+      return true;
+    }
+    
+    const enabledPermissions = querySnapshot.docs[0].data().value || [];
+    
+    // Verificar se a permissão específica está habilitada
+    return enabledPermissions.includes(permissionId);
+  } catch (error) {
+    console.error(`Erro ao verificar permissão ${permissionId}:`, error);
+    // Em caso de erro, permitir a permissão por padrão
+    return true;
+  }
+};

@@ -20,7 +20,7 @@ import AboutModal from "../components/public/AboutModal";
 import ServiceCarousel from "../components/public/ServiceCarousel";
 import TestimonialCarousel from "../components/public/TestimonialCarousel";
 import AddTestimonialDialog from "../components/public/AddTestimonialDialog";
-import { Service, CompanySettings, Testimonial, SubscriptionPlan } from "@/firebase/entities";
+import { Service, CompanySettings, Testimonial, SubscriptionPlan, checkEnabledPermission } from "@/firebase/entities";
 import SubscriptionPlansSection from '../components/public/SubscriptionPlansSection';
 import GiftCardSection from '../components/public/GiftCardSection';
 
@@ -51,9 +51,30 @@ export default function Public() {
     whatsapp_message: "Olá! Gostaria de agendar uma consulta na ClinixPlus."
   });
   const [slideshowImages, setSlideshowImages] = useState([]);
-  const [footerServices, setFooterServices] = useState([]);
   const [testimonials, setTestimonials] = useState([]);
   const [subscriptionPlans, setSubscriptionPlans] = useState([]);
+  const [showAboutModal, setShowAboutModal] = useState(false);
+  const [showTestimonialDialog, setShowTestimonialDialog] = useState(false);
+  const [showSubscriptionsSection, setShowSubscriptionsSection] = useState(true);
+  const [showGiftCardsSection, setShowGiftCardsSection] = useState(true);
+  const [footerServices, setFooterServices] = useState([]);
+  const [defaultServices, setDefaultServices] = useState([
+    {
+      name: "Tratamentos Faciais",
+      description: "Nossas terapias faciais são personalizadas para atender às necessidades específicas da sua pele.",
+      image_url: "https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=500&q=80"
+    },
+    {
+      name: "Massagens Terapêuticas",
+      description: "Técnicas avançadas de massagem para relaxar, regenerar e revitalizar seu corpo.",
+      image_url: "https://images.unsplash.com/photo-1519823551278-64ac92734fb1?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=500&q=80"
+    },
+    {
+      name: "Tratamentos Corporais",
+      description: "Soluções inovadoras para modelagem corporal, redução de medidas e tratamento da celulite.",
+      image_url: "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=500&q=80"
+    }
+  ]);
 
   useEffect(() => {
     loadCompanySettings();
@@ -61,6 +82,7 @@ export default function Public() {
     loadSlideShowImages();
     loadTestimonials();
     loadSubscriptionPlans();
+    checkFeaturePermissions();
   }, []);
 
   const loadCompanySettings = async () => {
@@ -145,25 +167,25 @@ export default function Public() {
     }
   };
 
-  const defaultServices = [
-    {
-      name: "Tratamentos Faciais",
-      description: "Nossas terapias faciais são personalizadas para atender às necessidades específicas da sua pele.",
-      image_url: "https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=500&q=80"
-    },
-    {
-      name: "Massagens Terapêuticas",
-      description: "Técnicas avançadas de massagem para relaxar, regenerar e revitalizar seu corpo.",
-      image_url: "https://images.unsplash.com/photo-1519824145371-296894a0daa9?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=500&q=80"
-    },
-    {
-      name: "Tratamentos Corporais",
-      description: "Soluções inovadoras para modelagem corporal, redução de medidas e tratamento da celulite.",
-      image_url: "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=500&q=80"
+  const checkFeaturePermissions = async () => {
+    try {
+      // Verificar permissão para planos de assinatura
+      const subscriptionsEnabled = await checkEnabledPermission('manage_subscriptions');
+      setShowSubscriptionsSection(subscriptionsEnabled);
+      
+      // Verificar permissão para gift cards
+      const giftCardsEnabled = await checkEnabledPermission('manage_gift_cards');
+      setShowGiftCardsSection(giftCardsEnabled);
+      
+      console.log('Permissões verificadas:', { 
+        subscriptions: subscriptionsEnabled, 
+        giftCards: giftCardsEnabled 
+      });
+    } catch (error) {
+      console.error('Erro ao verificar permissões:', error);
+      // Em caso de erro, manter as seções visíveis por padrão
     }
-  ];
-
-  const servicesDisplay = featuredServices.length > 0 ? featuredServices : defaultServices;
+  };
 
   const defaultSlides = [
     {
@@ -285,6 +307,8 @@ export default function Public() {
 
   const plansToDisplay = subscriptionPlans.length > 0 ? subscriptionPlans : defaultSubscriptionPlans;
 
+  const servicesDisplay = featuredServices.length > 0 ? featuredServices : defaultServices;
+
   return (
     <div className="bg-white min-h-screen">
       <header className="bg-[#0D0F36] text-white">
@@ -325,8 +349,12 @@ export default function Public() {
             <div className="hidden md:flex items-center gap-6">
               <a href="#home" className="text-[#0D0F36] font-medium hover:text-[#69D2CD] transition-colors">Home</a>
               <a href="#services" className="text-[#0D0F36] font-medium hover:text-[#69D2CD] transition-colors">Serviços</a>
-              <a href="#subscriptions" className="text-[#0D0F36] font-medium hover:text-[#69D2CD] transition-colors">Assinaturas</a>
-              <a href="#gift-cards" className="text-[#0D0F36] font-medium hover:text-[#69D2CD] transition-colors">Gift Cards</a>
+              {showSubscriptionsSection && (
+                <a href="#subscriptions" className="text-[#0D0F36] font-medium hover:text-[#69D2CD] transition-colors">Assinaturas</a>
+              )}
+              {showGiftCardsSection && (
+                <a href="#gift-cards" className="text-[#0D0F36] font-medium hover:text-[#69D2CD] transition-colors">Gift Cards</a>
+              )}
               <a href="#about" className="text-[#0D0F36] font-medium hover:text-[#69D2CD] transition-colors">Sobre</a>
               <a href="#testimonials" className="text-[#0D0F36] font-medium hover:text-[#69D2CD] transition-colors">Depoimentos</a>
               <a href="#contact" className="text-[#0D0F36] font-medium hover:text-[#69D2CD] transition-colors">Contato</a>
@@ -383,9 +411,13 @@ export default function Public() {
         </div>
       </section>
 
-      <SubscriptionPlansSection plans={plansToDisplay} />
+      {showSubscriptionsSection && (
+        <SubscriptionPlansSection plans={plansToDisplay} />
+      )}
 
-      <GiftCardSection />
+      {showGiftCardsSection && (
+        <GiftCardSection />
+      )}
 
       <section id="about" className="py-20 bg-gradient-to-br from-[#F1F6CE]/20 to-white">
         <div className="container mx-auto px-4">

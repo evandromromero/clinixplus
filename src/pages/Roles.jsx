@@ -607,7 +607,8 @@ export default function Roles() {
                         if (p.id === 'admin') return false; // Já está sendo mostrada separadamente
                         
                         // Para administradores gerais, mostrar todas as permissões
-                        if (isAdminUser) return true;
+                        const userIsAdminGeral = userRole && userRole.name === "Administrador Geral";
+                        if (userIsAdminGeral) return true;
                         
                         // Para usuários normais, mostrar apenas as permissões habilitadas
                         return enabledPermissions.includes(p.id);
