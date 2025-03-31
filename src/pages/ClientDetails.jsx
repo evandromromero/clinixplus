@@ -34,7 +34,10 @@ import {
   X,
   ImageIcon,
   Download,
-  Edit
+  Edit,
+  CreditCard,
+  Receipt,
+  ExternalLink
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -48,6 +51,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 
 export default function ClientDetails() {
   const [client, setClient] = useState(null);
@@ -97,6 +101,8 @@ export default function ClientDetails() {
   const [anamneseData, setAnamneseData] = useState({});
   const [selectedGiftCard, setSelectedGiftCard] = useState(null);
   const [showGiftCardImageDialog, setShowGiftCardImageDialog] = useState(false);
+  const [selectedSubscription, setSelectedSubscription] = useState(null);
+  const [showPaymentHistoryDialog, setShowPaymentHistoryDialog] = useState(false);
   const urlParams = new URLSearchParams(window.location.search);
   const clientId = urlParams.get('id');
 
@@ -651,6 +657,73 @@ export default function ClientDetails() {
       console.error("Erro ao fazer download da imagem:", error);
       toast.error("Erro ao fazer download da imagem");
     }
+  };
+
+  // Função para enviar link de pagamento para o cliente
+  const sendPaymentLink = async (subscription) => {
+    try {
+      if (!subscription || !client) return;
+      
+      // Verificar se existe um link de pagamento
+      if (!subscription.payment_link) {
+        toast({
+          title: "Link de pagamento não disponível",
+          description: "Esta assinatura não possui um link de pagamento configurado.",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      // Construir a mensagem
+      const planName = getPlanName(subscription.plan_id);
+      const message = `Olá ${client.name}, segue o link para pagamento da sua assinatura "${planName}": ${subscription.payment_link}`;
+      
+      // Verificar se o cliente tem telefone
+      if (!client.phone) {
+        // Se não tiver telefone, copiar o link para a área de transferência
+        navigator.clipboard.writeText(message);
+        toast({
+          title: "Mensagem copiada",
+          description: "O cliente não possui telefone cadastrado. A mensagem foi copiada para a área de transferência.",
+          variant: "default"
+        });
+        return;
+      }
+      
+      // Remover caracteres não numéricos do telefone
+      const phone = client.phone.replace(/\D/g, '');
+      
+      // Abrir WhatsApp Web com a mensagem
+      const whatsappUrl = `https://wa.me/55${phone}?text=${encodeURIComponent(message)}`;
+      window.open(whatsappUrl, '_blank');
+      
+      toast({
+        title: "WhatsApp aberto",
+        description: "O link de pagamento foi enviado para o WhatsApp do cliente.",
+        variant: "success"
+      });
+    } catch (error) {
+      console.error("Erro ao enviar link de pagamento:", error);
+      toast({
+        title: "Erro ao enviar link",
+        description: "Não foi possível enviar o link de pagamento.",
+        variant: "destructive"
+      });
+    }
+  };
+  
+  // Função para abrir o modal de histórico de pagamentos
+  const openPaymentHistory = (subscription) => {
+    setSelectedSubscription(subscription);
+    setShowPaymentHistoryDialog(true);
+  };
+  
+  // Função para formatar valor monetário
+  const formatCurrency = (value) => {
+    return new Intl.NumberFormat('pt-BR', { 
+      style: 'currency', 
+      currency: 'BRL' 
+    }).format(value);
   };
 
   if (!client && !loadError) {
@@ -1220,7 +1293,7 @@ export default function ClientDetails() {
                         </div>
                         {pkg.status === 'ativo' && pkg.sessions_used < pkg.total_sessions && (
                           <Link to={createPageUrl("Appointments", { client_id: clientId, package_id: pkg.id })}>
-                            <Button variant="outline" size="sm" className="bg-[#8BBAFF]/10 border-[#6EA3E7] text-[#175EA0] hover:bg-[#8BBAFF]/20 hover:text-[#175EA0]">
+                            <Button variant="outline" size="sm" className="bg-[#8BBAFF]/10 border-[#6EA3E7] text-[#175EA0] hover:bg-[#8BBAFF]/20">
                               <Plus className="w-4 h-4" />
                               Agendar Sessão
                             </Button>
@@ -1467,9 +1540,36 @@ export default function ClientDetails() {
                                 <span className="text-green-600">{subscription.discount}%</span>
                               </div>
                             )}
+                            <div className="flex justify-between">
+                              <span className="text-sm text-gray-500">Faturas pagas:</span>
+                              <span className="font-medium">
+                                {subscription.payment_history?.length || 0}
+                              </span>
+                            </div>
                           </div>
                           
-                          <div className="mt-4 flex justify-end gap-2">
+                          <div className="mt-4 flex flex-wrap justify-end gap-2">
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={() => openPaymentHistory(subscription)}
+                            >
+                              <Receipt className="h-4 w-4 mr-1" />
+                              Histórico
+                            </Button>
+                            
+                            {subscription.payment_link && (
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={() => sendPaymentLink(subscription)}
+                                className="bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
+                              >
+                                <Send className="h-4 w-4 mr-1" />
+                                Enviar Link
+                              </Button>
+                            )}
+                            
                             <Button 
                               variant="outline" 
                               size="sm" 
@@ -1528,9 +1628,24 @@ export default function ClientDetails() {
                               <span className="text-sm text-gray-500">Método de pagamento:</span>
                               <span>{formatPaymentMethod(subscription.payment_method)}</span>
                             </div>
+                            <div className="flex justify-between">
+                              <span className="text-sm text-gray-500">Faturas pagas:</span>
+                              <span className="font-medium">
+                                {subscription.payment_history?.length || 0}
+                              </span>
+                            </div>
                           </div>
                           
-                          <div className="mt-4 flex justify-end gap-2">
+                          <div className="mt-4 flex flex-wrap justify-end gap-2">
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={() => openPaymentHistory(subscription)}
+                            >
+                              <Receipt className="h-4 w-4 mr-1" />
+                              Histórico
+                            </Button>
+                            
                             <Button 
                               variant="outline" 
                               size="sm" 
@@ -2166,6 +2281,101 @@ export default function ClientDetails() {
                 Enviar por WhatsApp
               </Button>
             )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Diálogo para visualizar o histórico de pagamentos */}
+      <Dialog open={showPaymentHistoryDialog} onOpenChange={setShowPaymentHistoryDialog}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Histórico de Pagamentos</DialogTitle>
+          </DialogHeader>
+          
+          <div className="py-4">
+            {selectedSubscription && (
+              <>
+                <div className="mb-4">
+                  <h3 className="text-lg font-medium">Plano: {getPlanName(selectedSubscription.plan_id)}</h3>
+                  <p className="text-sm text-gray-500">
+                    Ciclo: {formatBillingCycle(selectedSubscription.billing_cycle)} | 
+                    Início: {selectedSubscription.start_date ? format(new Date(selectedSubscription.start_date), 'dd/MM/yyyy') : 'N/A'}
+                  </p>
+                </div>
+                
+                {(!selectedSubscription.payment_history || selectedSubscription.payment_history.length === 0) ? (
+                  <div className="text-center p-8 bg-gray-50 rounded-lg">
+                    <Receipt className="h-12 w-12 mx-auto text-gray-400 mb-2" />
+                    <p className="text-gray-500">Nenhum pagamento registrado</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Data</TableHead>
+                          <TableHead>Valor</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Método</TableHead>
+                          <TableHead>Referência</TableHead>
+                          <TableHead className="text-right">Ações</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {selectedSubscription.payment_history.map((payment, index) => (
+                          <TableRow key={index}>
+                            <TableCell>
+                              {payment.date ? format(new Date(payment.date), 'dd/MM/yyyy') : 'N/A'}
+                            </TableCell>
+                            <TableCell>
+                              {payment.amount ? formatCurrency(payment.amount) : 'N/A'}
+                            </TableCell>
+                            <TableCell>
+                              <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+                                payment.status === 'approved' ? 'bg-green-100 text-green-800' :
+                                payment.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                payment.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                                'bg-gray-100 text-gray-800'
+                              }`}>
+                                {payment.status === 'approved' ? 'Aprovado' :
+                                 payment.status === 'pending' ? 'Pendente' :
+                                 payment.status === 'rejected' ? 'Rejeitado' :
+                                 payment.status || 'N/A'}
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              {payment.payment_method || 'N/A'}
+                            </TableCell>
+                            <TableCell>
+                              <span className="font-mono text-xs">
+                                {payment.reference_id || 'N/A'}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {payment.receipt_url && (
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm"
+                                  onClick={() => window.open(payment.receipt_url, '_blank')}
+                                >
+                                  <ExternalLink className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPaymentHistoryDialog(false)}>
+              Fechar
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
