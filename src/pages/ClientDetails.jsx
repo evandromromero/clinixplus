@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Client, Appointment, Sale, ClientPackage, Package, Service, Contract, ContractTemplate, AnamneseTemplate, PendingService } from "@/firebase/entities";
+import { Client, Appointment, Sale, ClientPackage, Package, Service, Contract, ContractTemplate, AnamneseTemplate, PendingService, GiftCard } from "@/firebase/entities";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -30,14 +30,17 @@ import {
   Upload,
   User,
   Wallet,
-  X
+  X,
+  ImageIcon,
+  Download,
+  Send
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import html2pdf from 'html2pdf.js';
 import DependentList from '@/components/clients/DependentList'; 
 import DependentForm from '@/components/clients/DependentForm'; 
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import RateLimitHandler from '@/components/RateLimitHandler';
 import toast from 'react-hot-toast';
 import { Label } from "@/components/ui/label";
@@ -53,6 +56,7 @@ export default function ClientDetails() {
   const [packages, setPackages] = useState([]);
   const [pendingServices, setPendingServices] = useState([]);
   const [services, setServices] = useState([]);
+  const [giftCards, setGiftCards] = useState([]);
   const [showDependentForm, setShowDependentForm] = useState(false);
   const [editingDependent, setEditingDependent] = useState(null);
   const [loadError, setLoadError] = useState(null);
@@ -88,6 +92,8 @@ export default function ClientDetails() {
   const [anamneseTemplates, setAnamneseTemplates] = useState([]);
   const [selectedAnamneseTemplate, setSelectedAnamneseTemplate] = useState(null);
   const [anamneseData, setAnamneseData] = useState({});
+  const [selectedGiftCard, setSelectedGiftCard] = useState(null);
+  const [showGiftCardImageDialog, setShowGiftCardImageDialog] = useState(false);
   const urlParams = new URLSearchParams(window.location.search);
   const clientId = urlParams.get('id');
 
@@ -138,11 +144,8 @@ export default function ClientDetails() {
 
   useEffect(() => {
     if (clientId) {
-      loadData();
+      loadClient();
       loadTemplates();
-      loadPhotos();
-      loadObservations();
-      loadAnamnese();
       loadAnamneseTemplates();
     }
   }, [clientId]);
@@ -174,81 +177,49 @@ export default function ClientDetails() {
     }
   }, [client]);
 
-  const loadData = async () => {
+  const loadClient = async () => {
     try {
-      // Carregar dados básicos
-      const [clientData, appointmentsData, salesData, servicesData, clientPackagesData, packagesData] = await Promise.all([
-        Client.get(clientId),
-        Appointment.list(),
-        Sale.list(),
-        Service.list(),
-        ClientPackage.list(),
-        Package.list()
-      ]);
-
-      setClient(clientData);
-
-      // Filtrar agendamentos do cliente
-      const clientAppointments = appointmentsData
-        .filter(a => a.client_id === clientId)
-        .sort((a, b) => new Date(b.date) - new Date(a.date));
-      setAppointments(clientAppointments);
-
-      // Filtrar vendas do cliente
-      const clientSales = salesData
-        .filter(s => s.client_id === clientId)
-        .sort((a, b) => new Date(b.date) - new Date(a.date));
-      setSales(clientSales);
-
-      // Filtrar e processar pacotes do cliente
-      const activePackages = clientPackagesData
-        .filter(cp => cp.client_id === clientId)
-        .map(cp => {
-          // Encontra o pacote base
-          const basePackage = packagesData.find(p => p.id === cp.package_id);
-          
-          // Encontra os serviços do package_snapshot
-          let services = [];
-          if (cp.package_snapshot?.services) {
-            services = Object.entries(cp.package_snapshot.services).map(([_, serviceData]) => {
-              const service = servicesData.find(s => s.id === serviceData.service_id);
-              return {
-                service_id: serviceData.service_id,
-                name: service?.name || 'Serviço não encontrado',
-                quantity: serviceData.quantity || 0
-              };
-            });
-          }
-          
-          return {
-            ...cp,
-            packageData: basePackage,
-            sessions_used: cp.sessions_used || 0,
-            total_sessions: cp.total_sessions || 0,
-            session_history: cp.session_history || [],
-            services: services
-          };
-        })
-        .filter(cp => cp.packageData)
-        .sort((a, b) => {
-          // Primeiro os ativos, depois por data de validade
-          if (a.status === 'ativo' && b.status !== 'ativo') return -1;
-          if (a.status !== 'ativo' && b.status === 'ativo') return 1;
-          
-          const dateA = new Date(a.purchase_date || a.created_date || 0);
-          const dateB = new Date(b.purchase_date || b.created_date || 0);
-          return dateB - dateA;
-        });
+      const clientData = await Client.get(clientId);
+      if (!clientData) {
+        setLoadError('Cliente não encontrado');
+        return;
+      }
       
-      setClientPackages(activePackages);
-      setPackages(packagesData);
-
-      // Carregar serviços pendentes do cliente
-      const pendingServicesData = await PendingService.filter({ 
-        client_id: clientId,
-        status: 'pendente'
+      setClient(clientData);
+      setEditForm({
+        name: clientData.name || '',
+        phone: clientData.phone || '',
+        email: clientData.email || '',
+        address: clientData.address || '',
+        skinType: clientData.skinType || ''
       });
-      setPendingServices(pendingServicesData);
+      
+      // Carregar dados relacionados
+      const [appointmentsData, salesData, clientPackagesData, packagesData, servicesData] = await Promise.all([
+        Appointment.filter({ client_id: clientId }),
+        Sale.filter({ client_id: clientId }),
+        ClientPackage.filter({ client_id: clientId }),
+        Package.list(),
+        Service.list()
+      ]);
+      
+      // Carregar Gift Cards do cliente
+      const clientGiftCards = await GiftCard.filter({ client_id: clientId });
+      setGiftCards(clientGiftCards.sort((a, b) => {
+        // Primeiro os ativos, depois os utilizados
+        if ((a.status === 'active' || a.status === 'ativo') && (b.status !== 'active' && b.status !== 'ativo')) return -1;
+        if ((a.status !== 'active' && a.status !== 'ativo') && (b.status === 'active' || b.status === 'ativo')) return 1;
+        
+        // Depois por data de criação (mais recentes primeiro)
+        const dateA = new Date(a.created_at || 0);
+        const dateB = new Date(b.created_at || 0);
+        return dateB - dateA;
+      }));
+      
+      setAppointments(appointmentsData);
+      setSales(salesData);
+      setClientPackages(clientPackagesData);
+      setPackages(packagesData);
       setServices(servicesData);
     } catch (error) {
       console.error(error);
@@ -265,22 +236,12 @@ export default function ClientDetails() {
     }
   };
 
-  const loadPhotos = async () => {
+  const loadAnamneseTemplates = async () => {
     try {
-      const clientPhotos = await Client.getPhotos(clientId);
-      setPhotos(clientPhotos);
+      const templates = await AnamneseTemplate.list();
+      setAnamneseTemplates(templates);
     } catch (error) {
-      console.error('Error loading photos:', error);
-      toast.error('Erro ao carregar fotos');
-    }
-  };
-
-  const loadObservations = async () => {
-    try {
-      const clientObservations = await Client.getObservations(clientId);
-      setObservations(clientObservations || []);
-    } catch (error) {
-      console.error('Error loading observations:', error);
+      console.error('Error loading anamnese templates:', error);
     }
   };
 
@@ -299,15 +260,6 @@ export default function ClientDetails() {
       }
     } catch (error) {
       console.error('Error loading anamnese:', error);
-    }
-  };
-
-  const loadAnamneseTemplates = async () => {
-    try {
-      const templates = await AnamneseTemplate.list();
-      setAnamneseTemplates(templates);
-    } catch (error) {
-      console.error('Error loading anamnese templates:', error);
     }
   };
 
@@ -599,6 +551,65 @@ export default function ClientDetails() {
     }
   }, [clientId, anamneseTemplates]);
 
+  // Função para visualizar a imagem do gift card
+  const viewGiftCardImage = async (card) => {
+    if (!card) return;
+    
+    try {
+      // Se o card já tem a imagem base64, usamos ela diretamente
+      if (card.image_base64) {
+        // Verificar se a string base64 tem o prefixo correto
+        let imageUrl = card.image_base64;
+        if (imageUrl && !imageUrl.startsWith('data:')) {
+          // Adicionar o prefixo correto para imagens base64
+          card.image_base64 = `data:image/png;base64,${imageUrl}`;
+        }
+        
+        setSelectedGiftCard(card);
+        setShowGiftCardImageDialog(true);
+      } else {
+        // Se não, tentamos buscar do Firebase
+        const giftCardData = await GiftCard.get(card.id);
+        if (giftCardData && giftCardData.image_base64) {
+          // Verificar se a string base64 tem o prefixo correto
+          let imageUrl = giftCardData.image_base64;
+          if (imageUrl && !imageUrl.startsWith('data:')) {
+            // Adicionar o prefixo correto para imagens base64
+            giftCardData.image_base64 = `data:image/png;base64,${imageUrl}`;
+          }
+          
+          setSelectedGiftCard(giftCardData);
+          setShowGiftCardImageDialog(true);
+        } else {
+          toast.error("Imagem do Gift Card não encontrada");
+        }
+      }
+    } catch (error) {
+      console.error("Erro ao visualizar imagem:", error);
+      toast.error("Erro ao carregar imagem do Gift Card");
+    }
+  };
+
+  // Função para fazer download da imagem do gift card
+  const downloadGiftCardImage = (card) => {
+    if (!card || !card.image_base64) return;
+    
+    try {
+      // Criar um link temporário para download
+      const link = document.createElement('a');
+      link.href = card.image_base64;
+      link.download = `GiftCard-${card.code}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      toast.success("Download iniciado");
+    } catch (error) {
+      console.error("Erro ao fazer download da imagem:", error);
+      toast.error("Erro ao fazer download da imagem");
+    }
+  };
+
   if (!client && !loadError) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -795,11 +806,15 @@ export default function ClientDetails() {
           </TabsTrigger>
           <TabsTrigger value="pending" className="data-[state=active]:bg-[#8BBAFF]/10 data-[state=active]:text-[#175EA0]">
             <Clock className="w-4 h-4 mr-2" />
-            Serviços Pendentes
+            Pendentes
           </TabsTrigger>
           <TabsTrigger value="pacotes" className="data-[state=active]:bg-[#8BBAFF]/10 data-[state=active]:text-[#175EA0]">
             <PackageIcon className="w-4 h-4 mr-2" />
             Pacotes
+          </TabsTrigger>
+          <TabsTrigger value="giftcards" className="data-[state=active]:bg-[#8BBAFF]/10 data-[state=active]:text-[#175EA0]">
+            <Wallet className="w-4 h-4 mr-2" />
+            Gift Cards
           </TabsTrigger>
           <TabsTrigger value="fotos" className="data-[state=active]:bg-[#8BBAFF]/10 data-[state=active]:text-[#175EA0]">
             <Camera className="w-4 h-4 mr-2" />
@@ -1123,6 +1138,161 @@ export default function ClientDetails() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="giftcards" className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-medium">Gift Cards do Cliente</h3>
+            <Link to={`/gift-cards?client_id=${clientId}`}>
+              <Button size="sm">
+                <Plus className="h-4 w-4 mr-2" />
+                Novo Gift Card
+              </Button>
+            </Link>
+          </div>
+          
+          {giftCards.length === 0 ? (
+            <Card>
+              <CardContent className="pt-6 text-center text-muted-foreground">
+                <Wallet className="h-12 w-12 mx-auto mb-2 opacity-20" />
+                <p>Este cliente não possui Gift Cards</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              {/* Gift Cards Ativos */}
+              <div>
+                <h4 className="text-md font-medium mb-2">Gift Cards Ativos</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {giftCards
+                    .filter(card => card.status === 'active' || card.status === 'ativo')
+                    .map(card => (
+                      <Card key={card.id} className="overflow-hidden">
+                        <CardHeader className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-4">
+                          <div className="flex justify-between items-start">
+                            <CardTitle className="text-lg">Gift Card: {card.code}</CardTitle>
+                            <div className="bg-white/20 text-white text-xs font-medium px-2 py-1 rounded-full">
+                              Ativo
+                            </div>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="p-4">
+                          <div className="space-y-2">
+                            <div className="flex justify-between">
+                              <span className="text-sm text-gray-500">Valor:</span>
+                              <span className="font-medium">
+                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(card.value)}
+                              </span>
+                            </div>
+                            {card.recipient_name && (
+                              <div className="flex justify-between">
+                                <span className="text-sm text-gray-500">Destinatário:</span>
+                                <span>{card.recipient_name}</span>
+                              </div>
+                            )}
+                            <div className="flex justify-between">
+                              <span className="text-sm text-gray-500">Validade:</span>
+                              <span>
+                                {card.expiration_date ? format(new Date(card.expiration_date), 'dd/MM/yyyy') : 'N/A'}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-sm text-gray-500">Data de criação:</span>
+                              <span>
+                                {card.created_at ? format(new Date(card.created_at), 'dd/MM/yyyy') : 
+                                 card.created_date ? format(new Date(card.created_date), 'dd/MM/yyyy') : 'N/A'}
+                              </span>
+                            </div>
+                          </div>
+                          
+                          <div className="mt-4 flex justify-end gap-2">
+                            {card.image_base64 && (
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={() => viewGiftCardImage(card)}
+                              >
+                                <ImageIcon className="h-4 w-4 mr-1" />
+                                Ver
+                              </Button>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                </div>
+                {giftCards.filter(card => card.status === 'active' || card.status === 'ativo').length === 0 && (
+                  <p className="text-center text-muted-foreground py-4">Nenhum Gift Card ativo</p>
+                )}
+              </div>
+              
+              {/* Gift Cards Resgatados */}
+              <div>
+                <h4 className="text-md font-medium mb-2">Gift Cards Resgatados</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {giftCards
+                    .filter(card => card.status === 'used' || card.status === 'usado')
+                    .map(card => (
+                      <Card key={card.id} className="overflow-hidden">
+                        <CardHeader className="bg-gradient-to-r from-gray-500 to-gray-600 text-white p-4">
+                          <div className="flex justify-between items-start">
+                            <CardTitle className="text-lg">Gift Card: {card.code}</CardTitle>
+                            <div className="bg-white/20 text-white text-xs font-medium px-2 py-1 rounded-full">
+                              Resgatado
+                            </div>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="p-4">
+                          <div className="space-y-2">
+                            <div className="flex justify-between">
+                              <span className="text-sm text-gray-500">Valor:</span>
+                              <span className="font-medium">
+                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(card.value)}
+                              </span>
+                            </div>
+                            {card.recipient_name && (
+                              <div className="flex justify-between">
+                                <span className="text-sm text-gray-500">Destinatário:</span>
+                                <span>{card.recipient_name}</span>
+                              </div>
+                            )}
+                            <div className="flex justify-between">
+                              <span className="text-sm text-gray-500">Data de resgate:</span>
+                              <span>
+                                {card.redemption_date ? format(new Date(card.redemption_date), 'dd/MM/yyyy') : 'N/A'}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-sm text-gray-500">Data de criação:</span>
+                              <span>
+                                {card.created_at ? format(new Date(card.created_at), 'dd/MM/yyyy') : 
+                                 card.created_date ? format(new Date(card.created_date), 'dd/MM/yyyy') : 'N/A'}
+                              </span>
+                            </div>
+                          </div>
+                          
+                          <div className="mt-4 flex justify-end gap-2">
+                            {card.image_base64 && (
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={() => viewGiftCardImage(card)}
+                              >
+                                <ImageIcon className="h-4 w-4 mr-1" />
+                                Ver
+                              </Button>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                </div>
+                {giftCards.filter(card => card.status === 'used' || card.status === 'usado').length === 0 && (
+                  <p className="text-center text-muted-foreground py-4">Nenhum Gift Card resgatado</p>
+                )}
+              </div>
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="fotos" className="space-y-6">
@@ -1538,7 +1708,7 @@ export default function ClientDetails() {
                   }
                   const newDependents = [...(client.dependents || [])];
                   newDependents.splice(index, 1);
-                  await Client.update(client.id, {
+                  await Client.update(clientId, {
                     ...client,
                     dependents: newDependents
                   });
@@ -1564,7 +1734,7 @@ export default function ClientDetails() {
                   } else {
                     newDependents.push(data);
                   }
-                  await Client.update(client.id, {
+                  await Client.update(clientId, {
                     ...client,
                     dependents: newDependents
                   });
@@ -1674,6 +1844,74 @@ export default function ClientDetails() {
           </div>
         </TabsContent>
       </Tabs>
+      
+      {/* Diálogo para visualizar a imagem do Gift Card */}
+      <Dialog open={showGiftCardImageDialog} onOpenChange={setShowGiftCardImageDialog}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Visualização do Gift Card</DialogTitle>
+          </DialogHeader>
+          
+          <div className="py-4 flex flex-col items-center">
+            <div className="mb-4">
+              <h3 className="text-lg font-medium">Gift Card: {selectedGiftCard?.code}</h3>
+              <p>Valor: {selectedGiftCard?.value ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedGiftCard.value) : "N/A"}</p>
+              <p>Destinatário: {selectedGiftCard?.recipient_name || "Não especificado"}</p>
+            </div>
+            
+            {selectedGiftCard?.image_base64 ? (
+              <div className="border rounded-lg overflow-hidden shadow-lg max-w-md">
+                <img 
+                  src={selectedGiftCard.image_base64} 
+                  alt="Gift Card" 
+                  className="w-full h-auto"
+                />
+              </div>
+            ) : (
+              <div className="text-center p-8 bg-gray-100 rounded-lg">
+                <ImageIcon className="h-12 w-12 mx-auto text-gray-400 mb-2" />
+                <p className="text-gray-500">Imagem não disponível</p>
+              </div>
+            )}
+          </div>
+          
+          <DialogFooter className="flex flex-wrap gap-2 justify-end">
+            <Button variant="outline" onClick={() => setShowGiftCardImageDialog(false)}>
+              Fechar
+            </Button>
+            
+            {selectedGiftCard?.image_base64 && (
+              <Button 
+                onClick={() => downloadGiftCardImage(selectedGiftCard)} 
+                className="bg-indigo-600 hover:bg-indigo-700"
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Download
+              </Button>
+            )}
+            
+            {selectedGiftCard?.recipient_phone && (
+              <Button 
+                onClick={() => {
+                  setShowGiftCardImageDialog(false);
+                  const message = `Olá${selectedGiftCard.recipient_name ? ' ' + selectedGiftCard.recipient_name : ''}! Você recebeu um Gift Card no valor de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedGiftCard.value)}. Código: ${selectedGiftCard.code}${selectedGiftCard.message ? '\n\nMensagem: ' + selectedGiftCard.message : ''}`;
+                  
+                  // Remover caracteres não numéricos
+                  const phone = selectedGiftCard.recipient_phone.replace(/\D/g, '');
+                  
+                  // Abrir WhatsApp Web com a mensagem
+                  const whatsappUrl = `https://wa.me/55${phone}?text=${encodeURIComponent(message)}`;
+                  window.open(whatsappUrl, '_blank');
+                }} 
+                className="bg-green-600 hover:bg-green-700"
+              >
+                <Send className="mr-2 h-4 w-4" />
+                Enviar por WhatsApp
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
