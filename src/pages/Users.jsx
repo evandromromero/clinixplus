@@ -65,6 +65,8 @@ export default function Users() {
     user: null
   });
   const [showPassword, setShowPassword] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [isAdminUser, setIsAdminUser] = useState(false);
   const itemsPerPage = 10;
 
   const [newUser, setNewUser] = useState({
@@ -78,6 +80,7 @@ export default function Users() {
   useEffect(() => {
     loadUsers();
     loadRoles();
+    loadCurrentUser();
   }, []);
 
   const loadUsers = async () => {
@@ -99,6 +102,29 @@ export default function Users() {
       setRoles(roleData);
     } catch (error) {
       console.error("Erro ao carregar cargos:", error);
+    }
+  };
+
+  const loadCurrentUser = async () => {
+    try {
+      // Obter dados do usuário logado do localStorage
+      const userData = JSON.parse(localStorage.getItem('user'));
+      if (userData) {
+        setCurrentUser(userData);
+        
+        // Carregar cargo do usuário
+        if (userData.roleId) {
+          const roleData = await Role.get(userData.roleId);
+          if (roleData) {
+            // Verificar se o usuário é um administrador geral
+            const isAdmin = roleData.name === "Administrador Geral" || 
+                           (roleData.permissions && roleData.permissions.includes('admin'));
+            setIsAdminUser(isAdmin);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Erro ao carregar dados do usuário:", error);
     }
   };
 
@@ -137,6 +163,22 @@ export default function Users() {
           message: "ID do usuário não encontrado."
         });
         return;
+      }
+
+      // Verificar se o usuário sendo editado tem cargo de Administrador Geral
+      const userToEdit = users.find(u => u.id === selectedUser.id);
+      if (userToEdit) {
+        const userRole = roles.find(r => r.id === userToEdit.roleId);
+        const isUserAdmin = userRole && userRole.name === "Administrador Geral";
+        
+        // Se o usuário sendo editado for Administrador Geral e o usuário atual não for admin
+        if (isUserAdmin && !isAdminUser) {
+          setAlert({
+            type: "error",
+            message: "Apenas usuários com cargo de Administrador Geral podem editar outros Administradores Gerais."
+          });
+          return;
+        }
       }
 
       // Não enviar a senha se estiver vazia (manter a senha atual)
@@ -198,12 +240,38 @@ export default function Users() {
   };
 
   const handleEditUser = (user) => {
+    // Verificar se o usuário a ser editado tem cargo de Administrador Geral
+    const userRole = roles.find(r => r.id === user.roleId);
+    const isUserAdmin = userRole && userRole.name === "Administrador Geral";
+    
+    // Se o usuário a ser editado for Administrador Geral e o usuário atual não for admin
+    if (isUserAdmin && !isAdminUser) {
+      setAlert({
+        type: "error",
+        message: "Apenas usuários com cargo de Administrador Geral podem editar outros Administradores Gerais."
+      });
+      return;
+    }
+    
     setSelectedUser(user);
     setIsEditing(true);
     setShowNewUserDialog(true);
   };
 
   const handleConfirmDeleteUser = (user) => {
+    // Verificar se o usuário a ser excluído tem cargo de Administrador Geral
+    const userRole = roles.find(r => r.id === user.roleId);
+    const isUserAdmin = userRole && userRole.name === "Administrador Geral";
+    
+    // Se o usuário a ser excluído for Administrador Geral e o usuário atual não for admin
+    if (isUserAdmin && !isAdminUser) {
+      setAlert({
+        type: "error",
+        message: "Apenas usuários com cargo de Administrador Geral podem excluir outros Administradores Gerais."
+      });
+      return;
+    }
+    
     setDeleteConfirmation({
       isOpen: true,
       user
