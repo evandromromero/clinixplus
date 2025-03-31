@@ -28,7 +28,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Role } from "@/firebase/entities";
+import { Role, SystemConfig } from "@/api/entities";
 import { 
   Plus, 
   Search, 
@@ -37,7 +37,10 @@ import {
   CheckCircle,
   XCircle,
   Shield,
-  UserCog
+  UserCog,
+  Settings,
+  Eye,
+  EyeOff
 } from "lucide-react";
 import RateLimitHandler from '@/components/RateLimitHandler';
 
@@ -51,6 +54,9 @@ export default function Roles() {
   const [currentUser, setCurrentUser] = useState(null);
   const [userRole, setUserRole] = useState(null);
   const [isAdminUser, setIsAdminUser] = useState(false);
+  // Inicializar com um array vazio para garantir que nenhuma permissão seja mostrada até que as permissões habilitadas sejam carregadas
+  const [enabledPermissions, setEnabledPermissions] = useState([]);
+  const [showPermissionsManagerDialog, setShowPermissionsManagerDialog] = useState(false);
   
   const [newRole, setNewRole] = useState({
     name: "",
@@ -96,6 +102,7 @@ export default function Roles() {
   useEffect(() => {
     loadRoles();
     loadCurrentUser();
+    loadEnabledPermissions();
   }, []);
 
   const loadRoles = async () => {
@@ -151,6 +158,28 @@ export default function Roles() {
       }
     } catch (error) {
       console.error("Erro ao carregar dados do usuário:", error);
+    }
+  };
+
+  const loadEnabledPermissions = async () => {
+    try {
+      // Carregar permissões habilitadas do sistema
+      const enabled = await SystemConfig.get('enabled_permissions');
+      
+      // Se não existir configuração, habilitar todas as permissões por padrão
+      if (!enabled) {
+        const allPermissionIds = availablePermissions.map(p => p.id);
+        await SystemConfig.set('enabled_permissions', allPermissionIds);
+        setEnabledPermissions(allPermissionIds);
+      } else {
+        console.log("Permissões habilitadas carregadas:", enabled);
+        setEnabledPermissions(enabled);
+      }
+    } catch (error) {
+      console.error("Erro ao carregar permissões habilitadas:", error);
+      // Em caso de erro, habilitar todas as permissões por padrão
+      const allPermissionIds = availablePermissions.map(p => p.id);
+      setEnabledPermissions(allPermissionIds);
     }
   };
 
@@ -259,6 +288,42 @@ export default function Roles() {
     });
   };
 
+  const handleSaveEnabledPermissions = async () => {
+    try {
+      console.log("Salvando permissões habilitadas:", enabledPermissions);
+      await SystemConfig.set('enabled_permissions', enabledPermissions);
+      setShowPermissionsManagerDialog(false);
+      
+      // Recarregar as permissões para garantir que as alterações foram aplicadas
+      await loadEnabledPermissions();
+    } catch (error) {
+      console.error("Erro ao salvar permissões habilitadas:", error);
+    }
+  };
+
+  const togglePermissionVisibility = (permissionId) => {
+    setEnabledPermissions(prevPermissions => {
+      if (prevPermissions.includes(permissionId)) {
+        // Se a permissão já está habilitada, desabilite-a
+        return prevPermissions.filter(id => id !== permissionId);
+      } else {
+        // Se a permissão está desabilitada, habilite-a
+        return [...prevPermissions, permissionId];
+      }
+    });
+  };
+
+  const toggleAllPermissions = (enable) => {
+    if (enable) {
+      // Habilitar todas as permissões
+      const allPermissionIds = availablePermissions.map(p => p.id);
+      setEnabledPermissions(allPermissionIds);
+    } else {
+      // Desabilitar todas as permissões
+      setEnabledPermissions([]);
+    }
+  };
+
   const filteredRoles = roles.filter(role => {
     // Verificar se o cargo é "Administrador Geral" e se o usuário não é admin
     if (role.name === "Administrador Geral" && !isAdminUser) {
@@ -277,16 +342,28 @@ export default function Roles() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <h2 className="text-3xl font-bold text-gray-800">Cargos e Permissões</h2>
-        <Button 
-          onClick={() => {
-            resetForm();
-            setShowRoleDialog(true);
-          }}
-          className="bg-purple-600 hover:bg-purple-700"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Novo Cargo
-        </Button>
+        <div className="flex gap-2">
+          {isAdminUser && (
+            <Button 
+              onClick={() => setShowPermissionsManagerDialog(true)}
+              variant="outline"
+              className="flex items-center"
+            >
+              <Settings className="w-4 h-4 mr-2" />
+              Gerenciar Permissões
+            </Button>
+          )}
+          <Button 
+            onClick={() => {
+              resetForm();
+              setShowRoleDialog(true);
+            }}
+            className="bg-purple-600 hover:bg-purple-700"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Novo Cargo
+          </Button>
+        </div>
       </div>
 
       <div className="flex items-center space-x-2">
@@ -524,7 +601,18 @@ export default function Roles() {
               <Card className="border-dashed">
                 <CardContent className="pt-6">
                   <div className="grid md:grid-cols-2 gap-4">
-                    {availablePermissions.filter(p => p.id !== 'admin').map((permission) => (
+                    {availablePermissions
+                      .filter(p => {
+                        // Sempre mostrar a permissão de admin separadamente
+                        if (p.id === 'admin') return false; // Já está sendo mostrada separadamente
+                        
+                        // Para administradores gerais, mostrar todas as permissões
+                        if (isAdminUser) return true;
+                        
+                        // Para usuários normais, mostrar apenas as permissões habilitadas
+                        return enabledPermissions.includes(p.id);
+                      })
+                      .map((permission) => (
                       <div key={permission.id} className="flex items-start space-x-2">
                         <Checkbox 
                           id={`permission-${permission.id}`}
@@ -558,6 +646,75 @@ export default function Roles() {
             </Button>
             <Button onClick={handleCreateRole} className="bg-purple-600 hover:bg-purple-700">
               {isEditing ? "Salvar Alterações" : "Criar Cargo"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog 
+        open={showPermissionsManagerDialog} 
+        onOpenChange={(open) => setShowPermissionsManagerDialog(open)}
+      >
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Gerenciar Permissões</DialogTitle>
+          </DialogHeader>
+          
+          <div className="grid gap-4 py-4">
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <Label className="text-base font-semibold">Permissões Habilitadas</Label>
+                <div className="flex items-center space-x-2">
+                  <Button 
+                    variant="ghost" 
+                    size="icon"
+                    onClick={() => toggleAllPermissions(true)}
+                  >
+                    <CheckCircle className="w-4 h-4 text-green-500" />
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="icon"
+                    onClick={() => toggleAllPermissions(false)}
+                  >
+                    <XCircle className="w-4 h-4 text-red-500" />
+                  </Button>
+                </div>
+              </div>
+              
+              <Card className="border-dashed">
+                <CardContent className="pt-6">
+                  <div className="grid md:grid-cols-2 gap-4">
+                    {availablePermissions.map((permission) => (
+                      <div key={permission.id} className="flex items-start space-x-2">
+                        <Checkbox 
+                          id={`permission-${permission.id}`}
+                          checked={enabledPermissions.includes(permission.id)}
+                          onCheckedChange={() => togglePermissionVisibility(permission.id)}
+                        />
+                        <div>
+                          <Label 
+                            htmlFor={`permission-${permission.id}`}
+                            className="font-medium"
+                          >
+                            {permission.name}
+                          </Label>
+                          <p className="text-xs text-gray-500">{permission.description}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPermissionsManagerDialog(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSaveEnabledPermissions} className="bg-purple-600 hover:bg-purple-700">
+              Salvar Alterações
             </Button>
           </DialogFooter>
         </DialogContent>

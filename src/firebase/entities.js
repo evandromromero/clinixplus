@@ -1482,3 +1482,70 @@ export const Role = {
     }
   }
 };
+
+// Entidade para gerenciar configurações do sistema
+export const SystemConfig = {
+  async get(key) {
+    try {
+      const configsRef = collection(db, 'system_configs');
+      const querySnapshot = await getDocs(configsRef);
+      const configs = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      const config = configs.find(c => c.key === key);
+      return config ? config.value : null;
+    } catch (error) {
+      console.error(`Erro ao obter configuração ${key}:`, error);
+      return null;
+    }
+  },
+  
+  async set(key, value) {
+    try {
+      const configsRef = collection(db, 'system_configs');
+      const q = query(configsRef, where("key", "==", key));
+      const querySnapshot = await getDocs(q);
+      
+      if (!querySnapshot.empty) {
+        // Atualizar configuração existente
+        const docId = querySnapshot.docs[0].id;
+        const docRef = doc(db, 'system_configs', docId);
+        const updatedConfig = { 
+          key, 
+          value, 
+          updated_at: new Date().toISOString() 
+        };
+        await updateDoc(docRef, updatedConfig);
+        return { ...updatedConfig, id: docId };
+      } else {
+        // Criar nova configuração
+        const newConfig = { 
+          key, 
+          value, 
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        const docRef = await addDoc(configsRef, newConfig);
+        return { ...newConfig, id: docRef.id };
+      }
+    } catch (error) {
+      console.error(`Erro ao salvar configuração ${key}:`, error);
+      throw error;
+    }
+  },
+  
+  async list() {
+    try {
+      const configsRef = collection(db, 'system_configs');
+      const querySnapshot = await getDocs(configsRef);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('Erro ao listar configurações:', error);
+      return [];
+    }
+  }
+};
