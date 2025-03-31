@@ -48,6 +48,9 @@ export default function Roles() {
   const [selectedRole, setSelectedRole] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [userRole, setUserRole] = useState(null);
+  const [isAdminUser, setIsAdminUser] = useState(false);
   
   const [newRole, setNewRole] = useState({
     name: "",
@@ -92,6 +95,7 @@ export default function Roles() {
 
   useEffect(() => {
     loadRoles();
+    loadCurrentUser();
   }, []);
 
   const loadRoles = async () => {
@@ -125,15 +129,48 @@ export default function Roles() {
     }
   };
 
+  const loadCurrentUser = async () => {
+    try {
+      // Obter dados do usuário logado do localStorage
+      const userData = JSON.parse(localStorage.getItem('user'));
+      if (userData) {
+        setCurrentUser(userData);
+        
+        // Carregar cargo do usuário
+        if (userData.roleId) {
+          const roleData = await Role.get(userData.roleId);
+          if (roleData) {
+            setUserRole(roleData);
+            
+            // Verificar se o usuário é um administrador geral
+            const isAdmin = roleData.name === "Administrador Geral" || 
+                           (roleData.permissions && roleData.permissions.includes('admin'));
+            setIsAdminUser(isAdmin);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Erro ao carregar dados do usuário:", error);
+    }
+  };
+
   const handleCreateRole = async () => {
     try {
+      // Verificar se o usuário está tentando criar/editar um cargo de Administrador Geral sem ser admin
+      if (newRole.name === "Administrador Geral" && !isAdminUser) {
+        alert("Apenas administradores podem criar ou editar o cargo de Administrador Geral");
+        return;
+      }
+      
       if (isEditing && selectedRole) {
+        // Atualizar cargo existente
         await Role.update(selectedRole.id, newRole);
       } else {
+        // Criar novo cargo
         await Role.create(newRole);
       }
+      
       setShowRoleDialog(false);
-      resetForm();
       loadRoles();
     } catch (error) {
       console.error("Erro ao salvar cargo:", error);
@@ -157,6 +194,21 @@ export default function Roles() {
 
   const handleDeleteRole = async (roleId) => {
     try {
+      // Verificar se o cargo a ser excluído é o Administrador Geral
+      const roleToDelete = roles.find(r => r.id === roleId);
+      
+      // Impedir exclusão do Administrador Geral por não-admins
+      if (roleToDelete && roleToDelete.name === "Administrador Geral" && !isAdminUser) {
+        alert("Apenas administradores podem excluir o cargo de Administrador Geral");
+        return;
+      }
+      
+      // Impedir exclusão de cargos padrão
+      if (roleToDelete && roleToDelete.is_default) {
+        alert("Não é possível excluir um cargo padrão do sistema");
+        return;
+      }
+      
       await Role.delete(roleId);
       loadRoles();
     } catch (error) {
@@ -207,11 +259,19 @@ export default function Roles() {
     });
   };
 
-  const filteredRoles = roles.filter(role =>
-    role.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    role.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    role.department?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredRoles = roles.filter(role => {
+    // Verificar se o cargo é "Administrador Geral" e se o usuário não é admin
+    if (role.name === "Administrador Geral" && !isAdminUser) {
+      return false;
+    }
+    
+    // Filtrar por termo de busca
+    return (
+      role.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      role.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      role.department?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  });
 
   return (
     <div className="space-y-6">

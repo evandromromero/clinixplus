@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import {
@@ -41,60 +41,131 @@ export default function Layout() {
   const [financialMenuOpen, setFinancialMenuOpen] = useState(false);
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
   const [cadastrosMenuOpen, setCadastrosMenuOpen] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [userPermissions, setUserPermissions] = useState([]);
+  const [userRole, setUserRole] = useState(null);
+
+  useEffect(() => {
+    // Carregar dados do usuário logado
+    const loadUserData = async () => {
+      try {
+        const userData = JSON.parse(localStorage.getItem('user'));
+        if (userData) {
+          setCurrentUser(userData);
+          
+          // Carregar cargo do usuário para obter permissões
+          if (userData.roleId) {
+            const { Role } = await import('@/api/entities');
+            const roleData = await Role.get(userData.roleId);
+            if (roleData) {
+              setUserRole(roleData);
+              setUserPermissions(roleData.permissions || []);
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Erro ao carregar dados do usuário:", error);
+      }
+    };
+    
+    loadUserData();
+  }, []);
 
   const menuItems = [
-    { name: "Dashboard", icon: <Home className="w-5 h-5" />, url: "Dashboard" },
-    { name: "Agenda", icon: <CalendarDays className="w-5 h-5" />, url: "Appointments" },
+    { name: "Dashboard", icon: <Home className="w-5 h-5" />, url: "Dashboard", permission: "view_dashboard" },
+    { name: "Agenda", icon: <CalendarDays className="w-5 h-5" />, url: "Appointments", permission: "manage_appointments" },
     {
       name: "Pessoas",
       icon: <Users className="w-5 h-5" />,
+      permission: ["manage_clients", "manage_employees", "manage_suppliers", "manage_users", "view_birthdays", "manage_client_returns"],
       submenu: [
-        { name: "Clientes", url: "Clients" },
-        { name: "Funcionários", url: "Employees" },
-        { name: "Fornecedores", url: "Suppliers" },
-        { name: "Usuários", url: "Users" },
-        { name: "Aniversariantes", url: "Birthdays" },
-        { name: "Retornos", url: "ClientReturns" }
+        { name: "Clientes", url: "Clients", permission: "manage_clients" },
+        { name: "Funcionários", url: "Employees", permission: "manage_employees" },
+        { name: "Fornecedores", url: "Suppliers", permission: "manage_suppliers" },
+        { name: "Usuários", url: "Users", permission: "manage_users" },
+        { name: "Aniversariantes", url: "Birthdays", permission: "view_birthdays" },
+        { name: "Retornos", url: "ClientReturns", permission: "manage_client_returns" }
       ]
     },
     {
       name: "Cadastros",
       icon: <FolderPlus className="w-5 h-5" />,
+      permission: ["manage_services", "manage_roles", "manage_products", "manage_payment_methods", "manage_contract_templates", "manage_anamnese_templates"],
       submenu: [
-        { name: "Serviços", url: "Services" },
-        { name: "Cargos", url: "Roles" },
-        { name: "Produtos", url: "Products" },
-        { name: "Formas de Pagamento", url: "PaymentMethods" },
-        { name: "Modelos de Contrato", url: "contract-templates" },
-        { name: "Modelos de Anamnese", url: "AnamneseTemplates" }
+        { name: "Serviços", url: "Services", permission: "manage_services" },
+        { name: "Cargos", url: "Roles", permission: "manage_roles" },
+        { name: "Produtos", url: "Products", permission: "manage_products" },
+        { name: "Formas de Pagamento", url: "PaymentMethods", permission: "manage_payment_methods" },
+        { name: "Modelos de Contrato", url: "contract-templates", permission: "manage_contract_templates" },
+        { name: "Modelos de Anamnese", url: "AnamneseTemplates", permission: "manage_anamnese_templates" }
       ]
     },
-    { name: "Estoque", icon: <Package className="w-5 h-5" />, url: "Inventory" },
-    { name: "Pacotes", icon: <Package className="w-5 h-5" />, url: "Packages" },
-    { name: "Pacotes de Clientes", icon: <User className="w-5 h-5" />, url: "ClientPackages" },
-    { name: "Assinaturas", icon: <Clock className="w-5 h-5" />, url: "Subscriptions" },
-    { name: "Gift Cards", icon: <Gift className="w-5 h-5" />, url: "GiftCards" },
-    { name: "Vendas", icon: <ShoppingBag className="w-5 h-5" />, url: "SalesRegister" },
+    { name: "Estoque", icon: <Package className="w-5 h-5" />, url: "Inventory", permission: "manage_inventory" },
+    { name: "Pacotes", icon: <Package className="w-5 h-5" />, url: "Packages", permission: "manage_packages" },
+    { name: "Pacotes de Clientes", icon: <User className="w-5 h-5" />, url: "ClientPackages", permission: "manage_client_packages" },
+    { name: "Assinaturas", icon: <Clock className="w-5 h-5" />, url: "Subscriptions", permission: "manage_subscriptions" },
+    { name: "Gift Cards", icon: <Gift className="w-5 h-5" />, url: "GiftCards", permission: "manage_gift_cards" },
+    { name: "Vendas", icon: <ShoppingBag className="w-5 h-5" />, url: "SalesRegister", permission: "manage_sales" },
     {
       name: "Financeiro",
       icon: <DollarSign className="w-5 h-5" />,
+      permission: ["manage_finances", "manage_accounts_payable", "manage_accounts_receivable", "manage_cash_register"],
       submenu: [
-        { name: "Contas a Pagar", url: "AccountsPayable" },
-        { name: "Contas a Receber", url: "AccountsReceivable" },
-        { name: "Caixa", url: "CashRegister" }
+        { name: "Contas a Pagar", url: "AccountsPayable", permission: "manage_accounts_payable" },
+        { name: "Contas a Receber", url: "AccountsReceivable", permission: "manage_accounts_receivable" },
+        { name: "Caixa", url: "CashRegister", permission: "manage_cash_register" }
       ]
     },
-    { name: "Relatórios", icon: <PieChart className="w-5 h-5" />, url: "Reports" },
+    { name: "Relatórios", icon: <PieChart className="w-5 h-5" />, url: "Reports", permission: "view_reports" },
     {
       name: "Configurações",
       icon: <Settings className="w-5 h-5" />,
+      permission: ["manage_settings", "manage_data"],
       submenu: [
-        { name: "Configurações Gerais", url: "Settings" },
-        { name: "Gerenciador de Dados", url: "DataManager" }
+        { name: "Configurações Gerais", url: "Settings", permission: "manage_settings" },
+        { name: "Gerenciador de Dados", url: "DataManager", permission: "manage_data" }
       ]
     },
     { name: "Página Inicial Pública", icon: <Globe className="w-5 h-5" />, url: "Public" }
   ];
+
+  // Função para verificar se o usuário tem permissão para acessar um item de menu
+  const hasPermission = (requiredPermission) => {
+    // Se o usuário for admin, tem acesso a tudo
+    if (userPermissions.includes('admin')) {
+      return true;
+    }
+    
+    // Se não houver permissão definida, permitir acesso
+    if (!requiredPermission) {
+      return true;
+    }
+    
+    // Se a permissão for um array, verificar se o usuário tem pelo menos uma das permissões
+    if (Array.isArray(requiredPermission)) {
+      return requiredPermission.some(perm => userPermissions.includes(perm));
+    }
+    
+    // Verificar permissão simples
+    return userPermissions.includes(requiredPermission);
+  };
+  
+  // Filtrar menus com base nas permissões do usuário
+  const filteredMenuItems = menuItems.filter(item => {
+    // Se o item não tiver submenu, verificar permissão diretamente
+    if (!item.submenu) {
+      return hasPermission(item.permission);
+    }
+    
+    // Se tiver submenu, verificar se pelo menos um item do submenu está disponível
+    const filteredSubmenu = item.submenu.filter(subItem => hasPermission(subItem.permission));
+    return filteredSubmenu.length > 0;
+  });
+  
+  // Função para obter os itens de submenu filtrados
+  const getFilteredSubmenu = (submenu) => {
+    return submenu.filter(subItem => hasPermission(subItem.permission));
+  };
 
   const handleLogout = () => {
     // Limpar token de autenticação
@@ -116,7 +187,7 @@ export default function Layout() {
         </div>
         <nav className="flex-1 overflow-y-auto py-4">
           <ul>
-            {menuItems.map((item, index) => (
+            {filteredMenuItems.map((item, index) => (
               <li key={index} className="mb-1">
                 {item.submenu ? (
                   <div>
@@ -150,7 +221,7 @@ export default function Layout() {
                         ? "block"
                         : "hidden"
                     }`}>
-                      {item.submenu.map((subItem, subIndex) => (
+                      {getFilteredSubmenu(item.submenu).map((subItem, subIndex) => (
                         <li key={subIndex}>
                           <Link
                             to={createPageUrl(subItem.url)}
@@ -213,7 +284,7 @@ export default function Layout() {
         </div>
         <nav className="flex-1 overflow-y-auto py-4">
           <ul>
-            {menuItems.map((item, index) => (
+            {filteredMenuItems.map((item, index) => (
               <li key={index} className="mb-1">
                 {item.submenu ? (
                   <div>
@@ -247,7 +318,7 @@ export default function Layout() {
                         ? "block"
                         : "hidden"
                     }`}>
-                      {item.submenu.map((subItem, subIndex) => (
+                      {getFilteredSubmenu(item.submenu).map((subItem, subIndex) => (
                         <li key={subIndex}>
                           <Link
                             to={createPageUrl(subItem.url)}

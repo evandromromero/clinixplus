@@ -55,9 +55,21 @@ export default function Login() {
       navigate('/dashboard');
     } catch (error) {
       console.error('Erro ao fazer login:', error);
+      
+      // Mensagens de erro mais amigáveis
+      let errorMessage = 'Erro ao fazer login. Verifique suas credenciais.';
+      
+      if (error.message === 'Senha incorreta') {
+        errorMessage = 'Senha incorreta. Por favor, tente novamente.';
+      } else if (error.message === 'Usuário não encontrado') {
+        errorMessage = 'Email não encontrado. Verifique se digitou corretamente.';
+      } else if (error.message === 'Usuário inativo') {
+        errorMessage = 'Sua conta está inativa. Entre em contato com o administrador.';
+      }
+      
       setAlert({
         type: 'error',
-        message: error.message || 'Erro ao fazer login. Verifique suas credenciais.'
+        message: errorMessage
       });
     } finally {
       setIsLoading(false);
