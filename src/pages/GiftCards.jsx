@@ -51,7 +51,9 @@ import {
   ChevronRight,
   Send,
   Printer,
-  Share2
+  Share2,
+  Image,
+  Download
 } from "lucide-react";
 import { format, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -78,6 +80,7 @@ export default function GiftCards() {
   const [clientSearchResults, setClientSearchResults] = useState([]);
   const [companyName, setCompanyName] = useState("");
   const [showReceiptDialog, setShowReceiptDialog] = useState(false);
+  const [showImageDialog, setShowImageDialog] = useState(false);
   
   const giftCardTemplateRef = useRef(null);
   const navigate = useNavigate();
@@ -254,22 +257,90 @@ export default function GiftCards() {
         return;
       }
 
+      // Garantir que estamos buscando diretamente do Firebase
+      console.log("Buscando gift card com código:", redeemCode);
+      
+      // Primeiro, tentar encontrar na lista carregada
       const foundGiftCard = giftCards.find(
-        card => card.code === redeemCode && card.status === "ativo"
+        card => card.code === redeemCode && (card.status === "ativo" || card.status === "active")
       );
 
-      if (!foundGiftCard) {
-        toast.error("Gift card não encontrado ou já utilizado");
-        return;
+      if (foundGiftCard) {
+        console.log("Gift card encontrado na lista local:", foundGiftCard);
+        
+        try {
+          // Atualizar o status do gift card para "usado"/"used"
+          await GiftCard.update(foundGiftCard.id, {
+            status: "used",
+            redemption_date: new Date().toISOString()
+          });
+          
+          console.log("Gift card marcado como usado");
+          
+          setSelectedGiftCard(foundGiftCard);
+          setShowRedeemDialog(false);
+          
+          toast.success("Gift Card resgatado com sucesso!");
+          
+          // Redirecionar para a página de vendas com desconto do gift card
+          console.log("Redirecionando para:", `/sales-register?apply_giftcard=${foundGiftCard.id}`);
+          
+          // Usar window.location para garantir o redirecionamento
+          window.location.href = `/sales-register?apply_giftcard=${foundGiftCard.id}`;
+          return;
+        } catch (updateError) {
+          console.error("Erro ao atualizar status do gift card:", updateError);
+          toast.error("Erro ao atualizar status do gift card");
+          return;
+        }
       }
 
-      setSelectedGiftCard(foundGiftCard);
-      setShowRedeemDialog(false);
+      // Se não encontrar na lista, tentar buscar diretamente do Firebase
+      console.log("Gift card não encontrado na lista local, buscando do Firebase...");
       
-      // Redirecionar para a página de vendas com desconto do gift card
-      navigate(createPageUrl(`SalesRegister?apply_giftcard=${foundGiftCard.id}`));
+      try {
+        // Buscar todos os gift cards do Firebase
+        const allGiftCards = await GiftCard.list();
+        console.log("Gift cards encontrados no Firebase:", allGiftCards.length);
+        
+        // Procurar pelo código específico
+        const firebaseGiftCard = allGiftCards.find(
+          card => card.code === redeemCode && (card.status === "ativo" || card.status === "active")
+        );
+        
+        if (firebaseGiftCard) {
+          console.log("Gift card encontrado no Firebase:", firebaseGiftCard);
+          
+          // Atualizar o status do gift card para "usado"/"used"
+          await GiftCard.update(firebaseGiftCard.id, {
+            status: "used",
+            redemption_date: new Date().toISOString()
+          });
+          
+          console.log("Gift card marcado como usado");
+          
+          setSelectedGiftCard(firebaseGiftCard);
+          setShowRedeemDialog(false);
+          
+          toast.success("Gift Card resgatado com sucesso!");
+          
+          // Redirecionar para a página de vendas com desconto do gift card
+          console.log("Redirecionando para:", `/sales-register?apply_giftcard=${firebaseGiftCard.id}`);
+          
+          // Usar window.location para garantir o redirecionamento
+          window.location.href = `/sales-register?apply_giftcard=${firebaseGiftCard.id}`;
+          return;
+        } else {
+          console.log("Gift card não encontrado no Firebase");
+          toast.error("Gift card não encontrado ou já utilizado");
+        }
+      } catch (fbError) {
+        console.error("Erro ao buscar gift cards do Firebase:", fbError);
+        toast.error("Erro ao buscar gift cards");
+      }
     } catch (error) {
       console.error("Erro ao resgatar gift card:", error);
+      toast.error("Erro ao processar o resgate");
     }
   };
 
@@ -408,6 +479,51 @@ export default function GiftCards() {
     }
   };
 
+  // Função para visualizar a imagem do gift card
+  const viewGiftCardImage = async (card) => {
+    if (!card) return;
+    
+    try {
+      // Se o card já tem a imagem base64, usamos ela diretamente
+      if (card.image_base64) {
+        setSelectedGiftCard(card);
+        setShowImageDialog(true);
+      } else {
+        // Se não, tentamos buscar do Firebase
+        const giftCardData = await GiftCard.get(card.id);
+        if (giftCardData && giftCardData.image_base64) {
+          setSelectedGiftCard(giftCardData);
+          setShowImageDialog(true);
+        } else {
+          toast.error("Imagem do Gift Card não encontrada");
+        }
+      }
+    } catch (error) {
+      console.error("Erro ao visualizar imagem:", error);
+      toast.error("Erro ao carregar imagem do Gift Card");
+    }
+  };
+
+  // Função para fazer download da imagem do gift card
+  const downloadGiftCardImage = (card) => {
+    if (!card || !card.image_base64) return;
+    
+    try {
+      // Criar um link temporário para download
+      const link = document.createElement('a');
+      link.href = card.image_base64;
+      link.download = `GiftCard-${card.code}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      toast.success("Download iniciado");
+    } catch (error) {
+      console.error("Erro ao fazer download da imagem:", error);
+      toast.error("Erro ao fazer download da imagem");
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Toaster />
@@ -519,6 +635,14 @@ export default function GiftCards() {
                           className="text-blue-500"
                         >
                           <Printer className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => viewGiftCardImage(card)}
+                          className="text-purple-500"
+                        >
+                          <Image className="h-4 w-4" />
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -869,6 +993,67 @@ export default function GiftCards() {
             <Button onClick={printReceipt} className="bg-blue-600 hover:bg-blue-700">
               Imprimir Recibo
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Diálogo para visualizar a imagem do Gift Card */}
+      <Dialog open={showImageDialog} onOpenChange={setShowImageDialog}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Visualização do Gift Card</DialogTitle>
+          </DialogHeader>
+          
+          <div className="py-4 flex flex-col items-center">
+            <div className="mb-4">
+              <h3 className="text-lg font-medium">Gift Card: {selectedGiftCard?.code}</h3>
+              <p>Valor: {selectedGiftCard?.value ? formatCurrency(selectedGiftCard.value) : "N/A"}</p>
+              <p>Destinatário: {selectedGiftCard?.recipient_name || "Não especificado"}</p>
+            </div>
+            
+            {selectedGiftCard?.image_base64 ? (
+              <div className="border rounded-lg overflow-hidden shadow-lg max-w-md">
+                <img 
+                  src={selectedGiftCard.image_base64} 
+                  alt="Gift Card" 
+                  className="w-full h-auto"
+                />
+              </div>
+            ) : (
+              <div className="text-center p-8 bg-gray-100 rounded-lg">
+                <Image className="h-12 w-12 mx-auto text-gray-400 mb-2" />
+                <p className="text-gray-500">Imagem não disponível</p>
+              </div>
+            )}
+          </div>
+          
+          <DialogFooter className="flex flex-wrap gap-2 justify-end">
+            <Button variant="outline" onClick={() => setShowImageDialog(false)}>
+              Fechar
+            </Button>
+            
+            {selectedGiftCard?.image_base64 && (
+              <Button 
+                onClick={() => downloadGiftCardImage(selectedGiftCard)} 
+                className="bg-indigo-600 hover:bg-indigo-700"
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Download
+              </Button>
+            )}
+            
+            {selectedGiftCard?.recipient_phone && (
+              <Button 
+                onClick={() => {
+                  setShowImageDialog(false);
+                  sendToWhatsApp(selectedGiftCard);
+                }} 
+                className="bg-green-600 hover:bg-green-700"
+              >
+                <Send className="mr-2 h-4 w-4" />
+                Enviar por WhatsApp
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
