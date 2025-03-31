@@ -223,6 +223,10 @@ export default function GiftCards() {
       
       // Recarregar os gift cards
       await loadData();
+      
+      // Redirecionar para a página de vendas com o ID do gift card
+      const salesUrl = createPageUrl('SalesRegister', { gift_card: giftCardData.id });
+      navigate(salesUrl);
     } catch (error) {
       console.error("Erro ao criar gift card:", error);
       toast.error("Erro ao criar gift card");
@@ -928,7 +932,7 @@ export default function GiftCards() {
           <div className="py-4">
             <p>
               Tem certeza que deseja cancelar o gift card com código{" "}
-              <span className="font-mono font-medium">{selectedGiftCard?.code}</span>?
+              <span className="font-mono">{selectedGiftCard?.code}</span>?
             </p>
             <p className="text-sm text-gray-500 mt-2">
               Esta ação não pode ser desfeita. O gift card ficará inutilizável.
