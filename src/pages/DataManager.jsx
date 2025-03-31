@@ -15,38 +15,55 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Database, Upload, Trash2, AlertTriangle, RefreshCw, Info, Clock } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Database, Upload, Trash2, AlertTriangle, RefreshCw, Info, Clock, Filter, CheckCircle, Search } from 'lucide-react';
 import RateLimitHandler from '../components/RateLimitHandler';
 
 // Importar todas as entidades do Firebase ao invés do Base44
-import { 
+import {
   Client,
   Employee,
   Service,
   Product,
   Package,
-  Sale,
-  Supplier,
   ClientPackage,
-  SubscriptionPlan,
   ClientSubscription,
-  Role,
-  PaymentMethod,
+  SubscriptionPlan,
   GiftCard,
-  CompanySettings,
-  Testimonial,
-  SlideShowImage,
   Appointment,
+  Sale,
+  PaymentMethod,
+  Role,
   FinancialTransaction,
+  Supplier,
   Inventory,
+  SlideShowImage,
+  Testimonial,
+  CompanySettings,
   ClientPackageSession,
   Receipt,
   UnfinishedSale,
-  ClientAuth
+  ClientAuth,
+  PendingService,
+  Contract,
+  ContractTemplate,
+  AnamneseTemplate
 } from '@/firebase/entities';
 
 export default function DataManager() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showSelectiveDeleteDialog, setShowSelectiveDeleteDialog] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
   const [progress, setProgress] = useState({ current: 0, total: 0, entity: '' });
@@ -56,32 +73,61 @@ export default function DataManager() {
   const [currentEntity, setCurrentEntity] = useState('');
   const [deleteProgress, setDeleteProgress] = useState({ current: 0, total: 0 });
   const [entityToDelete, setEntityToDelete] = useState('');
+  const [selectedItems, setSelectedItems] = useState({});
+  const [activeTab, setActiveTab] = useState('clients');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectAll, setSelectAll] = useState(false);
 
-  // Lista ordenada de entidades para garantir a exclusão segura (dependências primeiro)
+  // Definir as entidades disponíveis para exclusão
   const entities = [
-    { name: 'Receipt', entity: Receipt, label: 'Recibos' },
-    { name: 'ClientPackageSession', entity: ClientPackageSession, label: 'Sessões de Pacotes' },
-    { name: 'Appointment', entity: Appointment, label: 'Agendamentos' },
-    { name: 'FinancialTransaction', entity: FinancialTransaction, label: 'Transações Financeiras' },
-    { name: 'Inventory', entity: Inventory, label: 'Movimentações de Estoque' },
-    { name: 'Sale', entity: Sale, label: 'Vendas' },
-    { name: 'UnfinishedSale', entity: UnfinishedSale, label: 'Vendas não Finalizadas' },
-    { name: 'ClientAuth', entity: ClientAuth, label: 'Autenticação de Clientes' },
-    { name: 'ClientPackage', entity: ClientPackage, label: 'Pacotes de Clientes' },
-    { name: 'ClientSubscription', entity: ClientSubscription, label: 'Assinaturas' },
-    { name: 'GiftCard', entity: GiftCard, label: 'Gift Cards' },
-    { name: 'Client', entity: Client, label: 'Clientes' },
-    { name: 'Employee', entity: Employee, label: 'Funcionários' },
-    { name: 'Service', entity: Service, label: 'Serviços' },
-    { name: 'Product', entity: Product, label: 'Produtos' },
-    { name: 'Package', entity: Package, label: 'Pacotes' },
-    { name: 'Supplier', entity: Supplier, label: 'Fornecedores' },
-    { name: 'SubscriptionPlan', entity: SubscriptionPlan, label: 'Planos de Assinatura' },
-    { name: 'Role', entity: Role, label: 'Cargos' },
-    { name: 'PaymentMethod', entity: PaymentMethod, label: 'Formas de Pagamento' },
-    { name: 'SlideShowImage', entity: SlideShowImage, label: 'Slides do Site' },
-    { name: 'Testimonial', entity: Testimonial, label: 'Depoimentos' },
-    { name: 'CompanySettings', entity: CompanySettings, label: 'Configurações da Empresa' }
+    { entity: Client, label: 'Clientes', name: 'clients', id: 'clients' },
+    { entity: Employee, label: 'Funcionários', name: 'employees', id: 'employees' },
+    { entity: Service, label: 'Serviços', name: 'services', id: 'services' },
+    { entity: Product, label: 'Produtos', name: 'products', id: 'products' },
+    { entity: Package, label: 'Pacotes', name: 'packages', id: 'packages' },
+    { entity: ClientPackage, label: 'Pacotes de Clientes', name: 'client_packages', id: 'client_packages' },
+    { entity: ClientSubscription, label: 'Assinaturas', name: 'client_subscriptions', id: 'client_subscriptions' },
+    { entity: SubscriptionPlan, label: 'Planos de Assinatura', name: 'subscription_plans', id: 'subscription_plans' },
+    { entity: GiftCard, label: 'Gift Cards', name: 'gift_cards', id: 'gift_cards' },
+    { entity: Appointment, label: 'Agendamentos', name: 'appointments', id: 'appointments' },
+    { entity: Sale, label: 'Vendas', name: 'sales', id: 'sales' },
+    { entity: UnfinishedSale, label: 'Vendas não Finalizadas', name: 'unfinished_sales', id: 'unfinished_sales' },
+    { entity: PaymentMethod, label: 'Métodos de Pagamento', name: 'payment_methods', id: 'payment_methods' },
+    { entity: FinancialTransaction, label: 'Transações Financeiras', name: 'financial_transactions', id: 'financial_transactions' },
+    { entity: PendingService, label: 'Serviços Pendentes', name: 'pending_services', id: 'pending_services' },
+    { entity: Role, label: 'Funções', name: 'roles', id: 'roles' },
+    { entity: Supplier, label: 'Fornecedores', name: 'suppliers', id: 'suppliers' },
+    { entity: Testimonial, label: 'Depoimentos', name: 'testimonials', id: 'testimonials' },
+    { entity: Contract, label: 'Contratos', name: 'contracts', id: 'contracts' },
+    { entity: ContractTemplate, label: 'Modelos de Contratos', name: 'contract_templates', id: 'contract_templates' },
+    { entity: AnamneseTemplate, label: 'Modelos de Anamnese', name: 'anamnese_templates', id: 'anamnese_templates' },
+    { entity: CompanySettings, label: 'Configurações da Empresa', name: 'company_settings', id: 'company_settings' },
+  ];
+
+  // Definir as abas disponíveis
+  const tabs = [
+    { id: 'clients', label: 'Clientes', entity: Client },
+    { id: 'employees', label: 'Funcionários', entity: Employee },
+    { id: 'services', label: 'Serviços', entity: Service },
+    { id: 'products', label: 'Produtos', entity: Product },
+    { id: 'packages', label: 'Pacotes', entity: Package },
+    { id: 'client_packages', label: 'Pacotes de Clientes', entity: ClientPackage },
+    { id: 'client_subscriptions', label: 'Assinaturas', entity: ClientSubscription },
+    { id: 'subscription_plans', label: 'Planos de Assinatura', entity: SubscriptionPlan },
+    { id: 'gift_cards', label: 'Gift Cards', entity: GiftCard },
+    { id: 'appointments', label: 'Agendamentos', entity: Appointment },
+    { id: 'sales', label: 'Vendas', entity: Sale },
+    { id: 'unfinished_sales', label: 'Vendas não Finalizadas', entity: UnfinishedSale },
+    { id: 'payment_methods', label: 'Métodos de Pagamento', entity: PaymentMethod },
+    { id: 'financial_transactions', label: 'Transações Financeiras', entity: FinancialTransaction },
+    { id: 'pending_services', label: 'Serviços Pendentes', entity: PendingService },
+    { id: 'roles', label: 'Funções', entity: Role },
+    { id: 'suppliers', label: 'Fornecedores', entity: Supplier },
+    { id: 'testimonials', label: 'Depoimentos', entity: Testimonial },
+    { id: 'contracts', label: 'Contratos', entity: Contract },
+    { id: 'contract_templates', label: 'Modelos de Contratos', entity: ContractTemplate },
+    { id: 'anamnese_templates', label: 'Modelos de Anamnese', entity: AnamneseTemplate },
+    { id: 'company_settings', label: 'Configurações da Empresa', entity: CompanySettings },
   ];
 
   // Função para criar um atraso
@@ -195,6 +241,7 @@ export default function DataManager() {
       if (!data || !Array.isArray(data) || data.length === 0) {
         setMessage({type: 'info', text: `Não foram encontrados registros para ${entityName}.`});
         setEntityData([]);
+        setSelectedItems({});
         return;
       }
       
@@ -215,6 +262,14 @@ export default function DataManager() {
       setCurrentEntity(entityName);
       setRateLimitError(null);
       
+      // Inicializar selectedItems com todos os itens desmarcados
+      const initialSelectedItems = {};
+      data.forEach(item => {
+        initialSelectedItems[item.id] = false;
+      });
+      setSelectedItems(initialSelectedItems);
+      setSelectAll(false);
+      
     } catch (error) {
       console.error(`Erro ao carregar ${entityName}:`, error);
       handleApiError(error, `Erro ao carregar dados de ${entityName}`);
@@ -223,135 +278,101 @@ export default function DataManager() {
     }
   };
 
-  // Atualizar também a função que deleta dados para incluir tratamento de erros
-  const handleDeleteEntityData = async (entityName) => {
+  // Função para carregar dados da entidade quando a aba mudar
+  useEffect(() => {
+    const entitiesInTab = entities.filter(e => e.id === activeTab);
+    if (entitiesInTab.length > 0) {
+      displayEntityData(entitiesInTab[0].entity, entitiesInTab[0].name);
+    }
+  }, [activeTab]);
+
+  // Função para alternar a seleção de todos os itens
+  const toggleSelectAll = (checked) => {
+    setSelectAll(checked);
+    const newSelectedItems = {};
+    entityData.forEach(item => {
+      newSelectedItems[item.id] = checked;
+    });
+    setSelectedItems(newSelectedItems);
+  };
+
+  // Função para alternar a seleção de um item específico
+  const toggleSelectItem = (id, checked) => {
+    setSelectedItems(prev => ({
+      ...prev,
+      [id]: checked
+    }));
+    
+    // Verificar se todos os itens estão selecionados
+    const allSelected = Object.values({
+      ...selectedItems,
+      [id]: checked
+    }).every(value => value === true);
+    
+    setSelectAll(allSelected);
+  };
+
+  // Função para excluir os itens selecionados
+  const handleDeleteSelectedItems = async () => {
     try {
-      setDeleteProgress({current: 0, total: 0});
+      const selectedIds = Object.entries(selectedItems)
+        .filter(([_, selected]) => selected)
+        .map(([id]) => id);
+      
+      if (selectedIds.length === 0) {
+        setMessage({type: 'info', text: 'Nenhum item selecionado para exclusão.'});
+        return;
+      }
+      
       setLoading(true);
-      setMessage({type: 'info', text: `Iniciando exclusão de dados de ${getEntityLabel(entityName)}...`});
+      setDeleteProgress({current: 0, total: selectedIds.length});
+      setMessage({type: 'info', text: `Excluindo ${selectedIds.length} itens de ${getEntityLabel(currentEntity)}...`});
       
-      const entityApi = getEntityApiByName(entityName);
-      let allRecords = [];
+      const entityApi = getEntityApiByName(currentEntity);
       
-      try {
-        // Obter todos os registros com retry em caso de rate limit
-        allRecords = await fetchWithRetry(() => entityApi.list());
-      } catch (error) {
-        console.error(`Erro ao obter registros de ${entityName}:`, error);
-        throw new Error(`Falha ao listar registros de ${entityName}: ${error.message}`);
-      }
-      
-      if (!allRecords || !Array.isArray(allRecords)) {
-        throw new Error(`Não foi possível obter a lista de registros de ${entityName}`);
-      }
-      
-      setDeleteProgress({current: 0, total: allRecords.length});
-      
-      // Excluir cada registro com intervalos e retries
-      for (let i = 0; i < allRecords.length; i++) {
+      for (let i = 0; i < selectedIds.length; i++) {
         try {
-          const record = allRecords[i];
-          await fetchWithRetry(() => entityApi.delete(record.id));
+          const id = selectedIds[i];
+          await fetchWithRetry(() => entityApi.delete(id));
           
           // Atualizar progresso
-          setDeleteProgress({current: i + 1, total: allRecords.length});
+          setDeleteProgress({current: i + 1, total: selectedIds.length});
           
           // Pausa entre requisições para evitar rate limit
-          if (i < allRecords.length - 1) {
+          if (i < selectedIds.length - 1) {
             await delay(delayBetweenRequests);
           }
         } catch (error) {
-          console.error(`Erro ao excluir registro ${i+1}/${allRecords.length} de ${entityName}:`, error);
-          // Continuar com o próximo registro mesmo após erro
+          console.error(`Erro ao excluir item ${i+1}/${selectedIds.length} de ${currentEntity}:`, error);
+          // Continuar com o próximo item mesmo após erro
         }
       }
       
-      setMessage({type: 'success', text: `Todos os dados de ${getEntityLabel(entityName)} foram excluídos com sucesso!`});
-      setShowDeleteDialog(false);
-      setEntityToDelete('');
+      setMessage({type: 'success', text: `${selectedIds.length} itens de ${getEntityLabel(currentEntity)} foram excluídos com sucesso!`});
+      setShowSelectiveDeleteDialog(false);
+      
+      // Recarregar os dados após a exclusão
+      await displayEntityData(entityApi, currentEntity);
+      
+    } catch (error) {
+      console.error(`Erro ao excluir itens de ${currentEntity}:`, error);
+      setMessage({type: 'error', text: `Erro ao excluir itens de ${getEntityLabel(currentEntity)}: ${error.message}`});
+    } finally {
+      setLoading(false);
       setDeleteProgress({current: 0, total: 0});
-      
-    } catch (error) {
-      console.error(`Erro ao excluir dados de ${entityName}:`, error);
-      setMessage({type: 'error', text: `Erro ao deletar dados de ${getEntityLabel(entityName)}: ${error.message}`});
-    } finally {
-      setLoading(false);
     }
   };
 
-  const handleDeleteAllData = async () => {
-    try {
-      setLoading(true);
-      setMessage(null);
-      setRateLimitError(null);
-      setProgress({ current: 0, total: entities.length, entity: '' });
+  // Filtrar os dados com base no termo de pesquisa
+  const filteredData = searchTerm
+    ? entityData.filter(item => 
+        Object.values(item).some(value => 
+          String(value).toLowerCase().includes(searchTerm.toLowerCase())
+        )
+      )
+    : entityData;
 
-      for (let i = 0; i < entities.length; i++) {
-        const { entity, label, name } = entities[i];
-        
-        setProgress({ 
-          current: i + 1, 
-          total: entities.length, 
-          entity: label 
-        });
-        
-        try {
-          const items = await fetchWithRetry(async () => {
-            await delay(delayBetweenRequests);
-            return await entity.list();
-          });
-          
-          console.log(`Encontrados ${items.length} registros de ${label} para exclusão`);
-          
-          for (const item of items) {
-            try {
-              await fetchWithRetry(async () => {
-                await delay(delayBetweenRequests);
-                return await entity.delete(item.id);
-              });
-              
-              await delay(delayBetweenRequests);
-            } catch (itemError) {
-              console.warn(`Erro ao deletar item de ${name}:`, itemError);
-            }
-          }
-          
-          console.log(`Todos os dados de ${label} foram deletados.`);
-        } catch (entityError) {
-          console.error(`Erro ao deletar dados de ${label}:`, entityError);
-          
-          if (entityError.message?.includes('429') || 
-              entityError.message?.includes('Rate limit') || 
-              entityError.toString().includes('429')) {
-            
-            setRateLimitError(entityError);
-            await delay(10000);
-            setDelayBetweenRequests(prev => prev * 2);
-            i--;
-          }
-        }
-      }
-
-      setMessage({ type: 'success', text: 'Todos os dados foram deletados com sucesso!' });
-      setShowDeleteDialog(false);
-    } catch (error) {
-      console.error('Erro ao deletar dados:', error);
-      setMessage({ 
-        type: 'error', 
-        text: 'Erro ao deletar dados: ' + (error.message || 'Erro desconhecido') 
-      });
-      
-      if (error.message?.includes('429') || 
-          error.message?.includes('Rate limit') || 
-          error.toString().includes('429')) {
-        setRateLimitError(error);
-      }
-    } finally {
-      setLoading(false);
-      setProgress({ current: 0, total: 0, entity: '' });
-    }
-  };
-
+  // Adicionar de volta a função handleAddSampleData que foi removida
   const handleAddSampleData = async () => {
     try {
       setLoading(true);
@@ -471,6 +492,80 @@ export default function DataManager() {
     }
   };
 
+  // Adicionar de volta a função handleDeleteAllData que foi removida
+  const handleDeleteAllData = async () => {
+    try {
+      setLoading(true);
+      setMessage(null);
+      setRateLimitError(null);
+      setProgress({ current: 0, total: entities.length, entity: '' });
+
+      for (let i = 0; i < entities.length; i++) {
+        const { entity, label, name } = entities[i];
+        
+        setProgress({ 
+          current: i + 1, 
+          total: entities.length, 
+          entity: label 
+        });
+        
+        try {
+          const items = await fetchWithRetry(async () => {
+            await delay(delayBetweenRequests);
+            return await entity.list();
+          });
+          
+          console.log(`Encontrados ${items.length} registros de ${label} para exclusão`);
+          
+          for (const item of items) {
+            try {
+              await fetchWithRetry(async () => {
+                await delay(delayBetweenRequests);
+                return await entity.delete(item.id);
+              });
+              
+              await delay(delayBetweenRequests);
+            } catch (itemError) {
+              console.warn(`Erro ao deletar item de ${name}:`, itemError);
+            }
+          }
+          
+          console.log(`Todos os dados de ${label} foram deletados.`);
+        } catch (entityError) {
+          console.error(`Erro ao deletar dados de ${label}:`, entityError);
+          
+          if (entityError.message?.includes('429') || 
+              entityError.message?.includes('Rate limit') || 
+              entityError.toString().includes('429')) {
+            
+            setRateLimitError(entityError);
+            await delay(10000);
+            setDelayBetweenRequests(prev => prev * 2);
+            i--;
+          }
+        }
+      }
+
+      setMessage({ type: 'success', text: 'Todos os dados foram deletados com sucesso!' });
+      setShowDeleteDialog(false);
+    } catch (error) {
+      console.error('Erro ao deletar dados:', error);
+      setMessage({ 
+        type: 'error', 
+        text: 'Erro ao deletar dados: ' + (error.message || 'Erro desconhecido') 
+      });
+      
+      if (error.message?.includes('429') || 
+          error.message?.includes('Rate limit') || 
+          error.toString().includes('429')) {
+        setRateLimitError(error);
+      }
+    } finally {
+      setLoading(false);
+      setProgress({ current: 0, total: 0, entity: '' });
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -498,7 +593,7 @@ export default function DataManager() {
         </div>
       )}
 
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-6 md:grid-cols-3">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -521,6 +616,29 @@ export default function DataManager() {
                   Adicionando...
                 </>
               ) : "Adicionar Dados de Exemplo"}
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-amber-600">
+              <Filter className="h-5 w-5" />
+              Excluir Dados Seletivamente
+            </CardTitle>
+            <CardDescription>
+              Selecione quais dados deseja excluir do Firebase
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button 
+              variant="outline"
+              onClick={() => setShowSelectiveDeleteDialog(true)}
+              disabled={loading}
+              className="w-full border-amber-300 text-amber-700 hover:bg-amber-50"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Excluir Dados Seletivamente
             </Button>
           </CardContent>
         </Card>
@@ -565,6 +683,203 @@ export default function DataManager() {
         </Card>
       )}
 
+      {/* Diálogo para exclusão seletiva de dados */}
+      <Dialog open={showSelectiveDeleteDialog} onOpenChange={setShowSelectiveDeleteDialog}>
+        <DialogContent className="max-w-4xl max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-600">
+              <Filter className="h-5 w-5" />
+              Exclusão Seletiva de Dados
+            </DialogTitle>
+            <DialogDescription>
+              Selecione os dados que deseja excluir do Firebase. Esta ação não pode ser desfeita.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="mt-4">
+            <Tabs defaultValue="clients" value={activeTab} onValueChange={setActiveTab}>
+              <TabsList className="grid grid-cols-4 gap-2 mb-4 overflow-auto max-h-60">
+                {tabs.map((tab) => (
+                  <TabsTrigger key={tab.id} value={tab.id}>{tab.label}</TabsTrigger>
+                ))}
+              </TabsList>
+              
+              {tabs.map((tab, index) => (
+                <TabsContent key={tab.id} value={tab.id} className="space-y-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center space-x-2">
+                      <h3 className="text-lg font-medium">
+                        {entities.find(e => e.id === tab.id)?.label || tab.label}
+                      </h3>
+                      {loading && <RefreshCw className="h-4 w-4 animate-spin ml-2" />}
+                    </div>
+                    
+                    <div className="flex items-center space-x-4">
+                      <div className="relative">
+                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
+                        <input
+                          type="text"
+                          placeholder="Pesquisar..."
+                          className="pl-8 h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors"
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                      </div>
+                      
+                      <div className="flex items-center space-x-2">
+                        <Checkbox 
+                          id="select-all" 
+                          checked={selectAll}
+                          onCheckedChange={toggleSelectAll}
+                        />
+                        <Label htmlFor="select-all">Selecionar todos</Label>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <ScrollArea className="h-[400px] rounded-md border">
+                    {filteredData.length > 0 ? (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-[50px]">Selecionar</TableHead>
+                            <TableHead>ID</TableHead>
+                            <TableHead>Nome/Descrição</TableHead>
+                            <TableHead>Detalhes</TableHead>
+                            <TableHead>Data de Criação</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredData.map((item, index) => {
+                            // Garantir que cada item tenha uma chave única
+                            const uniqueKey = item.id || `item-${index}`;
+                            return (
+                              <TableRow key={uniqueKey}>
+                                <TableCell>
+                                  <Checkbox 
+                                    checked={selectedItems[item.id] || false}
+                                    onCheckedChange={(checked) => toggleSelectItem(item.id, checked)}
+                                  />
+                                </TableCell>
+                                <TableCell className="font-mono text-xs">{item.id}</TableCell>
+                                <TableCell>
+                                  {item.name || item.description || item.title || 'N/A'}
+                                </TableCell>
+                                <TableCell>
+                                  {currentEntity === 'Client' && item.email}
+                                  {currentEntity === 'Employee' && item.role}
+                                  {currentEntity === 'Service' && `${item.price || 'N/A'}`}
+                                  {currentEntity === 'Product' && `${item.price || 'N/A'}`}
+                                  {currentEntity === 'ClientSubscription' && `${item.status || 'N/A'}`}
+                                  {currentEntity === 'GiftCard' && `${item.value || 'N/A'}`}
+                                  {currentEntity === 'Appointment' && `${item.date || 'N/A'}`}
+                                  {currentEntity === 'Sale' && `${item.total || 'N/A'}`}
+                                  {currentEntity === 'SubscriptionPlan' && `${item.price || 'N/A'}`}
+                                  {currentEntity === 'PaymentMethod' && `${item.type || 'N/A'}`}
+                                  {currentEntity === 'FinancialTransaction' && `${item.amount || 'N/A'}`}
+                                  {currentEntity === 'PendingService' && `${item.service_name || 'N/A'}`}
+                                  {currentEntity === 'Role' && `${item.department || 'N/A'}`}
+                                  {currentEntity === 'Supplier' && `${item.contact || 'N/A'}`}
+                                  {currentEntity === 'Testimonial' && `${item.client_name || 'N/A'}`}
+                                  {currentEntity === 'Contract' && `${item.status || 'N/A'}`}
+                                  {currentEntity === 'ContractTemplate' && `${item.type || 'N/A'}`}
+                                  {currentEntity === 'AnamneseTemplate' && `${item.type || 'N/A'}`}
+                                  {currentEntity === 'CompanySettings' && `${item.key || 'N/A'}`}
+                                </TableCell>
+                                <TableCell>{item.created_date || item.created_at || 'N/A'}</TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+                        <Info className="h-10 w-10 text-gray-400 mb-2" />
+                        <p className="text-gray-500">
+                          {loading 
+                            ? 'Carregando dados...' 
+                            : 'Nenhum dado encontrado para esta categoria.'}
+                        </p>
+                      </div>
+                    )}
+                  </ScrollArea>
+                  
+                  <div className="flex justify-between items-center">
+                    <div className="text-sm text-gray-500">
+                      {Object.values(selectedItems).filter(Boolean).length} itens selecionados 
+                      de {filteredData.length} exibidos (total: {entityData.length})
+                    </div>
+                    
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        const entityObj = entities.find(e => e.id === tab.id);
+                        if (entityObj) {
+                          displayEntityData(entityObj.entity, entityObj.name);
+                        }
+                      }}
+                      disabled={loading}
+                      size="sm"
+                    >
+                      <RefreshCw className="h-3.5 w-3.5 mr-1" />
+                      Atualizar Lista
+                    </Button>
+                  </div>
+                </TabsContent>
+              ))}
+            </Tabs>
+          </div>
+          
+          {loading && deleteProgress.total > 0 && (
+            <div className="my-4">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-sm font-medium">
+                  Excluindo itens selecionados...
+                </span>
+                <span className="text-sm text-gray-500">
+                  {deleteProgress.current}/{deleteProgress.total}
+                </span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2.5">
+                <div 
+                  className="bg-amber-500 h-2.5 rounded-full" 
+                  style={{ width: `${(deleteProgress.current / deleteProgress.total) * 100}%` }}
+                ></div>
+              </div>
+            </div>
+          )}
+          
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setShowSelectiveDeleteDialog(false)}
+              disabled={loading}
+            >
+              Cancelar
+            </Button>
+            <Button 
+              variant="default"
+              className="bg-amber-600 hover:bg-amber-700"
+              onClick={handleDeleteSelectedItems}
+              disabled={loading || Object.values(selectedItems).filter(Boolean).length === 0}
+            >
+              {loading ? (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  Excluindo...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Excluir Itens Selecionados
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Diálogo para exclusão de todos os dados */}
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <DialogContent>
           <DialogHeader>
@@ -602,30 +917,15 @@ export default function DataManager() {
             </div>
           )}
           
-          <div className="bg-amber-50 p-3 rounded-md border border-amber-200 flex items-start gap-2">
-            <Info className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
-            <div className="text-sm text-amber-800">
-              <p>Esta operação irá excluir:</p>
-              <ul className="list-disc ml-5 mt-1 space-y-1">
-                <li>Todos os clientes e seus dados</li>
-                <li>Todos os agendamentos</li>
-                <li>Todas as transações financeiras e registros de caixa</li>
-                <li>Todos os pacotes e assinaturas</li>
-                <li>Todos os produtos, serviços e vendas</li>
-                <li>Todas as configurações do sistema</li>
-              </ul>
-            </div>
-          </div>
-          
           <DialogFooter>
-            <Button
-              variant="outline"
+            <Button 
+              variant="outline" 
               onClick={() => setShowDeleteDialog(false)}
               disabled={loading}
             >
               Cancelar
             </Button>
-            <Button
+            <Button 
               variant="destructive"
               onClick={handleDeleteAllData}
               disabled={loading}
@@ -633,13 +933,20 @@ export default function DataManager() {
               {loading ? (
                 <>
                   <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                  Deletando...
+                  Excluindo...
                 </>
-              ) : "Sim, Deletar Tudo"}
+              ) : (
+                <>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Excluir Todos os Dados
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <RateLimitHandler />
     </div>
   );
 }
