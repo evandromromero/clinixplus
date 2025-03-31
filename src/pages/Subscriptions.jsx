@@ -26,7 +26,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, UserPlus, Edit, Trash2, Check, X, Clock, AlertTriangle, CreditCard, RefreshCw } from "lucide-react";
+import { Search, Plus, UserPlus, Edit, Trash2, Check, X, Clock, AlertTriangle, CreditCard, RefreshCw, Send, Receipt, ExternalLink } from "lucide-react";
 import { format, addMonths, addDays, isBefore } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { SubscriptionPlan, ClientSubscription, Client, Service, Product, FinancialTransaction, CompanySettings } from "@/firebase/entities";
@@ -47,11 +47,13 @@ export default function Subscriptions() {
   const [showPlanDialog, setShowPlanDialog] = useState(false);
   const [showSubscriptionDialog, setShowSubscriptionDialog] = useState(false);
   const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false);
+  const [showPaymentHistoryDialog, setShowPaymentHistoryDialog] = useState(false);
   
   // Estado para o item sendo editado/criado/excluído
   const [currentPlan, setCurrentPlan] = useState(null);
   const [currentSubscription, setCurrentSubscription] = useState(null);
   const [itemToDelete, setItemToDelete] = useState(null);
+  const [selectedSubscription, setSelectedSubscription] = useState(null);
   
   // Estados para o formulário de plano
   const [planForm, setPlanForm] = useState({
@@ -1086,6 +1088,76 @@ export default function Subscriptions() {
     return totalPrice * (1 - (discount / 100));
   };
   
+  // Função para enviar link de pagamento para o cliente
+  const sendPaymentLink = async (subscription) => {
+    try {
+      if (!subscription) return;
+      
+      // Verificar se existe um link de pagamento
+      if (!subscription.payment_link) {
+        toast({
+          title: "Link de pagamento não disponível",
+          description: "Esta assinatura não possui um link de pagamento configurado.",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      // Buscar o cliente
+      const client = clients.find(c => c.id === subscription.client_id);
+      if (!client) {
+        toast({
+          title: "Cliente não encontrado",
+          description: "Não foi possível encontrar o cliente associado a esta assinatura.",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      // Construir a mensagem
+      const planName = getPlanName(subscription.plan_id);
+      const message = `Olá ${client.name}, segue o link para pagamento da sua assinatura "${planName}": ${subscription.payment_link}`;
+      
+      // Verificar se o cliente tem telefone
+      if (!client.phone) {
+        // Se não tiver telefone, copiar o link para a área de transferência
+        navigator.clipboard.writeText(message);
+        toast({
+          title: "Mensagem copiada",
+          description: "O cliente não possui telefone cadastrado. A mensagem foi copiada para a área de transferência.",
+          variant: "default"
+        });
+        return;
+      }
+      
+      // Remover caracteres não numéricos do telefone
+      const phone = client.phone.replace(/\D/g, '');
+      
+      // Abrir WhatsApp Web com a mensagem
+      const whatsappUrl = `https://wa.me/55${phone}?text=${encodeURIComponent(message)}`;
+      window.open(whatsappUrl, '_blank');
+      
+      toast({
+        title: "WhatsApp aberto",
+        description: "O link de pagamento foi enviado para o WhatsApp do cliente.",
+        variant: "success"
+      });
+    } catch (error) {
+      console.error("Erro ao enviar link de pagamento:", error);
+      toast({
+        title: "Erro ao enviar link",
+        description: "Não foi possível enviar o link de pagamento.",
+        variant: "destructive"
+      });
+    }
+  };
+  
+  // Função para abrir o modal de histórico de pagamentos
+  const openPaymentHistory = (subscription) => {
+    setSelectedSubscription(subscription);
+    setShowPaymentHistoryDialog(true);
+  };
+  
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -1301,71 +1373,97 @@ export default function Subscriptions() {
                         {getStatusBadge(subscription.status)}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="text-blue-500"
-                          onClick={() => {
-                            setCurrentSubscription(subscription);
-                            setSubscriptionForm({
-                              ...subscription,
-                              client_id: subscription.client_id,
-                              plan_id: subscription.plan_id,
-                              start_date: subscription.start_date,
-                              billing_cycle: subscription.billing_cycle,
-                              payment_method: subscription.payment_method,
-                              installments: subscription.installments || 1,
-                              custom_discount: subscription.custom_discount || 0
-                            });
-                            setShowSubscriptionDialog(true);
-                          }}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        {subscription.status !== "cancelada" && (
+                        <div className="flex justify-end gap-1">
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="text-red-500"
+                            className="text-blue-500"
                             onClick={() => {
                               setCurrentSubscription(subscription);
-                              setItemToDelete({
-                                id: subscription.id,
-                                name: `Assinatura de ${getClientName(subscription.client_id)}`,
-                                type: 'subscription'
+                              setSubscriptionForm({
+                                ...subscription,
+                                client_id: subscription.client_id,
+                                plan_id: subscription.plan_id,
+                                start_date: subscription.start_date,
+                                billing_cycle: subscription.billing_cycle,
+                                payment_method: subscription.payment_method,
+                                installments: subscription.installments || 1,
+                                custom_discount: subscription.custom_discount || 0
                               });
-                              setShowDeleteConfirmDialog(true);
+                              setShowSubscriptionDialog(true);
                             }}
                           >
-                            <X className="h-4 w-4" />
+                            <Edit className="h-4 w-4" />
                           </Button>
-                        )}
-                        {companySettings?.payment_settings?.mercadopago_enabled && (
-                          <>
+                          
+                          {/* Botão para ver histórico de pagamentos */}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-amber-600"
+                            onClick={() => openPaymentHistory(subscription)}
+                          >
+                            <Receipt className="h-4 w-4" />
+                          </Button>
+                          
+                          {/* Botão para enviar link de pagamento */}
+                          {subscription.payment_link && (
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="text-blue-500"
-                              onClick={() => handleProcessPayment(subscription)}
-                              disabled={loading[subscription.id]}
+                              className="text-green-600"
+                              onClick={() => sendPaymentLink(subscription)}
                             >
-                              <CreditCard className="h-4 w-4" />
+                              <Send className="h-4 w-4" />
                             </Button>
+                          )}
+                          
+                          {subscription.status !== "cancelada" && (
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="text-green-500"
-                              onClick={() => handleCheckSubscriptionStatus(subscription)}
-                              disabled={loading[subscription.id]}
+                              className="text-red-500"
+                              onClick={() => {
+                                setCurrentSubscription(subscription);
+                                setItemToDelete({
+                                  id: subscription.id,
+                                  name: `Assinatura de ${getClientName(subscription.client_id)}`,
+                                  type: 'subscription'
+                                });
+                                setShowDeleteConfirmDialog(true);
+                              }}
                             >
-                              {loading[subscription.id] ? (
-                                <RefreshCw className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <RefreshCw className="h-4 w-4" />
-                              )}
+                              <X className="h-4 w-4" />
                             </Button>
-                          </>
-                        )}
+                          )}
+                          
+                          {companySettings?.payment_settings?.mercadopago_enabled && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-blue-500"
+                                onClick={() => handleProcessPayment(subscription)}
+                                disabled={loading[subscription.id]}
+                              >
+                                <CreditCard className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-green-500"
+                                onClick={() => handleCheckSubscriptionStatus(subscription)}
+                                disabled={loading[subscription.id]}
+                              >
+                                {loading[subscription.id] ? (
+                                  <RefreshCw className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <RefreshCw className="h-4 w-4" />
+                                )}
+                              </Button>
+                            </>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))
@@ -1895,6 +1993,104 @@ export default function Subscriptions() {
               variant="destructive"
             >
               {itemToDelete?.type === 'plan' ? 'Excluir Plano' : 'Cancelar Assinatura'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Diálogo para visualizar o histórico de pagamentos */}
+      <Dialog open={showPaymentHistoryDialog} onOpenChange={setShowPaymentHistoryDialog}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Histórico de Pagamentos</DialogTitle>
+          </DialogHeader>
+          
+          <div className="py-4">
+            {selectedSubscription && (
+              <>
+                <div className="mb-4">
+                  <h3 className="text-lg font-medium">
+                    Plano: {getPlanName(selectedSubscription.plan_id)}
+                  </h3>
+                  <p className="text-sm text-gray-500">
+                    Cliente: {getClientName(selectedSubscription.client_id)} | 
+                    Ciclo: {selectedSubscription.billing_cycle.charAt(0).toUpperCase() + selectedSubscription.billing_cycle.slice(1)} | 
+                    Início: {selectedSubscription.start_date ? format(new Date(selectedSubscription.start_date), 'dd/MM/yyyy') : 'N/A'}
+                  </p>
+                </div>
+                
+                {(!selectedSubscription.payment_history || selectedSubscription.payment_history.length === 0) ? (
+                  <div className="text-center p-8 bg-gray-50 rounded-lg">
+                    <Receipt className="h-12 w-12 mx-auto text-gray-400 mb-2" />
+                    <p className="text-gray-500">Nenhum pagamento registrado</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Data</TableHead>
+                          <TableHead>Valor</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Método</TableHead>
+                          <TableHead>Referência</TableHead>
+                          <TableHead className="text-right">Ações</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {selectedSubscription.payment_history.map((payment, index) => (
+                          <TableRow key={index}>
+                            <TableCell>
+                              {payment.date ? format(new Date(payment.date), 'dd/MM/yyyy') : 'N/A'}
+                            </TableCell>
+                            <TableCell>
+                              {payment.amount ? formatCurrency(payment.amount) : 'N/A'}
+                            </TableCell>
+                            <TableCell>
+                              <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+                                payment.status === 'approved' ? 'bg-green-100 text-green-800' :
+                                payment.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                payment.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                                'bg-gray-100 text-gray-800'
+                              }`}>
+                                {payment.status === 'approved' ? 'Aprovado' :
+                                 payment.status === 'pending' ? 'Pendente' :
+                                 payment.status === 'rejected' ? 'Rejeitado' :
+                                 payment.status || 'N/A'}
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              {payment.payment_method || 'N/A'}
+                            </TableCell>
+                            <TableCell>
+                              <span className="font-mono text-xs">
+                                {payment.reference_id || 'N/A'}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {payment.receipt_url && (
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm"
+                                  onClick={() => window.open(payment.receipt_url, '_blank')}
+                                >
+                                  <ExternalLink className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPaymentHistoryDialog(false)}>
+              Fechar
             </Button>
           </DialogFooter>
         </DialogContent>
