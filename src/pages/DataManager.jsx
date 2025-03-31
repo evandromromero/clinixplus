@@ -736,7 +736,10 @@ export default function DataManager() {
       setLoading(true);
       setMessage(null);
       setRateLimitError(null);
+      setProgress({ current: 0, total: 23, entity: '' });
 
+      // 1. Criar métodos de pagamento
+      setProgress({ current: 1, total: 23, entity: 'Métodos de Pagamento' });
       const paymentMethods = await fetchWithRetry(async () => {
         await delay(delayBetweenRequests);
         return await PaymentMethod.bulkCreate([
@@ -770,6 +773,8 @@ export default function DataManager() {
       
       await delay(delayBetweenRequests);
 
+      // 2. Criar funções
+      setProgress({ current: 2, total: 23, entity: 'Funções' });
       const roles = await fetchWithRetry(async () => {
         await delay(delayBetweenRequests);
         return await Role.bulkCreate([
@@ -793,12 +798,14 @@ export default function DataManager() {
       
       await delay(delayBetweenRequests);
 
+      // 3. Criar funcionários
+      setProgress({ current: 3, total: 23, entity: 'Funcionários' });
       const employees = await fetchWithRetry(async () => {
         await delay(delayBetweenRequests);
         return await Employee.bulkCreate([
           {
             name: "Maria Silva",
-            role: "esteticista",
+            role: "Esteticista",
             email: "maria@clinica.com",
             phone: "(11) 98765-4321",
             commission_rate: 30,
@@ -809,7 +816,7 @@ export default function DataManager() {
           },
           {
             name: "João Santos",
-            role: "esteticista",
+            role: "Esteticista",
             email: "joao@clinica.com",
             phone: "(11) 98765-4322",
             commission_rate: 30,
@@ -820,7 +827,7 @@ export default function DataManager() {
           },
           {
             name: "Ana Oliveira",
-            role: "recepcionista",
+            role: "Recepcionista",
             email: "ana@clinica.com",
             phone: "(11) 98765-4323",
             commission_rate: 0,
@@ -832,7 +839,633 @@ export default function DataManager() {
       
       await delay(delayBetweenRequests);
 
-      setMessage({ type: 'success', text: 'Dados de exemplo adicionados com sucesso!' });
+      // 4. Criar serviços
+      setProgress({ current: 4, total: 23, entity: 'Serviços' });
+      const services = await fetchWithRetry(async () => {
+        await delay(delayBetweenRequests);
+        return await Service.bulkCreate([
+          {
+            name: "Limpeza de Pele",
+            description: "Limpeza profunda com extração de cravos e hidratação",
+            duration: 60,
+            price: 120.00,
+            cost: 30.00,
+            category: "facial",
+            active: true
+          },
+          {
+            name: "Massagem Relaxante",
+            description: "Massagem corporal para relaxamento",
+            duration: 60,
+            price: 150.00,
+            cost: 40.00,
+            category: "corporal",
+            active: true
+          },
+          {
+            name: "Depilação Completa",
+            description: "Depilação de pernas, axilas e virilha",
+            duration: 90,
+            price: 180.00,
+            cost: 50.00,
+            category: "depilação",
+            active: true
+          }
+        ]);
+      });
+      
+      await delay(delayBetweenRequests);
+
+      // 5. Criar produtos
+      setProgress({ current: 5, total: 23, entity: 'Produtos' });
+      const products = await fetchWithRetry(async () => {
+        await delay(delayBetweenRequests);
+        return await Product.bulkCreate([
+          {
+            name: "Creme Hidratante Facial",
+            description: "Creme hidratante para todos os tipos de pele",
+            price: 89.90,
+            cost: 45.00,
+            stock: 20,
+            category: "skincare",
+            active: true,
+            sku: "CRHID001"
+          },
+          {
+            name: "Protetor Solar FPS 50",
+            description: "Protetor solar de alta proteção",
+            price: 75.90,
+            cost: 38.00,
+            stock: 15,
+            category: "skincare",
+            active: true,
+            sku: "PRSOL050"
+          },
+          {
+            name: "Óleo de Massagem",
+            description: "Óleo essencial para massagens",
+            price: 65.00,
+            cost: 32.50,
+            stock: 10,
+            category: "massagem",
+            active: true,
+            sku: "OLMAS001"
+          }
+        ]);
+      });
+      
+      await delay(delayBetweenRequests);
+
+      // 6. Criar pacotes
+      setProgress({ current: 6, total: 23, entity: 'Pacotes' });
+      const packages = await fetchWithRetry(async () => {
+        await delay(delayBetweenRequests);
+        return await Package.bulkCreate([
+          {
+            name: "Pacote Facial Completo",
+            description: "5 sessões de limpeza de pele + 2 hidratações",
+            services: ["Limpeza de Pele", "Hidratação Facial"],
+            sessions: 7,
+            price: 550.00,
+            discount: 15,
+            validity_days: 180,
+            active: true
+          },
+          {
+            name: "Pacote Relaxante",
+            description: "10 sessões de massagem relaxante",
+            services: ["Massagem Relaxante"],
+            sessions: 10,
+            price: 1200.00,
+            discount: 20,
+            validity_days: 365,
+            active: true
+          }
+        ]);
+      });
+      
+      await delay(delayBetweenRequests);
+
+      // 7. Criar clientes
+      setProgress({ current: 7, total: 23, entity: 'Clientes' });
+      const clients = await fetchWithRetry(async () => {
+        await delay(delayBetweenRequests);
+        return await Client.bulkCreate([
+          {
+            name: "Carla Pereira",
+            email: "carla@email.com",
+            phone: "(11) 97654-3210",
+            birth_date: "1985-05-15",
+            address: "Rua das Flores, 123",
+            city: "São Paulo",
+            state: "SP",
+            postal_code: "01234-567",
+            notes: "Cliente assídua de tratamentos faciais"
+          },
+          {
+            name: "Roberto Almeida",
+            email: "roberto@email.com",
+            phone: "(11) 98765-4321",
+            birth_date: "1978-10-20",
+            address: "Av. Paulista, 1000",
+            city: "São Paulo",
+            state: "SP",
+            postal_code: "01310-100",
+            notes: "Prefere atendimento aos sábados"
+          },
+          {
+            name: "Fernanda Costa",
+            email: "fernanda@email.com",
+            phone: "(11) 91234-5678",
+            birth_date: "1990-03-25",
+            address: "Rua Augusta, 500",
+            city: "São Paulo",
+            state: "SP",
+            postal_code: "01305-000",
+            notes: "Alérgica a produtos com fragrância"
+          }
+        ]);
+      });
+      
+      await delay(delayBetweenRequests);
+
+      // 8. Criar planos de assinatura
+      setProgress({ current: 8, total: 23, entity: 'Planos de Assinatura' });
+      const subscriptionPlans = await fetchWithRetry(async () => {
+        await delay(delayBetweenRequests);
+        return await SubscriptionPlan.bulkCreate([
+          {
+            name: "Plano Básico",
+            description: "1 sessão de limpeza de pele por mês",
+            price: 99.90,
+            billing_cycle: "monthly",
+            services_included: ["Limpeza de Pele"],
+            sessions_per_month: 1,
+            active: true
+          },
+          {
+            name: "Plano Premium",
+            description: "2 sessões de qualquer serviço por mês",
+            price: 199.90,
+            billing_cycle: "monthly",
+            services_included: ["Limpeza de Pele", "Massagem Relaxante", "Hidratação Facial"],
+            sessions_per_month: 2,
+            active: true
+          }
+        ]);
+      });
+      
+      await delay(delayBetweenRequests);
+
+      // 9. Criar assinaturas de clientes
+      setProgress({ current: 9, total: 23, entity: 'Assinaturas' });
+      const clientSubscriptions = await fetchWithRetry(async () => {
+        await delay(delayBetweenRequests);
+        return await ClientSubscription.bulkCreate([
+          {
+            client_id: clients[0].id,
+            plan_id: subscriptionPlans[0].id,
+            start_date: new Date().toISOString(),
+            status: "active",
+            next_billing_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+            payment_method: paymentMethods[1].id
+          }
+        ]);
+      });
+      
+      await delay(delayBetweenRequests);
+
+      // 10. Criar gift cards
+      setProgress({ current: 10, total: 23, entity: 'Gift Cards' });
+      const giftCards = await fetchWithRetry(async () => {
+        await delay(delayBetweenRequests);
+        return await GiftCard.bulkCreate([
+          {
+            code: "GC" + Math.floor(100000 + Math.random() * 900000),
+            value: 200.00,
+            balance: 200.00,
+            expiration_date: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString(),
+            status: "active",
+            recipient_name: "Mariana Silva",
+            recipient_email: "mariana@email.com"
+          },
+          {
+            code: "GC" + Math.floor(100000 + Math.random() * 900000),
+            value: 150.00,
+            balance: 150.00,
+            expiration_date: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString(),
+            status: "active",
+            recipient_name: "Paulo Oliveira",
+            recipient_email: "paulo@email.com"
+          }
+        ]);
+      });
+      
+      await delay(delayBetweenRequests);
+
+      // 11. Criar agendamentos
+      setProgress({ current: 11, total: 23, entity: 'Agendamentos' });
+      const appointments = await fetchWithRetry(async () => {
+        await delay(delayBetweenRequests);
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        tomorrow.setHours(10, 0, 0, 0);
+        
+        const dayAfterTomorrow = new Date();
+        dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 2);
+        dayAfterTomorrow.setHours(14, 0, 0, 0);
+        
+        return await Appointment.bulkCreate([
+          {
+            client_id: clients[0].id,
+            employee_id: employees[0].id,
+            service_id: services[0].id,
+            start_time: tomorrow.toISOString(),
+            end_time: new Date(tomorrow.getTime() + services[0].duration * 60000).toISOString(),
+            status: "confirmed",
+            notes: "Cliente solicitou atenção especial na área do queixo"
+          },
+          {
+            client_id: clients[1].id,
+            employee_id: employees[1].id,
+            service_id: services[1].id,
+            start_time: dayAfterTomorrow.toISOString(),
+            end_time: new Date(dayAfterTomorrow.getTime() + services[1].duration * 60000).toISOString(),
+            status: "confirmed",
+            notes: "Primeira sessão de massagem"
+          }
+        ]);
+      });
+      
+      await delay(delayBetweenRequests);
+
+      // 12. Criar pacotes de clientes
+      setProgress({ current: 12, total: 23, entity: 'Pacotes de Clientes' });
+      const clientPackages = await fetchWithRetry(async () => {
+        await delay(delayBetweenRequests);
+        return await ClientPackage.bulkCreate([
+          {
+            client_id: clients[0].id,
+            package_id: packages[0].id,
+            purchase_date: new Date().toISOString(),
+            expiration_date: new Date(Date.now() + packages[0].validity_days * 24 * 60 * 60 * 1000).toISOString(),
+            total_sessions: packages[0].sessions,
+            remaining_sessions: packages[0].sessions,
+            status: "active",
+            price_paid: packages[0].price
+          }
+        ]);
+      });
+      
+      await delay(delayBetweenRequests);
+
+      // 13. Criar vendas
+      setProgress({ current: 13, total: 23, entity: 'Vendas' });
+      const sales = await fetchWithRetry(async () => {
+        await delay(delayBetweenRequests);
+        return await Sale.bulkCreate([
+          {
+            client_id: clients[0].id,
+            employee_id: employees[2].id,
+            date: new Date().toISOString(),
+            items: [
+              {
+                type: "product",
+                product_id: products[0].id,
+                name: products[0].name,
+                quantity: 1,
+                price: products[0].price,
+                total: products[0].price
+              },
+              {
+                type: "product",
+                product_id: products[1].id,
+                name: products[1].name,
+                quantity: 1,
+                price: products[1].price,
+                total: products[1].price
+              }
+            ],
+            subtotal: products[0].price + products[1].price,
+            discount: 0,
+            total: products[0].price + products[1].price,
+            payment_method: paymentMethods[1].id,
+            status: "completed"
+          }
+        ]);
+      });
+      
+      await delay(delayBetweenRequests);
+
+      // 14. Criar vendas não finalizadas
+      setProgress({ current: 14, total: 23, entity: 'Vendas não Finalizadas' });
+      const unfinishedSales = await fetchWithRetry(async () => {
+        await delay(delayBetweenRequests);
+        return await UnfinishedSale.bulkCreate([
+          {
+            client_id: clients[1].id,
+            date: new Date().toISOString(),
+            items: [
+              {
+                type: "service",
+                service_id: services[2].id,
+                name: services[2].name,
+                quantity: 1,
+                price: services[2].price,
+                total: services[2].price
+              }
+            ],
+            subtotal: services[2].price,
+            discount: 0,
+            total: services[2].price,
+            status: "pending"
+          }
+        ]);
+      });
+      
+      await delay(delayBetweenRequests);
+
+      // 15. Criar transações financeiras
+      setProgress({ current: 15, total: 23, entity: 'Transações Financeiras' });
+      const financialTransactions = await fetchWithRetry(async () => {
+        await delay(delayBetweenRequests);
+        return await FinancialTransaction.bulkCreate([
+          {
+            date: new Date().toISOString(),
+            type: "income",
+            category: "sale",
+            description: "Venda de produtos",
+            amount: products[0].price + products[1].price,
+            payment_method: paymentMethods[1].id,
+            reference_id: sales[0].id,
+            reference_type: "sale"
+          }
+        ]);
+      });
+      
+      await delay(delayBetweenRequests);
+
+      // 16. Criar serviços pendentes
+      setProgress({ current: 16, total: 23, entity: 'Serviços Pendentes' });
+      const pendingServices = await fetchWithRetry(async () => {
+        await delay(delayBetweenRequests);
+        return await PendingService.bulkCreate([
+          {
+            client_id: clients[0].id,
+            service_id: services[0].id,
+            package_id: clientPackages[0].id,
+            status: "pending",
+            created_date: new Date().toISOString()
+          }
+        ]);
+      });
+      
+      await delay(delayBetweenRequests);
+
+      // 17. Criar fornecedores
+      setProgress({ current: 17, total: 23, entity: 'Fornecedores' });
+      const suppliers = await fetchWithRetry(async () => {
+        await delay(delayBetweenRequests);
+        return await Supplier.bulkCreate([
+          {
+            name: "Distribuidora de Cosméticos Ltda",
+            contact_name: "Carlos Souza",
+            email: "carlos@distribuidora.com",
+            phone: "(11) 3456-7890",
+            address: "Rua dos Cosméticos, 500",
+            city: "São Paulo",
+            state: "SP",
+            postal_code: "04567-000",
+            notes: "Fornecedor principal de produtos para skincare"
+          },
+          {
+            name: "Equipamentos Estéticos S.A.",
+            contact_name: "Mariana Costa",
+            email: "mariana@equipamentos.com",
+            phone: "(11) 2345-6789",
+            address: "Av. das Máquinas, 1200",
+            city: "São Paulo",
+            state: "SP",
+            postal_code: "05678-000",
+            notes: "Fornecedor de equipamentos e acessórios"
+          }
+        ]);
+      });
+      
+      await delay(delayBetweenRequests);
+
+      // 18. Criar depoimentos
+      setProgress({ current: 18, total: 23, entity: 'Depoimentos' });
+      const testimonials = await fetchWithRetry(async () => {
+        await delay(delayBetweenRequests);
+        return await Testimonial.bulkCreate([
+          {
+            client_id: clients[0].id,
+            client_name: clients[0].name,
+            text: "Excelente atendimento! A limpeza de pele superou minhas expectativas.",
+            rating: 5,
+            date: new Date().toISOString(),
+            approved: true,
+            featured: true
+          },
+          {
+            client_id: clients[1].id,
+            client_name: clients[1].name,
+            text: "As massagens são incríveis, saio sempre renovado.",
+            rating: 5,
+            date: new Date().toISOString(),
+            approved: true,
+            featured: false
+          }
+        ]);
+      });
+      
+      await delay(delayBetweenRequests);
+
+      // 19. Criar modelos de contratos
+      setProgress({ current: 19, total: 23, entity: 'Modelos de Contratos' });
+      const contractTemplates = await fetchWithRetry(async () => {
+        await delay(delayBetweenRequests);
+        return await ContractTemplate.bulkCreate([
+          {
+            name: "Contrato de Prestação de Serviços Estéticos",
+            sections: [
+              {
+                title: "Objeto do Contrato",
+                content: "O presente contrato tem como objeto a prestação de serviços estéticos pela CONTRATADA ao CONTRATANTE, conforme especificado neste instrumento."
+              },
+              {
+                title: "Obrigações da Contratada",
+                content: "A CONTRATADA se compromete a prestar os serviços com qualidade, utilizando produtos adequados e seguindo as melhores práticas do mercado."
+              },
+              {
+                title: "Obrigações do Contratante",
+                content: "O CONTRATANTE se compromete a seguir todas as recomendações e orientações fornecidas pela CONTRATADA, bem como informar qualquer condição de saúde relevante."
+              }
+            ],
+            variables: ["nome_cliente", "cpf_cliente", "servicos_contratados", "valor_total"],
+            is_active: true
+          }
+        ]);
+      });
+      
+      await delay(delayBetweenRequests);
+
+      // 20. Criar contratos
+      setProgress({ current: 20, total: 23, entity: 'Contratos' });
+      const contracts = await fetchWithRetry(async () => {
+        await delay(delayBetweenRequests);
+        return await Contract.bulkCreate([
+          {
+            client_id: clients[0].id,
+            template_id: contractTemplates[0].id,
+            content: {
+              sections: contractTemplates[0].sections,
+              variables: {
+                nome_cliente: clients[0].name,
+                cpf_cliente: "123.456.789-00",
+                servicos_contratados: "Pacote Facial Completo",
+                valor_total: "R$ 550,00"
+              }
+            },
+            status: "signed",
+            signed_date: new Date().toISOString(),
+            expiration_date: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
+          }
+        ]);
+      });
+      
+      await delay(delayBetweenRequests);
+
+      // 21. Criar modelos de anamnese
+      setProgress({ current: 21, total: 23, entity: 'Modelos de Anamnese' });
+      const anamneseTemplates = await fetchWithRetry(async () => {
+        await delay(delayBetweenRequests);
+        return await AnamneseTemplate.bulkCreate([
+          {
+            name: "Anamnese Facial",
+            sections: [
+              {
+                title: "Informações Pessoais",
+                fields: [
+                  {
+                    name: "nome",
+                    label: "Nome Completo",
+                    type: "text",
+                    required: true
+                  },
+                  {
+                    name: "data_nascimento",
+                    label: "Data de Nascimento",
+                    type: "date",
+                    required: true
+                  }
+                ]
+              },
+              {
+                title: "Histórico de Saúde",
+                fields: [
+                  {
+                    name: "alergias",
+                    label: "Possui alergias?",
+                    type: "radio",
+                    options: ["Sim", "Não"],
+                    required: true
+                  },
+                  {
+                    name: "alergias_descricao",
+                    label: "Se sim, quais?",
+                    type: "textarea",
+                    required: false,
+                    conditional: {
+                      field: "alergias",
+                      value: "Sim"
+                    }
+                  }
+                ]
+              },
+              {
+                title: "Características da Pele",
+                fields: [
+                  {
+                    name: "tipo_pele",
+                    label: "Tipo de Pele",
+                    type: "select",
+                    options: ["Normal", "Seca", "Oleosa", "Mista", "Sensível"],
+                    required: true
+                  },
+                  {
+                    name: "sensibilidade",
+                    label: "Nível de Sensibilidade",
+                    type: "select",
+                    options: ["Baixa", "Média", "Alta"],
+                    required: true
+                  }
+                ]
+              }
+            ],
+            is_active: true
+          }
+        ]);
+      });
+      
+      await delay(delayBetweenRequests);
+
+      // 22. Criar configurações da empresa
+      setProgress({ current: 22, total: 23, entity: 'Configurações da Empresa' });
+      const companySettings = await fetchWithRetry(async () => {
+        await delay(delayBetweenRequests);
+        return await CompanySettings.bulkCreate([
+          {
+            company_name: "ClinixPlus Estética",
+            logo_url: "https://example.com/logo.png",
+            address: "Av. Paulista, 1000, São Paulo, SP",
+            phone: "(11) 3456-7890",
+            email: "contato@clinixplus.com",
+            website: "www.clinixplus.com",
+            business_hours: {
+              monday: { open: "09:00", close: "19:00" },
+              tuesday: { open: "09:00", close: "19:00" },
+              wednesday: { open: "09:00", close: "19:00" },
+              thursday: { open: "09:00", close: "19:00" },
+              friday: { open: "09:00", close: "19:00" },
+              saturday: { open: "09:00", close: "16:00" },
+              sunday: { open: null, close: null }
+            },
+            tax_id: "12.345.678/0001-90",
+            social_media: {
+              instagram: "@clinixplus",
+              facebook: "facebook.com/clinixplus"
+            }
+          }
+        ]);
+      });
+      
+      await delay(delayBetweenRequests);
+
+      // 23. Criar imagens para slideshow
+      setProgress({ current: 23, total: 23, entity: 'Imagens de Slideshow' });
+      const slideshowImages = await fetchWithRetry(async () => {
+        await delay(delayBetweenRequests);
+        return await SlideShowImage.bulkCreate([
+          {
+            url: "https://example.com/slide1.jpg",
+            title: "Promoção de Verão",
+            description: "Aproveite nossos pacotes especiais para o verão!",
+            order: 1,
+            is_active: true
+          },
+          {
+            url: "https://example.com/slide2.jpg",
+            title: "Novos Tratamentos",
+            description: "Conheça nossos novos tratamentos faciais!",
+            order: 2,
+            is_active: true
+          }
+        ]);
+      });
+
+      setMessage({ type: 'success', text: 'Dados de exemplo adicionados com sucesso para todas as 23 entidades do sistema!' });
     } catch (error) {
       console.error('Erro ao adicionar dados de exemplo:', error);
       setMessage({ 
@@ -847,6 +1480,7 @@ export default function DataManager() {
       }
     } finally {
       setLoading(false);
+      setProgress({ current: 0, total: 0, entity: '' });
     }
   };
 
@@ -1239,6 +1873,7 @@ export default function DataManager() {
             )}
 
             <div className="border-t pt-4">
+              <h3 className="text-lg font-medium mb-3">Dados a Restaurar</h3>
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-medium">Dados a Restaurar</h3>
                 <div className="flex items-center space-x-2">
