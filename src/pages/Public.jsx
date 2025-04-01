@@ -23,6 +23,7 @@ import AddTestimonialDialog from "../components/public/AddTestimonialDialog";
 import { Service, CompanySettings, Testimonial, SubscriptionPlan, checkEnabledPermission } from "@/firebase/entities";
 import SubscriptionPlansSection from '../components/public/SubscriptionPlansSection';
 import GiftCardSection from '../components/public/GiftCardSection';
+import SEOHead from '../components/SEOHead';
 
 export default function Public() {
   const [featuredServices, setFeaturedServices] = useState([]);
@@ -48,7 +49,15 @@ export default function Public() {
     website_secondary_color: "#69D2CD",
     about_image_url: "",
     about_full_description: "",
-    whatsapp_message: "Olá! Gostaria de agendar uma consulta na ClinixPlus."
+    whatsapp_message: "Olá! Gostaria de agendar uma consulta na ClinixPlus.",
+    seo_settings: {
+      meta_title: "ClinixPlus - Clínica de Estética e Bem-estar",
+      meta_description: "Transformando beleza e autoestima desde 2010, com tratamentos estéticos de excelência e profissionais altamente qualificados.",
+      meta_keywords: "clínica, estética, beleza, saúde, bem-estar, tratamentos faciais, massagens",
+      meta_author: "ClinixPlus",
+      favicon_url: "",
+      site_name: "ClinixPlus"
+    }
   });
   const [slideshowImages, setSlideshowImages] = useState([]);
   const [testimonials, setTestimonials] = useState([]);
@@ -311,6 +320,14 @@ export default function Public() {
 
   return (
     <div className="bg-white min-h-screen">
+      <SEOHead 
+        title={company.seo_settings.meta_title} 
+        description={company.seo_settings.meta_description} 
+        keywords={company.seo_settings.meta_keywords} 
+        author={company.seo_settings.meta_author} 
+        favicon={company.seo_settings.favicon_url} 
+        siteName={company.seo_settings.site_name} 
+      />
       <header className="bg-[#0D0F36] text-white">
         <div className="container mx-auto px-4 py-3">
           <div className="flex justify-between items-center">

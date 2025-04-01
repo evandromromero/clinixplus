@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
+import { setupAdminRole } from '@/utils/setupAdminRole';
 import {
   LayoutGrid,
   CalendarDays,
@@ -58,16 +59,79 @@ export default function Layout() {
           
           // Carregar cargo do usuário para obter permissões
           if (userData.roleId) {
-            const { Role } = await import('@/api/entities');
-            const roleData = await Role.get(userData.roleId);
-            if (roleData) {
-              setUserRole(roleData);
-              setUserPermissions(roleData.permissions || []);
+            // Importar a entidade Role diretamente do Firebase
+            const { Role, SystemConfig } = await import('@/firebase/entities');
+            try {
+              const roleData = await Role.get(userData.roleId);
+              if (roleData) {
+                setUserRole(roleData);
+                setUserPermissions(roleData.permissions || []);
+              }
+            } catch (roleError) {
+              console.error("Erro ao carregar cargo:", roleError);
+              
+              // Verificar se o usuário é administrador
+              const isAdmin = userData.email === 'admin@example.com' || userData.isAdmin;
+              
+              if (isAdmin) {
+                try {
+                  // Usar o script de configuração do cargo Administrador Geral
+                  console.log('Executando script de configuração do cargo Administrador Geral...');
+                  const adminRoleId = await setupAdminRole();
+                  
+                  // Recarregar o cargo após a configuração
+                  if (adminRoleId) {
+                    const adminRole = await Role.get(adminRoleId);
+                    if (adminRole) {
+                      setUserRole(adminRole);
+                      setUserPermissions(adminRole.permissions || []);
+                      console.log('Cargo Administrador Geral configurado com sucesso');
+                    }
+                  }
+                } catch (setupError) {
+                  console.error("Erro ao configurar cargo Administrador Geral:", setupError);
+                  // Definir permissões de administrador mesmo sem o cargo
+                  setUserPermissions(['admin', 'manage_users', 'manage_roles', 'manage_clients', 
+                                     'manage_appointments', 'manage_services', 'manage_products', 
+                                     'manage_sales', 'manage_finances', 'manage_settings',
+                                     'manage_subscriptions', 'manage_gift_cards']);
+                }
+              } else {
+                // Para usuários não-admin, definir permissões padrão básicas
+                console.log('Definindo permissões básicas para usuário não-admin');
+                setUserPermissions(['manage_clients', 'manage_appointments']);
+              }
+            }
+          } else if (userData.email === 'admin@example.com' || userData.isAdmin) {
+            // Se o usuário é admin mas não tem roleId, configurar o cargo Administrador Geral
+            try {
+              console.log('Usuário admin sem roleId, configurando cargo Administrador Geral...');
+              const adminRoleId = await setupAdminRole();
+              
+              // Recarregar o cargo após a configuração
+              if (adminRoleId) {
+                const { Role } = await import('@/firebase/entities');
+                const adminRole = await Role.get(adminRoleId);
+                if (adminRole) {
+                  setUserRole(adminRole);
+                  setUserPermissions(adminRole.permissions || []);
+                  console.log('Cargo Administrador Geral configurado com sucesso');
+                }
+              }
+            } catch (setupError) {
+              console.error("Erro ao configurar cargo Administrador Geral:", setupError);
+              // Definir permissões de administrador mesmo sem o cargo
+              setUserPermissions(['admin', 'manage_users', 'manage_roles', 'manage_clients', 
+                                 'manage_appointments', 'manage_services', 'manage_products', 
+                                 'manage_sales', 'manage_finances', 'manage_settings',
+                                 'manage_subscriptions', 'manage_gift_cards']);
             }
           }
         }
       } catch (error) {
         console.error("Erro ao carregar dados do usuário:", error);
+        // Garantir que o usuário tenha pelo menos algumas permissões básicas
+        setUserPermissions(['manage_clients', 'manage_appointments']);
       }
     };
     
@@ -135,7 +199,8 @@ export default function Layout() {
       permission: ["manage_settings", "manage_data"],
       submenu: [
         { name: "Configurações Gerais", url: "Settings", permission: "manage_settings" },
-        { name: "Gerenciador de Dados", url: "DataManager", permission: "manage_data" }
+        { name: "Gerenciador de Dados", url: "DataManager", permission: "manage_data" },
+        { name: "Reparo do Sistema", url: "admin-repair", permission: "admin" }
       ]
     },
     { name: "Página Inicial Pública", icon: <Globe className="w-5 h-5" />, url: "Public" }
@@ -158,7 +223,7 @@ export default function Layout() {
       return requiredPermission.some(perm => userPermissions.includes(perm));
     }
     
-    // Verificar permissão simples
+    // Verificar se o usuário tem a permissão específica
     return userPermissions.includes(requiredPermission);
   };
   
@@ -259,6 +324,13 @@ export default function Layout() {
           </ul>
         </nav>
         <div className="p-4 border-t border-[#0D0F36]/20">
+          <Link
+            to="/admin-repair"
+            className="flex w-full items-center justify-center rounded-md bg-blue-50 px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-100 mb-2"
+          >
+            <Settings className="w-5 h-5 mr-2" />
+            Reparo do Sistema
+          </Link>
           <button
             onClick={handleLogout}
             className="flex w-full items-center justify-center rounded-md bg-red-50 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-100"
@@ -358,6 +430,13 @@ export default function Layout() {
           </ul>
         </nav>
         <div className="p-4 border-t border-[#0D0F36]/20">
+          <Link
+            to="/admin-repair"
+            className="flex w-full items-center justify-center rounded-md bg-blue-50 px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-100 mb-2"
+          >
+            <Settings className="w-5 h-5 mr-2" />
+            Reparo do Sistema
+          </Link>
           <button
             onClick={handleLogout}
             className="flex w-full items-center justify-center rounded-md bg-red-50 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-100"

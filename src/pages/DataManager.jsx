@@ -1486,75 +1486,96 @@ export default function DataManager() {
 
   // Adicionar de volta a função handleDeleteAllData que foi removida
   const handleDeleteAllData = async () => {
-    try {
-      setLoading(true);
-      setMessage(null);
-      setRateLimitError(null);
-      setProgress({ current: 0, total: entities.length, entity: '' });
-
-      for (let i = 0; i < entities.length; i++) {
-        const { entity, label, name } = entities[i];
+    if (window.confirm('Tem certeza que deseja excluir TODOS os dados? Esta ação não pode ser desfeita.')) {
+      try {
+        setLoading(true);
+        setProgress({ current: 0, total: entities.length, entity: 'Iniciando' });
         
-        setProgress({ 
-          current: i + 1, 
-          total: entities.length, 
-          entity: label 
-        });
-        
-        try {
-          const items = await fetchWithRetry(async () => {
-            await delay(delayBetweenRequests);
-            return await entity.list();
+        for (let i = 0; i < entities.length; i++) {
+          const { entity, label, name } = entities[i];
+          
+          setProgress({ 
+            current: i + 1, 
+            total: entities.length, 
+            entity: label 
           });
           
-          console.log(`Encontrados ${items.length} registros de ${label} para exclusão`);
-          
-          for (const item of items) {
-            try {
-              await fetchWithRetry(async () => {
-                await delay(delayBetweenRequests);
-                return await entity.delete(item.id);
-              });
-              
+          try {
+            const items = await fetchWithRetry(async () => {
               await delay(delayBetweenRequests);
-            } catch (itemError) {
-              console.warn(`Erro ao deletar item de ${name}:`, itemError);
+              return await entity.list();
+            });
+            
+            console.log(`Encontrados ${items.length} registros de ${label} para exclusão`);
+            
+            for (const item of items) {
+              try {
+                // Proteger o cargo Administrador Geral da exclusão
+                if (name === 'roles' && (item.name === 'Administrador Geral' || item.default === true)) {
+                  console.log('Cargo Administrador Geral protegido da exclusão');
+                  continue;
+                }
+                
+                // Proteger usuários com cargo de Administrador Geral
+                if (name === 'users' && item.roleId) {
+                  try {
+                    const { Role } = await import('@/firebase/entities');
+                    const role = await Role.get(item.roleId);
+                    if (role && role.name === 'Administrador Geral') {
+                      console.log('Usuário com cargo Administrador Geral protegido da exclusão');
+                      continue;
+                    }
+                  } catch (roleError) {
+                    // Se não conseguir verificar o cargo, prosseguir com a exclusão
+                    console.warn(`Não foi possível verificar o cargo do usuário ${item.id}:`, roleError);
+                  }
+                }
+                
+                await fetchWithRetry(async () => {
+                  await delay(delayBetweenRequests);
+                  return await entity.delete(item.id);
+                });
+                
+                await delay(delayBetweenRequests);
+              } catch (itemError) {
+                console.warn(`Erro ao deletar item de ${name}:`, itemError);
+              }
+            }
+            
+            console.log(`Todos os dados de ${label} foram deletados.`);
+          } catch (entityError) {
+            console.error(`Erro ao deletar dados de ${label}:`, entityError);
+            
+            if (entityError.message?.includes('429') || 
+                entityError.message?.includes('Rate limit') || 
+                entityError.toString().includes('429')) {
+              
+              setRateLimitError(entityError);
+              await delay(10000);
+              setDelayBetweenRequests(prev => prev * 2);
+              i--;
             }
           }
-          
-          console.log(`Todos os dados de ${label} foram deletados.`);
-        } catch (entityError) {
-          console.error(`Erro ao deletar dados de ${label}:`, entityError);
-          
-          if (entityError.message?.includes('429') || 
-              entityError.message?.includes('Rate limit') || 
-              entityError.toString().includes('429')) {
-            
-            setRateLimitError(entityError);
-            await delay(10000);
-            setDelayBetweenRequests(prev => prev * 2);
-            i--;
-          }
         }
-      }
 
-      setMessage({ type: 'success', text: 'Todos os dados foram deletados com sucesso!' });
-      setShowDeleteDialog(false);
-    } catch (error) {
-      console.error('Erro ao deletar dados:', error);
-      setMessage({ 
-        type: 'error', 
-        text: 'Erro ao deletar dados: ' + (error.message || 'Erro desconhecido') 
-      });
-      
-      if (error.message?.includes('429') || 
-          error.message?.includes('Rate limit') || 
-          error.toString().includes('429')) {
-        setRateLimitError(error);
+        setMessage({ type: 'success', text: 'Todos os dados foram deletados com sucesso!' });
+        setShowDeleteDialog(false);
+      } catch (error) {
+        console.error('Erro ao deletar dados:', error);
+        setMessage({ 
+          type: 'error', 
+          text: 'Erro ao deletar dados: ' + (error.message || 'Erro desconhecido') 
+        });
+        
+        if (error.message?.includes('429') || 
+            error.message?.includes('Rate limit') || 
+            error.toString().includes('429')) {
+          setRateLimitError(error);
+        }
+      } finally {
+        setLoading(false);
+        setProgress({ current: 0, total: 0, entity: '' });
       }
-    } finally {
-      setLoading(false);
-      setProgress({ current: 0, total: 0, entity: '' });
     }
   };
 
@@ -1801,7 +1822,7 @@ export default function DataManager() {
                                   Criado em: {format(new Date(backup.timestamp), 'dd/MM/yyyy HH:mm:ss')}
                                 </CardDescription>
                               </div>
-                              <div className="flex space-x-3">
+                              <div className="flex items-center space-x-2">
                                 <Button 
                                   className={`${colorSet.accent} bg-white hover:bg-gray-50`}
                                   variant="outline" 

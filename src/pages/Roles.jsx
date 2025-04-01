@@ -28,7 +28,8 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Role, SystemConfig } from "@/api/entities";
+import { SystemConfig } from "@/api/entities";
+import { Role } from "@/firebase/entities";
 import { 
   Plus, 
   Search, 

@@ -35,6 +35,7 @@ import ContractTemplates from './pages/ContractTemplates';
 import AnamneseTemplates from './pages/AnamneseTemplates';
 import Users from './pages/Users';
 import Login from './pages/Login';
+import AdminRepair from './pages/AdminRepair';
 
 export default function AppRoutes() {
   return (
@@ -78,6 +79,7 @@ export default function AppRoutes() {
         <Route path="/contract-templates" element={<ContractTemplates />} />
         <Route path="/anamnese-templates" element={<AnamneseTemplates />} />
         <Route path="/users" element={<Users />} />
+        <Route path="/admin-repair" element={<AdminRepair />} />
       </Route>
       
       {/* Rota de fallback para páginas não encontradas */}

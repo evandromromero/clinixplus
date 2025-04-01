@@ -82,6 +82,14 @@ export default function Settings() {
       mercadopago_client_id: "",
       mercadopago_client_secret: "",
       mercadopago_sandbox: true
+    },
+    seo_settings: {
+      meta_title: "",
+      meta_description: "",
+      meta_keywords: "",
+      meta_author: "",
+      favicon_url: "",
+      site_name: ""
     }
   });
   
@@ -179,6 +187,14 @@ export default function Settings() {
             mercadopago_client_id: "",
             mercadopago_client_secret: "",
             mercadopago_sandbox: true
+          },
+          seo_settings: settings[0].seo_settings || {
+            meta_title: "",
+            meta_description: "",
+            meta_keywords: "",
+            meta_author: "",
+            favicon_url: "",
+            site_name: ""
           }
         };
         
@@ -571,7 +587,7 @@ export default function Settings() {
       )}
 
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-1 md:grid-cols-5">
+        <TabsList className="grid w-full grid-cols-1 md:grid-cols-6">
           <TabsTrigger 
             value="business" 
             className="flex items-center gap-2"
@@ -606,6 +622,13 @@ export default function Settings() {
             onClick={() => handleTabChange("payments")}
           >
             <SettingsIcon className="h-4 w-4" /> Pagamentos
+          </TabsTrigger>
+          <TabsTrigger 
+            value="seo" 
+            className="flex items-center gap-2"
+            onClick={() => handleTabChange("seo")}
+          >
+            <LinkIcon className="h-4 w-4" /> SEO
           </TabsTrigger>
         </TabsList>
 
@@ -1304,6 +1327,124 @@ export default function Settings() {
                       Salvando...
                     </>
                   ) : 'Salvar Configurações de Pagamento'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+        <TabsContent value="seo" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Configurações de SEO</CardTitle>
+              <CardDescription>Configure as configurações de SEO para seu site</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Título da Página</label>
+                  <Input
+                    value={companySettings.seo_settings?.meta_title || ""}
+                    onChange={(e) => setCompanySettings({
+                      ...companySettings,
+                      seo_settings: {
+                        ...companySettings.seo_settings,
+                        meta_title: e.target.value
+                      }
+                    })}
+                    placeholder="Título da página"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Descrição da Página</label>
+                  <Textarea
+                    value={companySettings.seo_settings?.meta_description || ""}
+                    onChange={(e) => setCompanySettings({
+                      ...companySettings,
+                      seo_settings: {
+                        ...companySettings.seo_settings,
+                        meta_description: e.target.value
+                      }
+                    })}
+                    placeholder="Descrição da página"
+                    rows={3}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Palavras-chave da Página</label>
+                  <Input
+                    value={companySettings.seo_settings?.meta_keywords || ""}
+                    onChange={(e) => setCompanySettings({
+                      ...companySettings,
+                      seo_settings: {
+                        ...companySettings.seo_settings,
+                        meta_keywords: e.target.value
+                      }
+                    })}
+                    placeholder="Palavras-chave da página"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Autor da Página</label>
+                  <Input
+                    value={companySettings.seo_settings?.meta_author || ""}
+                    onChange={(e) => setCompanySettings({
+                      ...companySettings,
+                      seo_settings: {
+                        ...companySettings.seo_settings,
+                        meta_author: e.target.value
+                      }
+                    })}
+                    placeholder="Autor da página"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">URL do Favicon</label>
+                  <Input
+                    value={companySettings.seo_settings?.favicon_url || ""}
+                    onChange={(e) => setCompanySettings({
+                      ...companySettings,
+                      seo_settings: {
+                        ...companySettings.seo_settings,
+                        favicon_url: e.target.value
+                      }
+                    })}
+                    placeholder="URL do favicon"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Nome do Site</label>
+                  <Input
+                    value={companySettings.seo_settings?.site_name || ""}
+                    onChange={(e) => setCompanySettings({
+                      ...companySettings,
+                      seo_settings: {
+                        ...companySettings.seo_settings,
+                        site_name: e.target.value
+                      }
+                    })}
+                    placeholder="Nome do site"
+                  />
+                </div>
+              </div>
+              
+              <div className="pt-4 flex justify-end">
+                <Button
+                  onClick={handleSaveCompanySettings}
+                  className="bg-[#294380] hover:bg-[#0D0F36]"
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                      Salvando...
+                    </>
+                  ) : 'Salvar Configurações de SEO'}
                 </Button>
               </div>
             </CardContent>

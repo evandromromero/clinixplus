@@ -374,133 +374,237 @@ export const AnamneseTemplate = {
 
 // Estender o objeto Contract
 export const Contract = {
-  ...baseContract,
   collection: 'contracts',
-
-  generate: async function(clientId, templateId = null) {
+  
+  async generate(clientId, templateId = null) {
     try {
-      let content;
-      
+      // Buscar o template de contrato
+      let template = null;
       if (templateId) {
-        // Usar template existente
-        const template = await ContractTemplate.get(templateId);
-        if (!template || !template.content) {
-          throw new Error('Template não encontrado ou sem conteúdo definido');
-        }
-        content = template.content;
+        template = await ContractTemplate.get(templateId);
       } else {
-        // Template padrão
-        content = {
-          sections: [
-            {
-              title: "Objeto do Contrato",
-              content: "Prestação de serviços..."
-            },
-            {
-              title: "Valor e Forma de Pagamento",
-              content: "O valor dos serviços..."
-            },
-            {
-              title: "Prazo",
-              content: "O presente contrato tem prazo..."
-            }
-          ]
-        };
+        // Buscar o primeiro template disponível se nenhum for especificado
+        const templates = await ContractTemplate.list();
+        if (templates.length > 0) {
+          template = templates[0];
+        }
       }
-
-      // Validação extra para garantir que content não seja undefined
-      if (!content) {
-        throw new Error('Conteúdo do contrato não pode ser vazio');
+      
+      if (!template) {
+        throw new Error('Nenhum template de contrato encontrado');
       }
-
+      
+      // Buscar dados do cliente
+      const client = await Client.get(clientId);
+      if (!client) {
+        throw new Error('Cliente não encontrado');
+      }
+      
+      // Gerar o texto do contrato substituindo as variáveis
+      let contractText = template.content;
+      
+      // Substituir variáveis do cliente
+      contractText = contractText.replace(/\{client\.name\}/g, client.name || '');
+      contractText = contractText.replace(/\{client\.email\}/g, client.email || '');
+      contractText = contractText.replace(/\{client\.phone\}/g, client.phone || '');
+      contractText = contractText.replace(/\{client\.address\}/g, client.address || '');
+      contractText = contractText.replace(/\{client\.cpf\}/g, client.cpf || '');
+      
+      // Substituir variáveis da empresa
+      const company = await SystemConfig.get('company');
+      if (company) {
+        contractText = contractText.replace(/\{company\.name\}/g, company.name || '');
+        contractText = contractText.replace(/\{company\.email\}/g, company.email || '');
+        contractText = contractText.replace(/\{company\.phone\}/g, company.phone || '');
+        contractText = contractText.replace(/\{company\.address\}/g, company.address || '');
+        contractText = contractText.replace(/\{company\.cnpj\}/g, company.cnpj || '');
+      }
+      
+      // Substituir data atual
+      const currentDate = new Date().toLocaleDateString('pt-BR');
+      contractText = contractText.replace(/\{current_date\}/g, currentDate);
+      
+      // Criar o contrato no Firebase
       const contractData = {
         client_id: clientId,
-        template_id: templateId,
-        content, // Agora temos certeza que content não é undefined
+        template_id: template.id,
+        title: template.title,
+        content: contractText,
         status: 'draft',
-        issue_date: new Date().toISOString(),
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        created_date: new Date().toISOString(),
+        updated_date: new Date().toISOString()
       };
-
-      const collectionRef = collection(db, this.collection);
-      const docRef = doc(collectionRef);
-      await setDoc(docRef, contractData);
-
-      return { id: docRef.id, ...contractData };
+      
+      // Salvar no Firebase
+      const docRef = doc(collection(db, 'contracts'));
+      await setDoc(docRef, {
+        ...contractData,
+        id: docRef.id
+      });
+      
+      return {
+        id: docRef.id,
+        ...contractData
+      };
     } catch (error) {
       console.error('Error generating contract:', error);
       throw error;
     }
   },
-
-  sendByEmail: async function(contractData, email, pdfFileName) {
+  
+  async sendByEmail(contractData, email, pdfFileName) {
     try {
-      // Aqui você implementará a lógica de envio de email com o seu serviço de email
-      console.log('Sending contract by email:', {
-        to: email,
-        subject: 'Contrato de Prestação de Serviços',
-        attachments: [pdfFileName]
-      });
+      // Verificar se o contrato existe
+      if (!contractData || !contractData.id) {
+        throw new Error('Dados do contrato inválidos');
+      }
       
-      // Salvar o registro de envio no Firebase
-      const emailLog = {
-        contract_id: contractData.id,
-        sent_to: email,
-        sent_at: new Date().toISOString(),
-        type: 'email'
+      // Preparar dados para envio
+      const emailData = {
+        to: email,
+        subject: `Contrato: ${contractData.title}`,
+        body: `Segue em anexo o contrato "${contractData.title}"`,
+        attachments: [
+          {
+            filename: pdfFileName || `contrato_${contractData.id}.pdf`,
+            content: contractData.content,
+            contentType: 'application/pdf'
+          }
+        ]
       };
       
-      const collectionRef = collection(db, 'contract_shares');
-      const docRef = doc(collectionRef);
-      await setDoc(docRef, emailLog);
-
+      // Enviar email (implementação fictícia)
+      // Na implementação real, você usaria um serviço de email
+      console.log('Enviando contrato por email:', emailData);
+      
+      // Atualizar status do contrato
+      await this.update(contractData.id, {
+        status: 'sent',
+        sent_date: new Date().toISOString(),
+        sent_to: email
+      });
+      
       return true;
     } catch (error) {
       console.error('Error sending contract by email:', error);
       throw error;
     }
   },
-
-  getByClientId: async function(clientId) {
+  
+  async getByClientId(clientId) {
     try {
-      const collectionRef = collection(db, this.collection);
-      const q = query(
-        collectionRef,
-        where('client_id', '==', clientId),
-        orderBy('created_at', 'desc')
-      );
-      const snapshot = await getDocs(q);
+      if (!clientId) {
+        throw new Error('ID do cliente não fornecido');
+      }
       
-      return snapshot.docs.map(doc => ({
+      // Buscar contratos do cliente
+      const q = query(
+        collection(db, this.collection),
+        where('client_id', '==', clientId)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
     } catch (error) {
-      console.error('Error getting client contracts:', error);
-      throw error;
+      console.error('Error getting contracts by client ID:', error);
+      return [];
     }
   },
-
-  update: async function(contractId, data) {
+  
+  async update(id, data) {
     try {
-      const docRef = doc(db, this.collection, contractId);
-      await setDoc(docRef, data, { merge: true });
-      return { id: contractId, ...data };
+      if (!id) {
+        throw new Error('ID do contrato não fornecido');
+      }
+      
+      const docRef = doc(db, this.collection, id);
+      await updateDoc(docRef, {
+        ...data,
+        updated_date: new Date().toISOString()
+      });
+      
+      return {
+        id,
+        ...data
+      };
     } catch (error) {
       console.error('Error updating contract:', error);
       throw error;
     }
   },
-
-  delete: async function(contractId) {
+  
+  async delete(id) {
     try {
-      const docRef = doc(db, this.collection, contractId);
+      if (!id) {
+        throw new Error('ID do contrato não fornecido');
+      }
+      
+      const docRef = doc(db, this.collection, id);
       await deleteDoc(docRef);
       return true;
     } catch (error) {
       console.error('Error deleting contract:', error);
       throw error;
+    }
+  },
+  
+  async get(id) {
+    try {
+      if (!id) {
+        throw new Error('ID do contrato não fornecido');
+      }
+      
+      const docRef = doc(db, this.collection, id);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        return {
+          id: docSnap.id,
+          ...docSnap.data()
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting contract:', error);
+      throw error;
+    }
+  },
+  
+  async list() {
+    try {
+      const querySnapshot = await getDocs(collection(db, this.collection));
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('Error listing contracts:', error);
+      return [];
+    }
+  },
+  
+  async filter(filters) {
+    try {
+      let q = collection(db, this.collection);
+      
+      // Aplicar filtros se fornecidos
+      if (filters) {
+        Object.entries(filters).forEach(([key, value]) => {
+          q = query(q, where(key, '==', value));
+        });
+      }
+      
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('Error filtering contracts:', error);
+      return [];
     }
   }
 };
@@ -892,59 +996,46 @@ export const Inventory = {
 
 export const Sale = createEnhancedEntity('sales', null); 
 export const FinancialTransaction = createEnhancedEntity('financial_transactions', base44.entities.FinancialTransaction);
-export const ClientPackage = createEnhancedEntity('client_packages', {
-  create: true,
-  update: true,
-  delete: true,
-  list: true,
-  get: true,
-  query: true,
-  defaultData: {
-    dependents: [],
-    session_history: [],
-    status: 'ativo'
-  }
-});
-export const Package = createEnhancedEntity('packages', base44.entities.Package);
-export const Service = createEnhancedEntity('services', base44.entities.Service);
-export const Supplier = createEnhancedEntity('suppliers', base44.entities.Supplier);
-// export const Role = createEnhancedEntity('roles', base44.entities.Role); // Comentado para usar a implementação completa abaixo
-export const PaymentMethod = createEnhancedEntity('payment_methods', base44.entities.PaymentMethod);
-export const SubscriptionPlan = createEnhancedEntity('subscription_plans', base44.entities.SubscriptionPlan);
-export const ClientSubscription = createEnhancedEntity('client_subscriptions', base44.entities.ClientSubscription);
 
-// Implementação completa da entidade GiftCard usando apenas Firebase
-export const GiftCard = {
-  collection: 'gift_cards',
+// Implementação completa da entidade ClientPackage usando apenas Firebase
+export const ClientPackage = {
+  collection: 'client_packages',
   
   async create(data) {
     try {
       // Gerar ID único se não fornecido
       const docRef = data.id 
-        ? doc(db, 'gift_cards', data.id)
-        : doc(collection(db, 'gift_cards'));
+        ? doc(db, this.collection, data.id)
+        : doc(collection(db, this.collection));
       
       // Preparar dados para salvar
-      const giftCardData = {
+      const packageData = {
         ...data,
         id: docRef.id,
+        dependents: data.dependents || [],
+        session_history: data.session_history || [],
+        status: data.status || 'ativo',
         created_date: data.created_date || new Date().toISOString(),
         updated_date: new Date().toISOString()
       };
       
       // Salvar no Firebase
-      await setDoc(docRef, giftCardData);
+      await setDoc(docRef, packageData);
       
-      return giftCardData;
+      return packageData;
     } catch (error) {
-      console.error('Error creating gift card:', error);
+      console.error('Erro ao criar pacote:', error);
       throw error;
     }
   },
   
   async update(id, data) {
     try {
-      const docRef = doc(db, 'gift_cards', id);
+      if (!id) {
+        throw new Error('ID do pacote não fornecido');
+      }
+      
+      const docRef = doc(db, this.collection, id);
       
       // Atualizar apenas os campos fornecidos
       await updateDoc(docRef, {
@@ -957,23 +1048,34 @@ export const GiftCard = {
         ...data
       };
     } catch (error) {
-      console.error('Error updating gift card:', error);
+      console.error(`Erro ao atualizar pacote ${id}:`, error);
       throw error;
     }
   },
   
   async delete(id) {
     try {
-      await deleteDoc(doc(db, 'gift_cards', id));
+      if (!id) {
+        throw new Error('ID do pacote não fornecido');
+      }
+      
+      const docRef = doc(db, this.collection, id);
+      await deleteDoc(docRef);
+      
+      return { success: true };
     } catch (error) {
-      console.error('Error deleting gift card:', error);
+      console.error(`Erro ao excluir pacote ${id}:`, error);
       throw error;
     }
   },
   
   async get(id) {
     try {
-      const docRef = doc(db, 'gift_cards', id);
+      if (!id) {
+        throw new Error('ID do pacote não fornecido');
+      }
+      
+      const docRef = doc(db, this.collection, id);
       const docSnap = await getDoc(docRef);
       
       if (docSnap.exists()) {
@@ -984,27 +1086,27 @@ export const GiftCard = {
       }
       return null;
     } catch (error) {
-      console.error('Error getting gift card:', error);
+      console.error(`Erro ao buscar pacote ${id}:`, error);
       throw error;
     }
   },
   
   async list() {
     try {
-      const querySnapshot = await getDocs(collection(db, 'gift_cards'));
+      const querySnapshot = await getDocs(collection(db, this.collection));
       return querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
     } catch (error) {
-      console.error('Error listing gift cards:', error);
+      console.error('Erro ao listar pacotes:', error);
       return [];
     }
   },
   
   async filter(filters) {
     try {
-      let q = collection(db, 'gift_cards');
+      let q = collection(db, this.collection);
       
       // Aplicar filtros se fornecidos
       if (filters) {
@@ -1019,8 +1121,136 @@ export const GiftCard = {
         ...doc.data()
       }));
     } catch (error) {
-      console.error('Error filtering gift cards:', error);
+      console.error('Erro ao filtrar pacotes:', error);
       return [];
+    }
+  }
+};
+
+export const Package = createEnhancedEntity('packages', base44.entities.Package);
+export const Service = createEnhancedEntity('services', base44.entities.Service);
+export const Supplier = createEnhancedEntity('suppliers', base44.entities.Supplier);
+// export const Role = createEnhancedEntity('roles', base44.entities.Role); // Comentado para usar a implementação completa abaixo
+export const PaymentMethod = createEnhancedEntity('payment_methods', base44.entities.PaymentMethod);
+export const SubscriptionPlan = createEnhancedEntity('subscription_plans', base44.entities.SubscriptionPlan);
+// Implementação completa da entidade ClientSubscription usando apenas Firebase
+export const ClientSubscription = {
+  collection: 'client_subscriptions',
+  
+  async create(data) {
+    try {
+      const collectionRef = collection(db, 'client_subscriptions');
+      const docRef = await addDoc(collectionRef, {
+        ...data,
+        created_date: new Date().toISOString()
+      });
+      
+      return {
+        id: docRef.id,
+        ...data
+      };
+    } catch (error) {
+      console.error('Erro ao criar assinatura:', error);
+      throw error;
+    }
+  },
+  
+  async update(id, data) {
+    try {
+      if (!id) {
+        throw new Error('ID da assinatura não fornecido');
+      }
+      
+      const docRef = doc(db, 'client_subscriptions', id);
+      await updateDoc(docRef, data);
+      
+      return {
+        id,
+        ...data
+      };
+    } catch (error) {
+      console.error(`Erro ao atualizar assinatura ${id}:`, error);
+      throw error;
+    }
+  },
+  
+  async delete(id) {
+    try {
+      if (!id) {
+        throw new Error('ID da assinatura não fornecido');
+      }
+      
+      const docRef = doc(db, 'client_subscriptions', id);
+      await deleteDoc(docRef);
+      
+      return { success: true };
+    } catch (error) {
+      console.error(`Erro ao excluir assinatura ${id}:`, error);
+      throw error;
+    }
+  },
+  
+  async get(id) {
+    try {
+      if (!id) {
+        throw new Error('ID da assinatura não fornecido');
+      }
+      
+      const docRef = doc(db, 'client_subscriptions', id);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        return {
+          id: docSnap.id,
+          ...docSnap.data()
+        };
+      } else {
+        throw new Error('Assinatura não encontrada');
+      }
+    } catch (error) {
+      console.error(`Erro ao buscar assinatura ${id}:`, error);
+      throw error;
+    }
+  },
+  
+  async list() {
+    try {
+      const collectionRef = collection(db, 'client_subscriptions');
+      const querySnapshot = await getDocs(collectionRef);
+      
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('Erro ao listar assinaturas:', error);
+      throw error;
+    }
+  },
+  
+  async filter(filters) {
+    try {
+      let q = collection(db, 'client_subscriptions');
+      
+      if (filters) {
+        if (filters.client_id) {
+          q = query(q, where('client_id', '==', filters.client_id));
+        }
+        
+        if (filters.status) {
+          q = query(q, where('status', '==', filters.status));
+        }
+      }
+      
+      const querySnapshot = await getDocs(q);
+      
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('Erro ao filtrar assinaturas:', error);
+      throw error;
     }
   }
 };
@@ -1480,6 +1710,52 @@ export const Role = {
       console.error('Erro ao filtrar cargos:', error);
       throw error;
     }
+  },
+  
+  // Método para criar múltiplos cargos de uma vez
+  bulkCreate: async function(roles) {
+    try {
+      if (!Array.isArray(roles) || roles.length === 0) {
+        throw new Error('É necessário fornecer um array de cargos');
+      }
+      
+      const results = [];
+      
+      // Verificar se o cargo Administrador Geral já existe
+      const adminExists = await this.checkAdminRoleExists();
+      
+      // Criar cada cargo individualmente
+      for (const roleData of roles) {
+        // Pular a criação do Administrador Geral se ele já existir
+        if (adminExists && roleData.name === "Administrador Geral") {
+          continue;
+        }
+        
+        const result = await this.create(roleData);
+        results.push(result);
+      }
+      
+      return results;
+    } catch (error) {
+      console.error('Erro ao criar múltiplos cargos:', error);
+      throw error;
+    }
+  },
+  
+  // Método para verificar se o cargo Administrador Geral já existe
+  checkAdminRoleExists: async function() {
+    try {
+      const q = query(
+        collection(db, this.collection),
+        where('name', '==', 'Administrador Geral')
+      );
+      
+      const snapshot = await getDocs(q);
+      return !snapshot.empty;
+    } catch (error) {
+      console.error('Erro ao verificar existência do cargo Administrador Geral:', error);
+      return false;
+    }
   }
 };
 
@@ -1571,5 +1847,117 @@ export const checkEnabledPermission = async (permissionId) => {
     console.error(`Erro ao verificar permissão ${permissionId}:`, error);
     // Em caso de erro, permitir a permissão por padrão
     return true;
+  }
+};
+
+// Implementação completa da entidade GiftCard usando apenas Firebase
+export const GiftCard = {
+  collection: 'gift_cards',
+  
+  async create(data) {
+    try {
+      // Gerar ID único se não fornecido
+      const docRef = data.id 
+        ? doc(db, 'gift_cards', data.id)
+        : doc(collection(db, 'gift_cards'));
+      
+      // Preparar dados para salvar
+      const giftCardData = {
+        ...data,
+        id: docRef.id,
+        created_date: data.created_date || new Date().toISOString(),
+        updated_date: new Date().toISOString()
+      };
+      
+      // Salvar no Firebase
+      await setDoc(docRef, giftCardData);
+      
+      return giftCardData;
+    } catch (error) {
+      console.error('Error creating gift card:', error);
+      throw error;
+    }
+  },
+  
+  async update(id, data) {
+    try {
+      const docRef = doc(db, 'gift_cards', id);
+      
+      // Atualizar apenas os campos fornecidos
+      await updateDoc(docRef, {
+        ...data,
+        updated_date: new Date().toISOString()
+      });
+      
+      return {
+        id,
+        ...data
+      };
+    } catch (error) {
+      console.error('Error updating gift card:', error);
+      throw error;
+    }
+  },
+  
+  async delete(id) {
+    try {
+      await deleteDoc(doc(db, 'gift_cards', id));
+    } catch (error) {
+      console.error('Error deleting gift card:', error);
+      throw error;
+    }
+  },
+  
+  async get(id) {
+    try {
+      const docRef = doc(db, 'gift_cards', id);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        return {
+          id: docSnap.id,
+          ...docSnap.data()
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting gift card:', error);
+      throw error;
+    }
+  },
+  
+  async list() {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'gift_cards'));
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('Error listing gift cards:', error);
+      return [];
+    }
+  },
+  
+  async filter(filters) {
+    try {
+      let q = collection(db, 'gift_cards');
+      
+      // Aplicar filtros se fornecidos
+      if (filters) {
+        Object.entries(filters).forEach(([key, value]) => {
+          q = query(q, where(key, '==', value));
+        });
+      }
+      
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('Error filtering gift cards:', error);
+      return [];
+    }
   }
 };

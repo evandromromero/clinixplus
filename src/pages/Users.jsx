@@ -39,7 +39,8 @@ import {
   Eye,
   EyeOff
 } from "lucide-react";
-import { User, Role } from "@/api/entities";
+import { User } from "@/api/entities";
+import { Role } from "@/firebase/entities";
 import {
   Pagination,
   PaginationContent,
