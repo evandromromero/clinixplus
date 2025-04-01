@@ -199,271 +199,91 @@ src/
    - Cards informativos com:
      * Nome do pacote
      * Preço total com desconto
-     * Descrição
-     * Lista de serviços incluídos
-     * Validade em dias
-   - Identificação visual por cores
-   - Ações de editar e excluir
 
-4. **Integração Firebase**:
-   - Persistência completa dos dados
-   - Novos campos:
-     * discount_type: "percentage" | "fixed"
-     * color: string (hexadecimal)
+#### Formulário de Contato e Gerenciamento de Mensagens
+1. **Formulário de Contato na Página Inicial**:
+   - Implementação completa do formulário com validação de campos
+   - Feedback visual para o usuário durante o envio
+   - Armazenamento das mensagens no Firebase
+   - Eliminação da dependência de serviços externos como EmailJS
 
-#### Histórico de Sessões em Pacotes
-1. **Estrutura do Histórico**:
-   ```javascript
-   {
-     date: "Data do agendamento",
-     employee_id: "ID do profissional",
-     employee_name: "Nome do profissional",
-     appointment_id: "ID do agendamento",
-     service_id: "ID do serviço",
-     service_name: "Nome do serviço",
-     status: "concluido|agendado|cancelado",
-     notes: "Observações"
-   }
+2. **Sistema de Gerenciamento de Mensagens**:
+   - Nova aba "Emails" na página de configurações gerais
+   - Tabela com todas as mensagens recebidas
+   - Destaque visual para mensagens não lidas
+   - Funcionalidades para marcar como lida e excluir mensagens
+   - Modal de detalhes com todas as informações da mensagem
+   - Formatação adequada de datas e textos longos
+
+3. **Entidade ContactMessage no Firebase**:
+   - Métodos para criar, listar, atualizar e excluir mensagens
+   - Ordenação por data de criação
+   - Marcação de status (lida/não lida)
+
+#### Configurações de SEO
+1. **Nova Aba de SEO nas Configurações Gerais**:
+   - Campos para meta_title, meta_description, meta_keywords
+   - Campos para meta_author, favicon_url e site_name
+   - Interface intuitiva para edição das configurações
+
+2. **Componente SEOHead**:
+   - Aplicação automática das configurações de SEO na página pública
+   - Carregamento dinâmico das configurações do Firebase
+   - Fallback para valores padrão quando não configurados
+
+#### Reparo do Cargo Administrador Geral
+1. **Script de Reparo Automático**:
+   - Implementação do script setupAdminRole.js
+   - Verificação e criação automática do cargo Administrador Geral
+
+2. **Página de Reparo Manual**:
+   - Implementação da página AdminRepair.jsx
+   - Interface para reparar manualmente o cargo quando necessário
+   - Link direto no menu lateral para acesso rápido
+
+### Instruções para Hospedagem
+
+#### Preparação do Projeto
+1. **Gerar Build de Produção**:
+   ```bash
+   npm run build
+   ```
+   Isso criará uma pasta `dist` com os arquivos otimizados para produção.
+
+2. **Configurar o Firebase**:
+   - Acessar o Console do Firebase
+   - Adicionar o domínio ao Authentication > Sign-in method > Domínios autorizados
+   - Verificar as regras de segurança do Firestore e Storage
+
+#### Hospedagem na Hostinger
+1. **Configurar o Domínio**:
+   - Acessar o painel da Hostinger
+   - Vincular o domínio à hospedagem
+   - Configurar o SSL para o domínio
+
+2. **Fazer Upload dos Arquivos**:
+   - Acessar o Gerenciador de Arquivos
+   - Navegar até a pasta `public_html`
+   - Fazer upload de todo o conteúdo da pasta `dist`
+
+3. **Configurar Redirecionamento para SPA**:
+   - Criar arquivo `.htaccess` na pasta `public_html`:
+   ```apache
+   <IfModule mod_rewrite.c>
+     RewriteEngine On
+     RewriteBase /
+     RewriteRule ^index\.html$ - [L]
+     RewriteCond %{REQUEST_FILENAME} !-f
+     RewriteCond %{REQUEST_FILENAME} !-d
+     RewriteCond %{REQUEST_FILENAME} !-l
+     RewriteRule . /index.html [L]
+   </IfModule>
    ```
 
-2. **Padronização de Status**:
-   - Banco de dados: 'concluido', 'agendado', 'cancelado' (sem acentos)
-   - Interface: 'Concluído', 'Agendado', 'Cancelado' (com acentos)
-   - Cores: Verde (concluído), Azul (agendado), Vermelho (cancelado)
-
-3. **Fluxo de Atualização**:
-   - Ao concluir agendamento: status atualizado para 'concluido'
-   - Sessão adicionada ao histórico do pacote
-   - Contador de sessões incrementado
-   - Status do pacote atualizado se atingir total de sessões
-
-4. **Arquivos Modificados**:
-   - `Appointments.jsx`: Atualização de status e histórico
-   - `ClientPackages.jsx`: Exibição do histórico
-   - Integração com Firebase para persistência
-
-5. **Melhorias de UX**:
-   - Formatação de data/hora no padrão brasileiro
-   - Exibição do nome do profissional
-   - Badges coloridos para status
-   - Informações detalhadas por sessão
-
-#### Melhorias no Layout e UX
-1. **Página de Produtos**:
-   - Atualizado layout usando componentes shadcn/ui
-   - Implementada tabela com ordenação e filtragem
-   - Reorganizado modal de adicionar/editar produto
-   - Adicionadas validações e feedback visual
-   - Melhorada UX com grids e espaçamento adequado
-
-2. **Modelos de Anamnese**:
-   - Implementado sistema de campos dinâmicos
-   - Suporte para campos tipo texto, seleção e sim/não
-   - Preview em tempo real dos campos adicionados
-   - Modal com altura máxima e barra de rolagem
-   - Validações e feedback visual aprimorados
-
-3. **Página de Serviços**:
-   - Reorganizado formulário em seções lógicas
-   - Melhorada UX das configurações do site
-   - Implementadas validações mais robustas
-   - Modal com altura controlada e rolagem
-   - Feedback visual para todas as ações
-
-4. **Melhorias Gerais**:
-   - Modais com altura máxima (80vh) e barra de rolagem
-   - Padronização de cores e estilos dos botões
-   - Loading states e toasts para feedback
-   - Campos organizados em grids responsivos
-   - Validações claras e mensagens de erro
-
-#### Desafios e Soluções
-1. **Modais Grandes**
-   - Problema: Modais ocupando toda a tela em formulários longos
-   - Solução: Implementado `max-h-[80vh]` e `overflow-y-auto`
-   - Resultado: Melhor experiência em telas menores
-
-2. **Inconsistência Visual**
-   - Problema: Diferentes estilos entre páginas
-   - Solução: Padronização com shadcn/ui e Tailwind
-   - Resultado: Interface mais coesa e profissional
-
-3. **UX em Formulários**
-   - Problema: Formulários longos e confusos
-   - Solução: Reorganização em seções lógicas
-   - Resultado: Melhor fluxo de preenchimento
-
-#### Padrões Técnicos
-- **Componentes**: shadcn/ui para base consistente
-- **Estilos**: Tailwind CSS para customização
-- **Estado**: React Hooks e Context quando necessário
-- **Feedback**: Sistema de toast notifications
-- **Validação**: Implementada em tempo real
-- **Responsividade**: Layout adaptável em todas as telas
-
-### Integração com Firebase (Planejamento)
-Para resolver problemas de limite de taxa (429: Rate limit exceeded) do Base44, estamos considerando uma solução híbrida com Firebase. A implementação mais viável seria:
-
-1. **Camada de Abstração Mínima**:
-   - Criar um wrapper para as entidades do Base44
-   - Salvar dados no Firebase em paralelo
-   - Priorizar leitura do Firebase para reduzir chamadas à API
-
-2. **Implementação**:
-   - Criar arquivo de configuração do Firebase
-   - Modificar `entities.js` para usar as versões aprimoradas
-   - Manter compatibilidade total com o código existente
-
-3. **Entidades Prioritárias**:
-   - Clients
-   - Appointments
-   - Dashboard (componente com mais requisições)
-
-Esta solução não alterará o layout ou a lógica de negócios existente, apenas otimizará o acesso aos dados.
-
-#### Gift Cards com Nome da Empresa Dinâmico
-1. **Integração com Configurações da Empresa**:
-   - Nome da empresa buscado automaticamente do Firebase
-   - Implementação de cache para otimizar requisições
-   - Suporte a múltiplas instâncias do componente
-   - Estado global para compartilhar dados
-
-2. **Componentes Modificados**:
-   - `GiftCardTemplate.jsx`: 
-     * Cache do nome da empresa
-     * Busca automática das configurações
-     * Fallback para nome padrão
-   - `GiftCards.jsx`:
-     * Integração com configurações da empresa
-     * Preview dinâmico no modal de criação
-     * Reset de formulário mantendo dados da empresa
-
-3. **Melhorias Técnicas**:
-   - Busca dinâmica do primeiro documento de configurações
-   - Eliminação de IDs hardcoded
-   - Otimização de requisições ao Firebase
-   - Melhor gerenciamento de estado
-
-4. **Benefícios**:
-   - Configuração simplificada para novas empresas
-   - Manutenção centralizada do nome da empresa
-   - Melhor performance com sistema de cache
-   - UX consistente em todo o sistema
-
-## Migração do Sistema de Assinaturas para Firestore
-
-### Visão Geral
-Realizamos uma migração completa do sistema de assinaturas do Base44 para o Firestore, eliminando todas as dependências do Base44 no componente de assinaturas. Esta migração resolve problemas de erro 404 ao excluir ou atualizar assinaturas e melhora a confiabilidade do sistema.
-
-### Modificações Realizadas
-
-#### 1. Carregamento de Dados
-- Modificamos o método `loadData` em `Subscriptions.jsx` para carregar assinaturas diretamente do Firestore
-- Implementamos um sistema de logs detalhados para facilitar o diagnóstico de problemas
-- Adicionamos tratamento de erros robusto com feedback visual para o usuário
-
-```javascript
-// Carregar assinaturas diretamente do Firestore
-const { db } = await import('@/firebase/config');
-const { collection, getDocs } = await import('firebase/firestore');
-
-const subscriptionsRef = collection(db, 'client_subscriptions');
-const querySnapshot = await getDocs(subscriptionsRef);
-
-subscriptionsData = [];
-querySnapshot.forEach((doc) => {
-  subscriptionsData.push({
-    id: doc.id,
-    ...doc.data()
-  });
-});
-```
-
-#### 2. Criação e Atualização de Assinaturas
-- Reescrevemos o método `handleSaveSubscription` para usar diretamente o Firestore
-- Implementamos um sistema de fallback que tenta métodos alternativos quando a primeira tentativa falha
-- Adicionamos timestamps automáticos para rastrear quando as assinaturas são criadas e atualizadas
-
-```javascript
-// Criar nova assinatura no Firestore
-const subscriptionsRef = collection(db, 'client_subscriptions');
-const docRef = await addDoc(subscriptionsRef, subscriptionData);
-
-// Fallback se addDoc falhar
-try {
-  const newId = Date.now().toString();
-  const subscriptionRef = doc(db, 'client_subscriptions', newId);
-  await setDoc(subscriptionRef, subscriptionData);
-}
-```
-
-#### 3. Cancelamento de Assinaturas
-- Modificamos o método `handleDeleteItem` para cancelar assinaturas diretamente no Firestore
-- Adicionamos feedback visual para o usuário sobre o resultado da operação
-
-```javascript
-// Atualizar o status da assinatura para "cancelada"
-const subscriptionRef = doc(db, 'client_subscriptions', itemToDelete.id);
-await updateDoc(subscriptionRef, {
-  status: "cancelada",
-  updated_at: new Date().toISOString()
-});
-```
-
-#### 4. Verificação de Status de Pagamento
-- Criamos um novo método `handleCheckSubscriptionStatus` que verifica o status diretamente no Mercado Pago
-- Implementamos a atualização da assinatura no Firestore com base no status retornado
-
-```javascript
-// Obter informações do pagamento do Mercado Pago
-const paymentInfo = await MercadoPagoService.getPaymentInfo(subscriptionData.mercadopago_payment_id);
-
-// Atualizar o status da assinatura no Firestore
-await updateDoc(subscriptionRef, {
-  status: newStatus,
-  mercadopago_status: mercadopago_status,
-  payment_status_detail: paymentInfo.status_detail || "",
-  updated_at: new Date().toISOString()
-});
-```
-
-#### 5. Verificação Periódica de Assinaturas
-- Implementamos um sistema de verificação periódica que usa diretamente o Firestore
-- Melhoramos o filtro de assinaturas pendentes para usar comparações case-insensitive
-- Adicionamos logs detalhados para facilitar o diagnóstico de problemas
-
-```javascript
-// Verificar periodicamente assinaturas pendentes
-const checkInterval = setInterval(() => {
-  checkPendingSubscriptionsStatus();
-}, 300000); // Verificar a cada 5 minutos
-```
-
-#### 6. Verificação de Assinaturas Vencidas
-- Atualizamos o método `checkSubscriptionsStatus` para verificar assinaturas vencidas
-- Implementamos a atualização automática do status para "vencida" diretamente no Firestore
-
-```javascript
-// Atualizar o status da assinatura para "vencida" no Firestore
-const subscriptionRef = doc(db, 'client_subscriptions', sub.id);
-await updateDoc(subscriptionRef, {
-  status: "vencida",
-  updated_at: new Date().toISOString()
-});
-```
-
-### Benefícios da Migração
-1. **Independência do Base44**: O sistema de assinaturas agora funciona de forma independente do Base44
-2. **Maior Confiabilidade**: Eliminação de erros 404 ao excluir ou atualizar assinaturas
-3. **Melhor Desempenho**: Acesso direto ao Firestore sem camadas intermediárias
-4. **Tratamento de Erros Robusto**: Sistema de fallback para garantir que as operações sejam concluídas
-5. **Logs Detalhados**: Facilita o diagnóstico e resolução de problemas
-6. **Feedback Visual**: Notificações toast para informar o usuário sobre o resultado das operações
-
-### Próximos Passos
-1. **Monitoramento**: Acompanhar o desempenho do sistema após a migração
-2. **Otimização**: Identificar e otimizar áreas que possam apresentar gargalos
-3. **Expansão**: Aplicar a mesma abordagem a outros componentes que ainda dependem do Base44
+4. **Testar o Site**:
+   - Acessar o site no domínio configurado
+   - Verificar se todas as páginas estão carregando
+   - Testar o login e outras funcionalidades
 
 ## Atualizações Recentes
 
