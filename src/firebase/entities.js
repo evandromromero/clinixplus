@@ -2,7 +2,7 @@
 import { base44 } from '../api/base44Client';
 import { createEnhancedEntity } from './enhancedEntities';
 import { db } from './config';
-import { collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where, orderBy, addDoc, updateDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where, orderBy, addDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 
 // Criar as versões base das entidades
 const baseClient = createEnhancedEntity('clients', base44.entities.Client);
@@ -1958,6 +1958,97 @@ export const GiftCard = {
     } catch (error) {
       console.error('Error filtering gift cards:', error);
       return [];
+    }
+  }
+};
+
+// Entidade para mensagens de contato
+export const ContactMessage = {
+  create: async (data) => {
+    try {
+      // Adicionar timestamp à mensagem
+      const messageData = {
+        ...data,
+        created_at: serverTimestamp(),
+        read: false
+      };
+      
+      const docRef = await addDoc(collection(db, 'contact_messages'), messageData);
+      return docRef.id;
+    } catch (error) {
+      console.error("Erro ao criar mensagem de contato:", error);
+      throw error;
+    }
+  },
+  
+  list: async (orderByField = 'created_at', direction = 'desc') => {
+    try {
+      const messagesRef = collection(db, 'contact_messages');
+      const q = query(messagesRef, orderBy(orderByField, direction));
+      const querySnapshot = await getDocs(q);
+      
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        created_at: doc.data().created_at ? new Date(doc.data().created_at.toDate()) : new Date()
+      }));
+    } catch (error) {
+      console.error("Erro ao listar mensagens de contato:", error);
+      return [];
+    }
+  },
+  
+  get: async (id) => {
+    try {
+      const docRef = doc(db, 'contact_messages', id);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id,
+          ...data,
+          created_at: data.created_at ? new Date(data.created_at.toDate()) : new Date()
+        };
+      }
+      
+      return null;
+    } catch (error) {
+      console.error("Erro ao obter mensagem de contato:", error);
+      return null;
+    }
+  },
+  
+  update: async (id, data) => {
+    try {
+      const docRef = doc(db, 'contact_messages', id);
+      await updateDoc(docRef, data);
+      return true;
+    } catch (error) {
+      console.error("Erro ao atualizar mensagem de contato:", error);
+      throw error;
+    }
+  },
+  
+  delete: async (id) => {
+    try {
+      const docRef = doc(db, 'contact_messages', id);
+      await deleteDoc(docRef);
+      return true;
+    } catch (error) {
+      console.error("Erro ao excluir mensagem de contato:", error);
+      throw error;
+    }
+  },
+  
+  markAsRead: async (id) => {
+    try {
+      const docRef = doc(db, 'contact_messages', id);
+      await updateDoc(docRef, { read: true });
+      return true;
+    } catch (error) {
+      console.error("Erro ao marcar mensagem como lida:", error);
+      throw error;
     }
   }
 };

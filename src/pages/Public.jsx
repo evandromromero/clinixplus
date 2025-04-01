@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { 
@@ -12,7 +12,9 @@ import {
   Facebook, 
   CheckCircle,
   ChevronRight,
-  Shield
+  Shield,
+  RefreshCw,
+  AlertCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import SlideShow from "../components/public/SlideShow";
@@ -20,7 +22,7 @@ import AboutModal from "../components/public/AboutModal";
 import ServiceCarousel from "../components/public/ServiceCarousel";
 import TestimonialCarousel from "../components/public/TestimonialCarousel";
 import AddTestimonialDialog from "../components/public/AddTestimonialDialog";
-import { Service, CompanySettings, Testimonial, SubscriptionPlan, checkEnabledPermission } from "@/firebase/entities";
+import { Service, CompanySettings, Testimonial, SubscriptionPlan, checkEnabledPermission, ContactMessage } from "@/firebase/entities";
 import SubscriptionPlansSection from '../components/public/SubscriptionPlansSection';
 import GiftCardSection from '../components/public/GiftCardSection';
 import SEOHead from '../components/SEOHead';
@@ -67,23 +69,19 @@ export default function Public() {
   const [showSubscriptionsSection, setShowSubscriptionsSection] = useState(true);
   const [showGiftCardsSection, setShowGiftCardsSection] = useState(true);
   const [footerServices, setFooterServices] = useState([]);
-  const [defaultServices, setDefaultServices] = useState([
-    {
-      name: "Tratamentos Faciais",
-      description: "Nossas terapias faciais são personalizadas para atender às necessidades específicas da sua pele.",
-      image_url: "https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=500&q=80"
-    },
-    {
-      name: "Massagens Terapêuticas",
-      description: "Técnicas avançadas de massagem para relaxar, regenerar e revitalizar seu corpo.",
-      image_url: "https://images.unsplash.com/photo-1519823551278-64ac92734fb1?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=500&q=80"
-    },
-    {
-      name: "Tratamentos Corporais",
-      description: "Soluções inovadoras para modelagem corporal, redução de medidas e tratamento da celulite.",
-      image_url: "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=500&q=80"
-    }
-  ]);
+  
+  // Estados para o formulário de contato
+  const [contactForm, setContactForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    subject: '',
+    message: ''
+  });
+  const [formErrors, setFormErrors] = useState({});
+  const [isSending, setIsSending] = useState(false);
+  const [sendResult, setSendResult] = useState({ success: false, message: '' });
+  const formRef = useRef();
 
   useEffect(() => {
     loadCompanySettings();
@@ -200,21 +198,21 @@ export default function Public() {
     {
       title: "Transforme sua beleza com tecnologia avançada",
       description: "Nossos tratamentos combinam tecnologia de ponta com profissionais especializados para resultados extraordinários.",
-      image_url: "https://images.unsplash.com/photo-1616394584738-fc6e612e71b9?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80",
+      image_url: "https://images.unsplash.com/photo-1616394584738-fc6e612e71b9?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80",
       button_text: "Conheça nossos tratamentos",
       button_url: "#services"
     },
     {
       title: "Experiência personalizada para sua pele",
       description: "Cada pele é única. Nossos tratamentos faciais são totalmente adaptados às suas necessidades específicas.",
-      image_url: "https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80",
+      image_url: "https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80",
       button_text: "Agende uma avaliação",
       button_url: "#contact"
     },
     {
       title: "Bem-estar e relaxamento para corpo e mente",
       description: "Nossas massagens terapêuticas promovem o relaxamento profundo e restauram o equilíbrio do seu corpo.",
-      image_url: "https://images.unsplash.com/photo-1519823551278-64ac92734fb1?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80",
+      image_url: "https://images.unsplash.com/photo-1519823551278-64ac92734fb1?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80",
       button_text: "Ver todas as terapias",
       button_url: "#services"
     }
@@ -316,7 +314,108 @@ export default function Public() {
 
   const plansToDisplay = subscriptionPlans.length > 0 ? subscriptionPlans : defaultSubscriptionPlans;
 
+  // Serviços padrão para exibir quando não houver serviços cadastrados
+  const defaultServices = [
+    {
+      name: "Tratamentos Faciais",
+      description: "Nossas terapias faciais são personalizadas para atender às necessidades específicas da sua pele.",
+      image_url: "https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?auto=format&fit=crop&w=500&q=80"
+    },
+    {
+      name: "Massagens Terapêuticas",
+      description: "Técnicas avançadas de massagem para relaxar, regenerar e revitalizar seu corpo.",
+      image_url: "https://images.unsplash.com/photo-1519823551278-64ac92734fb1?auto=format&fit=crop&w=500&q=80"
+    },
+    {
+      name: "Tratamentos Corporais",
+      description: "Soluções inovadoras para modelagem corporal, redução de medidas e tratamento da celulite.",
+      image_url: "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?auto=format&fit=crop&w=500&q=80"
+    }
+  ];
+
   const servicesDisplay = featuredServices.length > 0 ? featuredServices : defaultServices;
+
+  // Função para validar o formulário de contato
+  const validateForm = () => {
+    const errors = {};
+    
+    if (!contactForm.name.trim()) {
+      errors.name = "Nome é obrigatório";
+    }
+    
+    if (!contactForm.email.trim()) {
+      errors.email = "E-mail é obrigatório";
+    } else if (!/\S+@\S+\.\S+/.test(contactForm.email)) {
+      errors.email = "E-mail inválido";
+    }
+    
+    if (!contactForm.phone.trim()) {
+      errors.phone = "Telefone é obrigatório";
+    }
+    
+    if (!contactForm.subject || contactForm.subject === "Selecione um assunto") {
+      errors.subject = "Selecione um assunto";
+    }
+    
+    if (!contactForm.message.trim()) {
+      errors.message = "Mensagem é obrigatória";
+    }
+    
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  // Função para enviar o formulário de contato
+  const handleSendContactForm = async (e) => {
+    e.preventDefault();
+    
+    // Validar formulário
+    if (!validateForm()) {
+      return;
+    }
+    
+    setIsSending(true);
+    setSendResult({ success: false, message: '' });
+    
+    try {
+      // Preparar os dados da mensagem
+      const messageData = {
+        name: contactForm.name,
+        email: contactForm.email,
+        phone: contactForm.phone,
+        subject: contactForm.subject,
+        message: contactForm.message,
+        company_name: company.name,
+        to_email: company.email
+      };
+      
+      // Salvar mensagem no Firebase
+      await ContactMessage.create(messageData);
+      
+      // Sucesso
+      setSendResult({
+        success: true,
+        message: 'Mensagem enviada com sucesso! Entraremos em contato em breve.'
+      });
+      
+      // Limpar formulário
+      setContactForm({
+        name: '',
+        email: '',
+        phone: '',
+        subject: '',
+        message: ''
+      });
+    } catch (error) {
+      console.error('Erro ao enviar mensagem:', error);
+      setSendResult({
+        success: false,
+        message: 'Erro ao enviar mensagem. Por favor, tente novamente ou entre em contato por telefone.'
+      });
+    } finally {
+      setIsSending(false);
+    }
+  };
 
   return (
     <div className="bg-white min-h-screen">
@@ -570,36 +669,96 @@ export default function Public() {
             
             <div className="bg-white p-6 rounded-lg shadow-lg">
               <h3 className="text-xl font-semibold text-[#0D0F36] mb-4">Envie sua mensagem</h3>
-              <form className="space-y-4">
+              <form 
+                ref={formRef} 
+                className="space-y-4" 
+                onSubmit={handleSendContactForm}
+              >
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Nome completo</label>
-                  <input type="text" className="w-full p-2 border rounded-md focus:ring-2 focus:ring-[#69D2CD] focus:border-transparent" />
+                  <input 
+                    type="text" 
+                    value={contactForm.name} 
+                    onChange={(e) => setContactForm({ ...contactForm, name: e.target.value })}
+                    className="w-full p-2 border rounded-md focus:ring-2 focus:ring-[#69D2CD] focus:border-transparent"
+                  />
+                  {formErrors.name && (
+                    <p className="text-red-600 text-sm">{formErrors.name}</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">E-mail</label>
-                  <input type="email" className="w-full p-2 border rounded-md focus:ring-2 focus:ring-[#69D2CD] focus:border-transparent" />
+                  <input 
+                    type="email" 
+                    value={contactForm.email} 
+                    onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })}
+                    className="w-full p-2 border rounded-md focus:ring-2 focus:ring-[#69D2CD] focus:border-transparent"
+                  />
+                  {formErrors.email && (
+                    <p className="text-red-600 text-sm">{formErrors.email}</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Telefone</label>
-                  <input type="tel" className="w-full p-2 border rounded-md focus:ring-2 focus:ring-[#69D2CD] focus:border-transparent" />
+                  <input 
+                    type="tel" 
+                    value={contactForm.phone} 
+                    onChange={(e) => setContactForm({ ...contactForm, phone: e.target.value })}
+                    className="w-full p-2 border rounded-md focus:ring-2 focus:ring-[#69D2CD] focus:border-transparent"
+                  />
+                  {formErrors.phone && (
+                    <p className="text-red-600 text-sm">{formErrors.phone}</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Assunto</label>
-                  <select className="w-full p-2 border rounded-md focus:ring-2 focus:ring-[#69D2CD] focus:border-transparent">
+                  <select 
+                    value={contactForm.subject} 
+                    onChange={(e) => setContactForm({ ...contactForm, subject: e.target.value })}
+                    className="w-full p-2 border rounded-md focus:ring-2 focus:ring-[#69D2CD] focus:border-transparent"
+                  >
                     <option>Selecione um assunto</option>
                     <option>Agendamento</option>
                     <option>Informações sobre tratamentos</option>
                     <option>Preços</option>
                     <option>Outros</option>
                   </select>
+                  {formErrors.subject && (
+                    <p className="text-red-600 text-sm">{formErrors.subject}</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Mensagem</label>
-                  <textarea rows="4" className="w-full p-2 border rounded-md focus:ring-2 focus:ring-[#69D2CD] focus:border-transparent"></textarea>
+                  <textarea 
+                    rows="4" 
+                    value={contactForm.message} 
+                    onChange={(e) => setContactForm({ ...contactForm, message: e.target.value })}
+                    className="w-full p-2 border rounded-md focus:ring-2 focus:ring-[#69D2CD] focus:border-transparent"
+                  ></textarea>
+                  {formErrors.message && (
+                    <p className="text-red-600 text-sm">{formErrors.message}</p>
+                  )}
                 </div>
-                <Button className="bg-[#294380] hover:bg-[#0D0F36] w-full">
-                  Enviar mensagem
+                <Button 
+                  type="submit" 
+                  className="bg-[#294380] hover:bg-[#0D0F36] w-full"
+                  disabled={isSending}
+                >
+                  {isSending ? (
+                    <div className="flex items-center justify-center">
+                      <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-[#69D2CD]"></div>
+                      <span className="ml-2">Enviando...</span>
+                    </div>
+                  ) : (
+                    <span>Enviar mensagem</span>
+                  )}
                 </Button>
+                {sendResult.success && (
+                  <p className="text-green-600 text-sm mt-2">{sendResult.message}</p>
+                )}
+                {sendResult.success === false && sendResult.message && (
+                  <p className="text-red-600 text-sm mt-2">{sendResult.message}</p>
+                )}
               </form>
             </div>
           </div>

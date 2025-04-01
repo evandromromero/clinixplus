@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { CompanySettings, Testimonial, SlideShowImage, Employee } from '@/firebase/entities';
+import { CompanySettings, Testimonial, SlideShowImage, Employee, ContactMessage } from '@/firebase/entities';
 import {
   Building2,
   Settings as SettingsIcon,
@@ -45,7 +45,10 @@ import {
   Facebook,
   RefreshCw,
   Image,
-  AlertTriangle
+  AlertTriangle,
+  Mail,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 export default function Settings() {
@@ -114,58 +117,126 @@ export default function Settings() {
   const [loadError, setLoadError] = useState(null);
   const [activeTab, setActiveTab] = useState("business");
   
+  // Estados para gerenciamento de mensagens de contato
+  const [contactMessages, setContactMessages] = useState([]);
+  const [selectedMessage, setSelectedMessage] = useState(null);
+  const [showMessageDetails, setShowMessageDetails] = useState(false);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+
   useEffect(() => {
     console.log('Initial useEffect triggered');
     loadInitialData();
-    
-    return () => {
-      console.log('Settings component unmounting');
-    };
   }, []);
-
+  
+  // Efeito para carregar mensagens de contato quando a aba de emails for selecionada
+  useEffect(() => {
+    if (activeTab === 'emails') {
+      loadContactMessages();
+    }
+  }, [activeTab]);
+  
   const loadInitialData = async () => {
+    console.log('Loading initial data...');
+    setLoadError({});
+    
     try {
-      console.log('Starting to load initial data...');
-      setIsLoading(true);
-      
-      try {
-        await loadCompanySettings();
-        console.log('Company settings loaded successfully');
-      } catch (error) {
-        console.error('Failed to load company settings:', error);
-        setLoadError(prev => ({...prev, companySettings: error}));
-      }
-      
-      try {
-        await loadEmployees();
-        console.log('Employees loaded successfully');
-      } catch (error) {
-        console.error('Failed to load employees:', error);
-        setLoadError(prev => ({...prev, employees: error}));
-      }
-      
-      try {
-        await loadSlideShowImages();
-        console.log('Slideshow images loaded successfully');
-      } catch (error) {
-        console.error('Failed to load slideshow images:', error);
-        setLoadError(prev => ({...prev, slideshow: error}));
-      }
-      
-      try {
-        await loadTestimonials();
-        console.log('Testimonials loaded successfully');
-      } catch (error) {
-        console.error('Failed to load testimonials:', error);
-        setLoadError(prev => ({...prev, testimonials: error}));
-      }
-      
-      console.log('Initial data loading completed');
+      await Promise.all([
+        loadCompanySettings(),
+        loadTestimonials(),
+        loadSlideShowImages(),
+        loadEmployees()
+      ]);
     } catch (error) {
-      console.error('Error in loadInitialData:', error);
-      setLoadError(prev => ({...prev, general: error}));
+      console.error("Erro ao carregar dados iniciais:", error);
+      setLoadError({
+        general: error
+      });
+    }
+  };
+  
+  // Função para carregar mensagens de contato
+  const loadContactMessages = async () => {
+    try {
+      setIsLoadingMessages(true);
+      const messages = await ContactMessage.list();
+      setContactMessages(messages);
+    } catch (error) {
+      console.error("Erro ao carregar mensagens de contato:", error);
+      setAlert({
+        type: 'error',
+        message: 'Erro ao carregar mensagens de contato: ' + error.message
+      });
     } finally {
-      setIsLoading(false);
+      setIsLoadingMessages(false);
+    }
+  };
+  
+  // Função para marcar mensagem como lida
+  const handleMarkAsRead = async (messageId) => {
+    try {
+      await ContactMessage.markAsRead(messageId);
+      
+      // Atualizar a lista de mensagens
+      setContactMessages(prevMessages => 
+        prevMessages.map(msg => 
+          msg.id === messageId ? { ...msg, read: true } : msg
+        )
+      );
+      
+      setAlert({
+        type: 'success',
+        message: 'Mensagem marcada como lida!'
+      });
+    } catch (error) {
+      console.error("Erro ao marcar mensagem como lida:", error);
+      setAlert({
+        type: 'error',
+        message: 'Erro ao marcar mensagem como lida: ' + error.message
+      });
+    }
+  };
+  
+  // Função para excluir mensagem
+  const handleDeleteMessage = async (messageId) => {
+    if (!confirm('Tem certeza que deseja excluir esta mensagem?')) {
+      return;
+    }
+    
+    try {
+      await ContactMessage.delete(messageId);
+      
+      // Atualizar a lista de mensagens
+      setContactMessages(prevMessages => 
+        prevMessages.filter(msg => msg.id !== messageId)
+      );
+      
+      // Se a mensagem excluída for a selecionada, fechar o modal de detalhes
+      if (selectedMessage && selectedMessage.id === messageId) {
+        setSelectedMessage(null);
+        setShowMessageDetails(false);
+      }
+      
+      setAlert({
+        type: 'success',
+        message: 'Mensagem excluída com sucesso!'
+      });
+    } catch (error) {
+      console.error("Erro ao excluir mensagem:", error);
+      setAlert({
+        type: 'error',
+        message: 'Erro ao excluir mensagem: ' + error.message
+      });
+    }
+  };
+  
+  // Função para visualizar detalhes da mensagem
+  const handleViewMessageDetails = async (message) => {
+    setSelectedMessage(message);
+    setShowMessageDetails(true);
+    
+    // Se a mensagem não estiver marcada como lida, marcá-la
+    if (!message.read) {
+      await handleMarkAsRead(message.id);
     }
   };
 
@@ -587,7 +658,7 @@ export default function Settings() {
       )}
 
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-1 md:grid-cols-6">
+        <TabsList className="grid w-full grid-cols-1 md:grid-cols-7">
           <TabsTrigger 
             value="business" 
             className="flex items-center gap-2"
@@ -629,6 +700,13 @@ export default function Settings() {
             onClick={() => handleTabChange("seo")}
           >
             <LinkIcon className="h-4 w-4" /> SEO
+          </TabsTrigger>
+          <TabsTrigger 
+            value="emails" 
+            className="flex items-center gap-2"
+            onClick={() => handleTabChange("emails")}
+          >
+            <Mail className="h-4 w-4" /> Emails
           </TabsTrigger>
         </TabsList>
 
@@ -1450,6 +1528,106 @@ export default function Settings() {
             </CardContent>
           </Card>
         </TabsContent>
+        
+        <TabsContent value="emails" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Configurações de Emails</CardTitle>
+              <CardDescription>Configure as configurações de emails para seu site</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Email de Contato</label>
+                  <Input
+                    value={companySettings.email || ""}
+                    onChange={(e) => setCompanySettings({...companySettings, email: e.target.value})}
+                    placeholder="contato@suaempresa.com"
+                    type="email"
+                  />
+                </div>
+              </div>
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium">Mensagens de Contato</h3>
+                {isLoadingMessages ? (
+                  <div className="text-center py-6 bg-gray-50 rounded-lg">
+                    <p className="text-gray-500">Carregando mensagens...</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {contactMessages.length > 0 ? (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-12 text-center">ID</TableHead>
+                            <TableHead>Nome</TableHead>
+                            <TableHead>Email</TableHead>
+                            <TableHead>Mensagem</TableHead>
+                            <TableHead className="hidden md:table-cell">Data</TableHead>
+                            <TableHead className="text-right">Ações</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {contactMessages.map((message) => (
+                            <TableRow 
+                              key={message.id}
+                              className={!message.read ? "bg-blue-50" : ""}
+                            >
+                              <TableCell className="text-center font-medium">{message.id.substring(0, 6)}...</TableCell>
+                              <TableCell>{message.name}</TableCell>
+                              <TableCell>{message.email}</TableCell>
+                              <TableCell>{message.message.length > 30 ? message.message.substring(0, 30) + '...' : message.message}</TableCell>
+                              <TableCell className="hidden md:table-cell">
+                                {message.created_at ? new Date(message.created_at).toLocaleString('pt-BR') : 'N/A'}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex justify-end items-center gap-2">
+                                  {!message.read && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => handleMarkAsRead(message.id)}
+                                      className="text-yellow-600 hover:text-yellow-800 hover:bg-yellow-50"
+                                      title="Marcar como lida"
+                                    >
+                                      <EyeOff className="w-4 h-4" />
+                                    </Button>
+                                  )}
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleViewMessageDetails(message)}
+                                    className="text-blue-600 hover:text-blue-800 hover:bg-blue-50"
+                                    title="Ver detalhes"
+                                  >
+                                    <Eye className="w-4 h-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleDeleteMessage(message.id)}
+                                    className="text-red-600 hover:text-red-800 hover:bg-red-50"
+                                    title="Excluir mensagem"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    ) : (
+                      <div className="text-center py-6 bg-gray-50 rounded-lg">
+                        <p className="text-gray-500">Nenhuma mensagem de contato encontrada.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
       
       <Dialog open={showSlideForm} onOpenChange={setShowSlideForm}>
@@ -1585,6 +1763,61 @@ export default function Settings() {
                   Salvando...
                 </>
               ) : 'Salvar Slide'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      <Dialog open={showMessageDetails} onOpenChange={setShowMessageDetails}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Detalhes da Mensagem</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Nome:</label>
+              <p className="text-gray-800">{selectedMessage?.name}</p>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Email:</label>
+              <p className="text-gray-800">{selectedMessage?.email}</p>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Telefone:</label>
+              <p className="text-gray-800">{selectedMessage?.phone || 'Não informado'}</p>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Assunto:</label>
+              <p className="text-gray-800">{selectedMessage?.subject || 'Não informado'}</p>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Mensagem:</label>
+              <p className="text-gray-800 whitespace-pre-wrap">{selectedMessage?.message}</p>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Data:</label>
+              <p className="text-gray-800">
+                {selectedMessage?.created_at ? new Date(selectedMessage.created_at).toLocaleString('pt-BR') : 'N/A'}
+              </p>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Status:</label>
+              <p className="text-gray-800">
+                {selectedMessage?.read ? 
+                  <span className="text-green-600 flex items-center"><Check className="w-4 h-4 mr-1" /> Lida</span> : 
+                  <span className="text-yellow-600 flex items-center"><AlertTriangle className="w-4 h-4 mr-1" /> Não lida</span>
+                }
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowMessageDetails(false);
+              }}
+            >
+              Fechar
             </Button>
           </DialogFooter>
         </DialogContent>
