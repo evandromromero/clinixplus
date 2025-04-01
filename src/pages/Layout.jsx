@@ -23,7 +23,9 @@ import {
   Database,
   FolderPlus,
   Gift,
-  Globe
+  Globe,
+  Moon,
+  Sun
 } from "lucide-react";
 import { User as UserEntity } from "@/api/entities";
 
@@ -44,6 +46,7 @@ export default function Layout() {
   const [currentUser, setCurrentUser] = useState(null);
   const [userPermissions, setUserPermissions] = useState([]);
   const [userRole, setUserRole] = useState(null);
+  const [darkMode, setDarkMode] = useState(false);
 
   useEffect(() => {
     // Carregar dados do usuário logado
@@ -70,6 +73,15 @@ export default function Layout() {
     
     loadUserData();
   }, []);
+
+  useEffect(() => {
+    // Aplicar tema escuro
+    if (darkMode) {
+      document.body.classList.add('dark');
+    } else {
+      document.body.classList.remove('dark');
+    }
+  }, [darkMode]);
 
   const menuItems = [
     { name: "Dashboard", icon: <Home className="w-5 h-5" />, url: "Dashboard", permission: "view_dashboard" },
@@ -359,17 +371,28 @@ export default function Layout() {
       {/* Conteúdo principal */}
       <div className="flex-1 flex flex-col overflow-y-auto">
         {/* Header */}
-        <header className="bg-white shadow-sm">
+        <header className="bg-white dark:bg-gray-800 shadow-sm">
           <div className="flex items-center justify-between p-4">
             <button
               onClick={() => setSidebarOpen(true)}
-              className="md:hidden text-gray-600 hover:text-gray-900"
+              className="md:hidden text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
             >
               <Menu className="w-6 h-6" />
             </button>
             <div className="flex items-center space-x-4">
+              <button 
+                onClick={() => setDarkMode(!darkMode)} 
+                className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                aria-label={darkMode ? "Ativar modo claro" : "Ativar modo escuro"}
+              >
+                {darkMode ? (
+                  <Sun className="w-5 h-5 text-yellow-500" />
+                ) : (
+                  <Moon className="w-5 h-5 text-gray-700" />
+                )}
+              </button>
               <div className="relative">
-                <button className="flex items-center text-gray-700 hover:text-gray-900">
+                <button className="flex items-center text-gray-700 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white">
                   <User className="w-5 h-5 mr-1" />
                   <span className="text-sm font-medium">Administrador</span>
                 </button>
@@ -379,14 +402,14 @@ export default function Layout() {
         </header>
 
         {/* Conteúdo da página */}
-        <main className="flex-1 flex flex-col bg-gray-100">
+        <main className="flex-1 flex flex-col bg-gray-100 dark:bg-gray-900">
           <div className="flex-1 p-4">
             <Outlet />
           </div>
           
           {/* Footer */}
-          <footer className="border-t border-gray-200 py-4 px-6 bg-white">
-            <div className="text-center text-sm text-gray-600">
+          <footer className="border-t border-gray-200 dark:border-gray-700 py-4 px-6 bg-white dark:bg-gray-800">
+            <div className="text-center text-sm text-gray-600 dark:text-gray-400">
               {new Date().getFullYear()} ClinixPlus. Todos os direitos reservados.
             </div>
           </footer>
