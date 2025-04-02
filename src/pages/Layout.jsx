@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { setupAdminRole } from '@/utils/setupAdminRole';
+import { CompanySettings } from '@/firebase/entities';
 import {
   LayoutGrid,
   CalendarDays,
@@ -48,6 +49,7 @@ export default function Layout() {
   const [userPermissions, setUserPermissions] = useState([]);
   const [userRole, setUserRole] = useState(null);
   const [darkMode, setDarkMode] = useState(false);
+  const [companySettings, setCompanySettings] = useState({});
 
   useEffect(() => {
     // Carregar dados do usuário logado
@@ -136,6 +138,22 @@ export default function Layout() {
     };
     
     loadUserData();
+  }, []);
+
+  useEffect(() => {
+    // Carregar configurações da empresa
+    const loadCompanySettings = async () => {
+      try {
+        const companySettingsData = await CompanySettings.get();
+        if (companySettingsData) {
+          setCompanySettings(companySettingsData);
+        }
+      } catch (error) {
+        console.error("Erro ao carregar configurações da empresa:", error);
+      }
+    };
+    
+    loadCompanySettings();
   }, []);
 
   useEffect(() => {
@@ -259,7 +277,11 @@ export default function Layout() {
       <aside className="hidden md:flex flex-col w-64 bg-[#294380] text-white">
         <div className="p-4 border-b border-[#2D2F59]">
           <div className="flex flex-shrink-0 items-center justify-center">
-            <img className="h-10 w-auto" src="https://esthétique.com.br/wp-content/uploads/2023/08/logo-marca-dagua.png" alt="Logo" />
+            {companySettings.logo_url ? (
+              <img className="h-10 w-auto" src={companySettings.logo_url} alt={companySettings.name || "ClinixPlus"} />
+            ) : (
+              <span className="text-xl font-bold text-white">ClinixPlus</span>
+            )}
           </div>
         </div>
         <nav className="flex-1 overflow-y-auto py-4">
@@ -324,13 +346,6 @@ export default function Layout() {
           </ul>
         </nav>
         <div className="p-4 border-t border-[#0D0F36]/20">
-          <Link
-            to="/admin-repair"
-            className="flex w-full items-center justify-center rounded-md bg-blue-50 px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-100 mb-2"
-          >
-            <Settings className="w-5 h-5 mr-2" />
-            Reparo do Sistema
-          </Link>
           <button
             onClick={handleLogout}
             className="flex w-full items-center justify-center rounded-md bg-red-50 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-100"
@@ -357,7 +372,11 @@ export default function Layout() {
       >
         <div className="flex items-center justify-between p-4 border-b border-[#0D0F36]/20">
           <div className="flex flex-shrink-0 items-center justify-center">
-            <img className="h-8 w-auto" src="https://esthétique.com.br/wp-content/uploads/2023/08/logo-marca-dagua.png" alt="Logo" />
+            {companySettings.logo_url ? (
+              <img className="h-8 w-auto" src={companySettings.logo_url} alt={companySettings.name || "ClinixPlus"} />
+            ) : (
+              <span className="text-lg font-bold text-white">ClinixPlus</span>
+            )}
           </div>
           <button
             onClick={() => setSidebarOpen(false)}
@@ -430,13 +449,6 @@ export default function Layout() {
           </ul>
         </nav>
         <div className="p-4 border-t border-[#0D0F36]/20">
-          <Link
-            to="/admin-repair"
-            className="flex w-full items-center justify-center rounded-md bg-blue-50 px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-100 mb-2"
-          >
-            <Settings className="w-5 h-5 mr-2" />
-            Reparo do Sistema
-          </Link>
           <button
             onClick={handleLogout}
             className="flex w-full items-center justify-center rounded-md bg-red-50 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-100"

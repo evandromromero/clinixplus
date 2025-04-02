@@ -34,7 +34,8 @@ export function createPageUrl(pageName, params) {
     AnamneseTemplates: '/anamnese-templates',
     Users: '/users',
     Login: '/login',
-    Public: '/'
+    Public: '/',
+    'admin-repair': '/admin-repair'
   };
 
   // Obter a rota base
