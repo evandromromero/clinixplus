@@ -69,6 +69,7 @@ export default function Public() {
   const [showSubscriptionsSection, setShowSubscriptionsSection] = useState(true);
   const [showGiftCardsSection, setShowGiftCardsSection] = useState(true);
   const [footerServices, setFooterServices] = useState([]);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
   // Estados para o formulário de contato
   const [contactForm, setContactForm] = useState({
@@ -427,29 +428,46 @@ export default function Public() {
         favicon={company.seo_settings.favicon_url} 
         siteName={company.seo_settings.site_name} 
       />
-      <header className="bg-[#0D0F36] text-white">
-        <div className="container mx-auto px-4 py-3">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-1">
-                <Phone className="w-4 h-4" />
-                <span className="text-sm">{company.phone}</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <Mail className="w-4 h-4" />
-                <span className="text-sm">{company.email}</span>
-              </div>
+      <header className="bg-[#11142D] text-white">
+        <div className="container mx-auto px-4">
+          <div className="flex flex-col md:flex-row justify-between items-center py-2 gap-2">
+            {/* Contatos - Lado Esquerdo */}
+            <div className="flex flex-wrap items-center gap-4 text-sm">
+              <a href={`tel:${company.phone}`} className="flex items-center gap-2">
+                <Phone className="h-4 w-4" />
+                {company.phone}
+              </a>
+              <a href={`mailto:${company.email}`} className="flex items-center gap-2">
+                <Mail className="h-4 w-4" />
+                {company.email}
+              </a>
             </div>
+            
+            {/* Botão Painel - Lado Direito */}
             <div className="flex items-center gap-3">
-              <a href={company.instagram_url} className="text-white hover:text-[#69D2CD]">
-                <Instagram className="w-4 h-4" />
-              </a>
-              <a href={company.facebook_url} className="text-white hover:text-[#69D2CD]">
-                <Facebook className="w-4 h-4" />
-              </a>
-              <Link to={createPageUrl("Login")} className="bg-[#69D2CD] text-[#0D0F36] px-3 py-1 rounded-full text-xs font-semibold hover:bg-white transition-colors flex items-center">
-                <Shield className="w-3 h-3 mr-1" />
+              {company.facebook_url && (
+                <a href={company.facebook_url} className="text-white/70 hover:text-[#69D2CD]">
+                  <Facebook className="h-4 w-4" />
+                </a>
+              )}
+              {company.instagram_url && (
+                <a href={company.instagram_url} className="text-white/70 hover:text-[#69D2CD]">
+                  <Instagram className="h-4 w-4" />
+                </a>
+              )}
+              <Link
+                to={createPageUrl("ClientPortal")}
+                className="bg-[#69D2CD]/20 text-white px-3 py-1.5 rounded-md text-sm hover:bg-[#69D2CD]/30 transition-colors flex items-center gap-2 whitespace-nowrap"
+              >
+                Área do Cliente
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+              <Link
+                to={createPageUrl("Login")}
+                className="bg-[#69D2CD] text-white px-3 py-1.5 rounded-md text-sm hover:bg-[#5BC1BB] transition-colors flex items-center gap-2 whitespace-nowrap"
+              >
                 Painel Administrativo
+                <ArrowRight className="h-4 w-4" />
               </Link>
             </div>
           </div>
@@ -459,32 +477,61 @@ export default function Public() {
       <nav className="bg-white border-b shadow-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4">
           <div className="flex justify-between items-center">
-            <div className="flex items-center">
-              <img src={company.logo_url} alt={company.name} className="h-10" />
+            {/* Logo */}
+            <div>
+              <img 
+                src={company.logo_url} 
+                alt={company.name} 
+                className="h-10 md:h-12 w-auto"
+              />
             </div>
-            <div className="hidden md:flex items-center gap-6">
-              <a href="#home" className="text-[#0D0F36] font-medium hover:text-[#69D2CD] transition-colors">Home</a>
-              <a href="#services" className="text-[#0D0F36] font-medium hover:text-[#69D2CD] transition-colors">Serviços</a>
+            
+            {/* Desktop Navigation */}
+            <div className="hidden md:flex items-center gap-6 text-sm">
+              <a href="#home" className="hover:text-[#69D2CD] transition-colors">Home</a>
+              <a href="#services" className="hover:text-[#69D2CD] transition-colors">Serviços</a>
+              <a href="#about" className="hover:text-[#69D2CD] transition-colors">Sobre</a>
               {showSubscriptionsSection && (
-                <a href="#subscriptions" className="text-[#0D0F36] font-medium hover:text-[#69D2CD] transition-colors">Assinaturas</a>
+                <a href="#subscriptions" className="hover:text-[#69D2CD] transition-colors">Planos</a>
               )}
               {showGiftCardsSection && (
-                <a href="#gift-cards" className="text-[#0D0F36] font-medium hover:text-[#69D2CD] transition-colors">Gift Cards</a>
+                <a href="#gift-cards" className="hover:text-[#69D2CD] transition-colors">Gift Cards</a>
               )}
-              <a href="#about" className="text-[#0D0F36] font-medium hover:text-[#69D2CD] transition-colors">Sobre</a>
-              <a href="#testimonials" className="text-[#0D0F36] font-medium hover:text-[#69D2CD] transition-colors">Depoimentos</a>
-              <a href="#contact" className="text-[#0D0F36] font-medium hover:text-[#69D2CD] transition-colors">Contato</a>
-              <Link to={createPageUrl("ClientPortal")}>
-                <Button className="bg-[#294380] hover:bg-[#0D0F36] text-white">
-                  Área do Cliente
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </Link>
+              <a href="#testimonials" className="hover:text-[#69D2CD] transition-colors">Depoimentos</a>
+              <a href="#contact" className="hover:text-[#69D2CD] transition-colors">Contato</a>
             </div>
-            <div className="md:hidden">
-              <Button variant="ghost" size="sm">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="feather feather-menu"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
-              </Button>
+
+            {/* Mobile Menu Button */}
+            <button 
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="md:hidden p-2 hover:bg-gray-100 rounded-md"
+            >
+              {isMobileMenuOpen ? (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              )}
+            </button>
+          </div>
+
+          {/* Mobile Navigation */}
+          <div className={`md:hidden ${isMobileMenuOpen ? 'block' : 'hidden'} pt-4`}>
+            <div className="flex flex-col gap-4">
+              <a href="#home" className="hover:text-[#69D2CD] transition-colors py-2">Home</a>
+              <a href="#services" className="hover:text-[#69D2CD] transition-colors py-2">Serviços</a>
+              <a href="#about" className="hover:text-[#69D2CD] transition-colors py-2">Sobre</a>
+              {showSubscriptionsSection && (
+                <a href="#subscriptions" className="hover:text-[#69D2CD] transition-colors py-2">Planos</a>
+              )}
+              {showGiftCardsSection && (
+                <a href="#gift-cards" className="hover:text-[#69D2CD] transition-colors py-2">Gift Cards</a>
+              )}
+              <a href="#testimonials" className="hover:text-[#69D2CD] transition-colors py-2">Depoimentos</a>
+              <a href="#contact" className="hover:text-[#69D2CD] transition-colors py-2">Contato</a>
             </div>
           </div>
         </div>
@@ -847,12 +894,6 @@ export default function Public() {
           
           <div className="border-t border-white/10 mt-10 pt-6 flex flex-col md:flex-row justify-between items-center">
             <p className="text-white/50 text-sm"> 2024 {company.name}. Todos os direitos reservados.</p>
-            <div className="mt-4 md:mt-0">
-              <Link to={createPageUrl("ClientPortal")} className="text-[#69D2CD] hover:text-white flex items-center">
-                Área do Cliente
-                <ArrowRight className="ml-1 h-4 w-4" />
-              </Link>
-            </div>
           </div>
         </div>
       </footer>
