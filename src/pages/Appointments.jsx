@@ -404,28 +404,71 @@ export default function Appointments() {
     setSearchResults(results);
   };
 
-  const updateServicesForEmployee = (employeeId) => {
+  const updateServicesForEmployee = (employeeId, currentPackageId = null) => {
     const employee = employees.find(emp => emp.id === employeeId);
+    console.log("[DEBUG] Atualizando serviços para profissional:", employeeId);
+    console.log("[DEBUG] Pacote atual:", currentPackageId || selectedPackageId);
+    
     if (employee && employee.specialties && employee.specialties.length > 0) {
-      let availableServices = services.filter(service =>
-        employee.specialties.includes(service.id)
-      );
+      let availableServices = [];
       
-      if (selectedPackageId) {
-        const selectedPackage = clientPackages.find(pkg => pkg.id === selectedPackageId);
+      // Usa o pacote passado como parâmetro ou o estado atual
+      const packageId = currentPackageId || selectedPackageId;
+      
+      // Se um pacote foi selecionado, mostrar apenas os serviços do pacote
+      if (packageId && packageId !== "") {
+        console.log("[DEBUG] Filtrando por pacote:", {
+          packageId,
+          selectedClientPackage
+        });
+        
+        const selectedPackage = clientPackages.find(pkg => pkg.id === packageId);
         if (selectedPackage) {
-          const packageData = packages.find(p => p.id === selectedPackage.package_id);
-          if (packageData && packageData.services) {
-            const packageServiceIds = packageData.services.map(s => s.service_id);
-            availableServices = availableServices.filter(service => 
-              packageServiceIds.includes(service.id)
-            );
+          const packageInfo = packages.find(p => p.id === selectedPackage.package_id);
+          console.log("[DEBUG] Informações do pacote:", packageInfo);
+          
+          if (packageInfo && packageInfo.services) {
+            console.log("[DEBUG] Serviços do pacote:", packageInfo.services);
+            
+            // Filtra apenas os serviços que estão no pacote E que o profissional pode realizar
+            availableServices = services.filter(service => {
+              // Verifica se o serviço está no pacote
+              const packageService = packageInfo.services.find(s => s.service_id === service.id);
+              if (packageService) {
+                // Verifica se o profissional pode realizar este serviço
+                const canPerformService = employee.specialties.includes(service.id);
+                // Verifica se ainda tem sessões disponíveis
+                const usedSessions = selectedPackage.session_history?.filter(
+                  h => h.service_id === service.id
+                ).length || 0;
+                const hasAvailableSessions = usedSessions < packageService.quantity;
+                
+                console.log(`[DEBUG] Avaliando serviço ${service.name}:`, {
+                  id: service.id,
+                  packageService,
+                  canPerformService,
+                  usedSessions,
+                  totalSessions: packageService.quantity,
+                  hasAvailableSessions
+                });
+                
+                return canPerformService && hasAvailableSessions;
+              }
+              return false;
+            });
           }
         }
+      } else {
+        // Se não houver pacote selecionado, mostrar todos os serviços que o profissional pode realizar
+        availableServices = services.filter(service =>
+          employee.specialties.includes(service.id)
+        );
       }
       
+      console.log("[DEBUG] Serviços filtrados finais:", availableServices.map(s => s.name));
       setFilteredServices(availableServices);
     } else {
+      console.log("[DEBUG] Nenhuma especialidade encontrada para o profissional");
       setFilteredServices([]);
     }
   };
@@ -470,19 +513,41 @@ export default function Appointments() {
     }
   };
 
-  const handlePackageSelection = (packageId) => {
-    setSelectedPackageId(packageId);
-    const selectedPackage = clientPackages.find(pkg => pkg.id === packageId);
-    setSelectedClientPackage(selectedPackage);
+  const handlePackageSelection = async (packageId) => {
+    console.log("[DEBUG] Pacote selecionado na função handlePackageSelection:", packageId);
     
-    if (newAppointment.employee_id) {
-      updateServicesForEmployee(newAppointment.employee_id);
+    // Se o valor for "none", considere como nenhum pacote selecionado
+    if (packageId === "none") {
+      setSelectedPackageId("");
+      setSelectedClientPackage(null);
+    } else {
+      const selectedPackage = clientPackages.find(pkg => pkg.id === packageId);
+      if (!selectedPackage) {
+        console.error("[ERROR] Pacote não encontrado:", packageId);
+        return;
+      }
+      
+      const packageInfo = packages.find(p => p.id === selectedPackage.package_id);
+      console.log("[DEBUG] Informações do pacote selecionado:", packageInfo);
+      
+      // Atualiza os estados do pacote
+      setSelectedPackageId(packageId);
+      setSelectedClientPackage(selectedPackage);
     }
     
-    setNewAppointment({
-      ...newAppointment,
+    // Limpa o serviço selecionado para forçar uma nova seleção
+    setNewAppointment(prev => ({
+      ...prev,
       service_id: ""
-    });
+    }));
+
+    // Atualiza os serviços disponíveis com base no profissional e pacote selecionados
+    if (newAppointment.employee_id) {
+      // Pequeno delay para garantir que o estado foi atualizado
+      await new Promise(resolve => setTimeout(resolve, 100));
+      // Chama a função com o pacote atual
+      updateServicesForEmployee(newAppointment.employee_id, packageId);
+    }
   };
 
   const handleSelectAppointment = async (appointment) => {
@@ -1193,7 +1258,7 @@ export default function Appointments() {
                     <SelectValue placeholder="Selecione um pacote (opcional)..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={null}>Nenhum pacote (pagamento normal)</SelectItem>
+                    <SelectItem value="none">Nenhum pacote (pagamento normal)</SelectItem>
                     {clientPackages.map((pkg) => {
                       const packageData = packages.find(p => p.id === pkg.package_id);
                       return (

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { ClientPackage } from '@/api/entities';
 import { Package } from '@/api/entities';
@@ -147,6 +146,21 @@ export default function PackageProgress({ clientPackageId }) {
         </div>
 
         <div className="mt-6">
+          <h3 className="font-medium mb-3">Serviços Incluídos</h3>
+          <div className="space-y-2 mb-6">
+            {packageInfo.services.map((service, index) => (
+              <div 
+                key={index}
+                className="p-3 bg-gray-50 rounded-lg border border-gray-200"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">{getServiceName(service.service_id)}</span>
+                  <span className="text-sm text-gray-600">{service.quantity}x</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
           <h3 className="font-medium mb-3">Histórico de sessões</h3>
           {packageData.session_history && packageData.session_history.length > 0 ? (
             <div className="space-y-3">
