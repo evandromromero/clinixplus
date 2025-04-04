@@ -47,15 +47,12 @@ export default function PackageProgress({ clientPackageId }) {
   };
 
   const getUsedSessions = () => {
-    if (!packageData.session_history) return 0;
+    if (!packageData?.session_history) return 0;
 
-    return packageData.session_history.filter(session => {
-      if (session.appointment_id) {
-        const appointment = appointments.find(app => app.id === session.appointment_id);
-        return appointment && appointment.status === 'concluído';
-      }
-      return false;
-    }).length;
+    // Conta apenas sessões com status 'concluido'
+    return packageData.session_history.filter(session => 
+      session.status === 'concluido'
+    ).length;
   };
 
   const usedSessions = getUsedSessions();

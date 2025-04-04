@@ -230,43 +230,32 @@ export default function Appointments() {
         });
       }
 
-      // Se veio de um serviço pendente, atualizar o status
-      const pendingService = pendingServices.find(ps => ps.service_id === newAppointment.service_id);
-      if (pendingService) {
-        await PendingService.update(pendingService.id, {
-          status: "agendado",
-          appointment_id: createdAppointment.id
-        });
-      }
-
-      if (selectedClientPackage) {
+      // Se houver um pacote selecionado, atualiza o histórico
+      if (selectedPackageId && selectedPackageId !== "") {
         try {
-          const currentPackage = await ClientPackage.get(selectedClientPackage.id);
-          
-          if (!currentPackage) {
-            throw new Error("Pacote não encontrado");
-          }
+          const currentPackage = await ClientPackage.get(selectedPackageId);
+          const serviceData = services.find(s => s.id === newAppointment.service_id);
+          const employeeData = employees.find(e => e.id === newAppointment.employee_id);
 
-          console.log("Pacote atual:", currentPackage);
-
+          // Cria a entrada do histórico
           const sessionHistoryEntry = {
+            service_id: newAppointment.service_id,
+            service_name: serviceData?.name || "Serviço não encontrado",
+            employee_id: newAppointment.employee_id,
+            employee_name: employeeData?.name || "Profissional não encontrado",
             date: appointmentData.date,
-            employee_id: appointmentData.employee_id,
-            employee_name: employees.find(e => e.id === appointmentData.employee_id)?.name || "",
             appointment_id: createdAppointment.id,
-            service_id: appointmentData.service_id,
-            service_name: services.find(s => s.id === appointmentData.service_id)?.name || "",
-            status: "agendado",
-            notes: appointmentData.notes || ""
+            status: 'agendado' // Começa como agendado, muda para concluido quando o agendamento for concluído
           };
 
-          const currentSessionHistory = Array.isArray(currentPackage.session_history) 
-            ? currentPackage.session_history 
-            : [];
+          // Atualiza o histórico de sessões sem incrementar o contador
+          const updatedSessionHistory = [
+            ...(currentPackage.session_history || []),
+            sessionHistoryEntry
+          ];
 
-          await ClientPackage.update(selectedClientPackage.id, {
-            session_history: [...currentSessionHistory, sessionHistoryEntry],
-            sessions_used: (currentPackage.sessions_used || 0) + 1
+          await ClientPackage.update(selectedPackageId, {
+            session_history: updatedSessionHistory
           });
         } catch (error) {
           console.error("[Appointments] Erro ao atualizar pacote:", error);
@@ -404,6 +393,22 @@ export default function Appointments() {
     setSearchResults(results);
   };
 
+  const getServiceLabel = (service, selectedPackage, packageInfo) => {
+    if (!selectedPackage || !packageInfo) return service.name;
+
+    const packageService = packageInfo.services.find(s => s.service_id === service.id);
+    if (!packageService) return service.name;
+
+    // Conta apenas sessões concluídas
+    const usedSessions = selectedPackage.session_history?.filter(
+      h => h.service_id === service.id && h.status === 'concluido'
+    ).length || 0;
+    
+    const remainingSessions = packageService.quantity - usedSessions;
+    
+    return `${service.name} (${remainingSessions}/${packageService.quantity} sessões)`;
+  };
+
   const updateServicesForEmployee = (employeeId, currentPackageId = null) => {
     const employee = employees.find(emp => emp.id === employeeId);
     console.log("[DEBUG] Atualizando serviços para profissional:", employeeId);
@@ -437,9 +442,9 @@ export default function Appointments() {
               if (packageService) {
                 // Verifica se o profissional pode realizar este serviço
                 const canPerformService = employee.specialties.includes(service.id);
-                // Verifica se ainda tem sessões disponíveis
+                // Conta apenas sessões concluídas
                 const usedSessions = selectedPackage.session_history?.filter(
-                  h => h.service_id === service.id
+                  h => h.service_id === service.id && h.status === 'concluido'
                 ).length || 0;
                 const hasAvailableSessions = usedSessions < packageService.quantity;
                 
@@ -455,7 +460,10 @@ export default function Appointments() {
                 return canPerformService && hasAvailableSessions;
               }
               return false;
-            });
+            }).map(service => ({
+              ...service,
+              displayName: getServiceLabel(service, selectedPackage, packageInfo)
+            }));
           }
         }
       } else {
@@ -465,7 +473,7 @@ export default function Appointments() {
         );
       }
       
-      console.log("[DEBUG] Serviços filtrados finais:", availableServices.map(s => s.name));
+      console.log("[DEBUG] Serviços filtrados finais:", availableServices.map(s => s.displayName || s.name));
       setFilteredServices(availableServices);
     } else {
       console.log("[DEBUG] Nenhuma especialidade encontrada para o profissional");
@@ -776,42 +784,48 @@ export default function Appointments() {
       if (relevantPackage) {
         const serviceData = services.find(s => s.id === appointment.service_id);
         const employeeData = employees.find(e => e.id === appointment.employee_id);
-        const currentPackage = await ClientPackage.get(relevantPackage.id);
         
-        const currentSessionHistory = Array.isArray(currentPackage.session_history) 
-          ? currentPackage.session_history 
+        // Atualiza o status da sessão no histórico
+        const currentSessionHistory = Array.isArray(relevantPackage.session_history) 
+          ? relevantPackage.session_history 
           : [];
-        
-        const existingSessionIndex = currentSessionHistory.findIndex(
+
+        let updatedSessionHistory;
+        const sessionIndex = currentSessionHistory.findIndex(
           s => s.appointment_id === appointment.id
         );
 
-        const sessionHistoryEntry = {
-          date: appointment.date,
-          employee_id: appointment.employee_id,
-          employee_name: employeeData ? employeeData.name : "",
-          appointment_id: appointment.id,
-          service_id: appointment.service_id,
-          service_name: serviceData ? serviceData.name : "",
-          status: newStatus,
-          notes: appointment.notes || ""
-        };
-
-        let updatedSessionHistory;
-        if (existingSessionIndex >= 0) {
-          updatedSessionHistory = [...currentSessionHistory];
-          updatedSessionHistory[existingSessionIndex] = sessionHistoryEntry;
+        if (sessionIndex >= 0) {
+          // Atualiza a sessão existente
+          updatedSessionHistory = currentSessionHistory.map((session, index) => 
+            index === sessionIndex 
+              ? { ...session, status: newStatus }
+              : session
+          );
         } else {
+          // Cria uma nova entrada no histórico
+          const sessionHistoryEntry = {
+            service_id: appointment.service_id,
+            service_name: serviceData?.name || "Serviço não encontrado",
+            employee_id: appointment.employee_id,
+            employee_name: employeeData?.name || "Profissional não encontrado",
+            date: appointment.date,
+            appointment_id: appointment.id,
+            status: newStatus
+          };
           updatedSessionHistory = [...currentSessionHistory, sessionHistoryEntry];
         }
         
+        // Só incrementa o contador se o status for 'concluido'
         const sessionsToAdd = newStatus === 'concluido' ? 1 : 0;
-        const newSessionsUsed = (currentPackage.sessions_used || 0) + sessionsToAdd;
+        const currentUsedSessions = relevantPackage.session_history?.filter(
+          s => s.status === 'concluido'
+        ).length || 0;
         
         await ClientPackage.update(relevantPackage.id, {
-          sessions_used: newSessionsUsed,
           session_history: updatedSessionHistory,
-          status: newSessionsUsed >= currentPackage.total_sessions ? 'finalizado' : 'ativo'
+          sessions_used: currentUsedSessions + sessionsToAdd,
+          status: (currentUsedSessions + sessionsToAdd) >= relevantPackage.total_sessions ? 'finalizado' : 'ativo'
         });
       }
     } catch (error) {
@@ -1332,7 +1346,7 @@ export default function Appointments() {
                   {filteredServices.length > 0 ? (
                     filteredServices.map((service) => (
                       <SelectItem key={service.id} value={service.id}>
-                        {service.name} ({service.duration}min)
+                        {service.displayName || service.name} ({service.duration}min)
                         {selectedPackageId && (
                           <span className="ml-2 text-green-600 font-medium">Pacote</span>
                         )}
