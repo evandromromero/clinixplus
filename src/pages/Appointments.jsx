@@ -65,7 +65,9 @@ export default function Appointments() {
     date: new Date(),
     status: "agendado",
     notes: "",
-    original_appointment_id: null
+    original_appointment_id: null,
+    pending_service_id: null,
+    dependent_index: null
   });
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResults, setSearchResults] = useState([]);
@@ -114,6 +116,49 @@ export default function Appointments() {
     navigate(`/client-details?id=${clientId}`);
     setShowAppointmentDetails(false);
   };
+
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const clientId = searchParams.get('client_id');
+    const pendingServiceId = searchParams.get('pending_service_id');
+    
+    if (clientId && pendingServiceId) {
+      // Carregar dados do cliente e serviço pendente
+      const loadPendingServiceData = async () => {
+        try {
+          const [clientData, pendingServiceData] = await Promise.all([
+            Client.get(clientId),
+            PendingService.get(pendingServiceId)
+          ]);
+          
+          if (clientData && pendingServiceData) {
+            // Pré-selecionar o cliente
+            handleClientSelection(clientData.id, clientData.name, 'client');
+            
+            // Pré-selecionar o serviço
+            setNewAppointment(prev => ({
+              ...prev,
+              client_id: clientData.id,
+              service_id: pendingServiceData.service_id,
+              pending_service_id: pendingServiceId
+            }));
+            
+            // Abrir o modal de novo agendamento
+            setShowNewAppointmentDialog(true);
+          }
+        } catch (error) {
+          console.error('Erro ao carregar dados do serviço pendente:', error);
+          toast({
+            title: "Erro",
+            description: "Não foi possível carregar os dados do serviço pendente",
+            variant: "destructive"
+          });
+        }
+      };
+      
+      loadPendingServiceData();
+    }
+  }, []);
 
   useEffect(() => {
     loadData();
@@ -214,10 +259,27 @@ export default function Appointments() {
 
   const handleCreateAppointment = async () => {
     try {
+      // Validações...
+      if (!newAppointment.client_id || !newAppointment.employee_id || !newAppointment.service_id) {
+        toast({
+          title: "Campos obrigatórios",
+          description: "Por favor, preencha todos os campos obrigatórios",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Criar o agendamento
       const appointmentData = {
-        ...newAppointment,
+        client_id: newAppointment.client_id,
+        employee_id: newAppointment.employee_id,
+        service_id: newAppointment.service_id,
         date: format(newAppointment.date, "yyyy-MM-dd'T'HH:mm:ss"),
-        status: newAppointment.original_appointment_id ? 'agendado' : newAppointment.status || 'agendado'
+        status: newAppointment.original_appointment_id ? 'agendado' : newAppointment.status || 'agendado',
+        notes: newAppointment.notes || "",
+        original_appointment_id: newAppointment.original_appointment_id || null,
+        pending_service_id: newAppointment.pending_service_id || null,
+        dependent_index: newAppointment.dependent_index || null
       };
       
       const createdAppointment = await Appointment.create(appointmentData);
@@ -260,6 +322,14 @@ export default function Appointments() {
         } catch (error) {
           console.error("[Appointments] Erro ao atualizar pacote:", error);
         }
+      }
+
+      // Se houver um serviço pendente associado, atualizar seu status
+      if (newAppointment.pending_service_id) {
+        await PendingService.update(newAppointment.pending_service_id, {
+          status: 'agendado',
+          appointment_id: createdAppointment.id
+        });
       }
 
       setShowNewAppointmentDialog(false);
@@ -592,68 +662,39 @@ export default function Appointments() {
 
   const handleStatusChange = async (newStatus, appointmentId) => {
     try {
-      await Appointment.update(appointmentId, {
-        status: newStatus
-      });
-      
-      if (newStatus === 'concluido') {
-        const appointment = appointments.find(app => app.id === appointmentId);
-        const clientPackages = await ClientPackage.filter({ 
-          client_id: appointment.client_id,
-          status: 'ativo'
+      const appointment = appointments.find(a => a.id === appointmentId);
+      if (!appointment) return;
+
+      // Atualizar o status do agendamento
+      await Appointment.update(appointmentId, { status: newStatus });
+
+      // Se o agendamento tem um serviço pendente associado, atualizar seu status
+      if (appointment.pending_service_id) {
+        await PendingService.update(appointment.pending_service_id, {
+          status: newStatus === 'concluido' ? 'concluido' : 'agendado'
         });
-        
-        const relevantPackage = clientPackages.find(pkg => {
-          const packageData = packages.find(p => p.id === pkg.package_id);
-          return packageData?.services.some(s => s.service_id === appointment.service_id);
-        });
-
-        if (relevantPackage) {
-          const serviceData = services.find(s => s.id === appointment.service_id);
-          const employeeData = employees.find(e => e.id === appointment.employee_id);
-          const sessionHistoryEntry = {
-            date: appointment.date,
-            employee_id: appointment.employee_id,
-            employee_name: employeeData ? employeeData.name : "",
-            appointment_id: appointmentId,
-            service_id: appointment.service_id,
-            service_name: serviceData ? serviceData.name : "",
-            status: newStatus,
-            notes: appointment.notes || ""
-          };
-
-          const currentPackage = await ClientPackage.get(relevantPackage.id);
-          const currentSessionHistory = Array.isArray(currentPackage.session_history) 
-            ? currentPackage.session_history 
-            : [];
-          
-          // Encontra e atualiza a sessão existente ou adiciona uma nova
-          const existingSessionIndex = currentSessionHistory.findIndex(
-            s => s.appointment_id === appointmentId
-          );
-
-          let updatedSessionHistory;
-          if (existingSessionIndex >= 0) {
-            updatedSessionHistory = [...currentSessionHistory];
-            updatedSessionHistory[existingSessionIndex] = sessionHistoryEntry;
-          } else {
-            updatedSessionHistory = [...currentSessionHistory, sessionHistoryEntry];
-          }
-          
-          // Se o status for concluído, incrementa as sessões usadas
-          const sessionsToAdd = newStatus === 'concluido' ? 1 : 0;
-          
-          await ClientPackage.update(relevantPackage.id, {
-            sessions_used: (currentPackage.sessions_used || 0) + sessionsToAdd,
-            session_history: updatedSessionHistory,
-            status: (currentPackage.sessions_used || 0) + sessionsToAdd >= currentPackage.total_sessions ? 'finalizado' : 'ativo'
-          });
-        }
       }
-      
+
+      // Se o agendamento está associado a um pacote, atualizar a sessão
+      if (appointment.package_id) {
+        await updatePackageSession(appointment, newStatus);
+      }
+
+      // Atualizar a lista de agendamentos
       await loadData();
+
+      toast({
+        title: "Status atualizado",
+        description: "O status do agendamento foi atualizado com sucesso!",
+        variant: "success"
+      });
     } catch (error) {
-      console.error("Erro ao atualizar status:", error);
+      console.error('Erro ao atualizar status:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível atualizar o status do agendamento",
+        variant: "destructive"
+      });
     }
   };
 
@@ -811,8 +852,10 @@ export default function Appointments() {
             employee_name: employeeData?.name || "Profissional não encontrado",
             date: appointment.date,
             appointment_id: appointment.id,
-            status: newStatus
+            status: newStatus,
+            notes: appointment.notes || ""
           };
+
           updatedSessionHistory = [...currentSessionHistory, sessionHistoryEntry];
         }
         
@@ -970,7 +1013,9 @@ export default function Appointments() {
       date: new Date(),
       status: "agendado",
       notes: "",
-      original_appointment_id: null
+      original_appointment_id: null,
+      pending_service_id: null,
+      dependent_index: null
     });
     setSelectedClientPackage(null);
     setSelectedPackageId("");

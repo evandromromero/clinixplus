@@ -12,10 +12,12 @@ import {
   Camera,
   Check,
   Clock,
-  FileDown,
+  Download,
+  Edit,
+  ExternalLink,
+  Eye,
   FileText,
-  FileUp,
-  Loader2,
+  ImageIcon,
   Mail,
   MapPin,
   MessageCircle,
@@ -23,21 +25,15 @@ import {
   Pencil,
   Phone,
   Plus,
-  Printer,
+  Receipt,
   RefreshCw,
-  Send,
   ShoppingCart,
-  Trash2,
   Upload,
   User,
   Wallet,
   X,
-  ImageIcon,
-  Download,
-  Edit,
   CreditCard,
-  Receipt,
-  ExternalLink
+  CalendarPlus
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -1089,7 +1085,7 @@ export default function ClientDetails() {
 
           {pendingServices.length === 0 ? (
             <div className="text-center p-8 bg-gray-50 rounded-lg">
-              <Clock className="h-12 w-12 mx-auto text-gray-400 mb-2" />
+              <Clock className="h-12 w-12 text-gray-400 mb-2" />
               <p className="text-gray-500">Nenhum serviço pendente</p>
             </div>
           ) : (
@@ -1130,6 +1126,17 @@ export default function ClientDetails() {
                         <span className="font-medium">Expira em:</span>{' '}
                         {format(new Date(service.expiration_date), 'dd/MM/yyyy')}
                       </p>
+                    )}
+                    
+                    {service.status === 'pendente' && (
+                      <div className="mt-4 flex justify-end">
+                        <Link to={createPageUrl("Appointments", { client_id: clientId, pending_service_id: service.id })}>
+                          <Button variant="outline" size="sm" className="bg-[#8BBAFF]/10 border-[#6EA3E7] text-[#175EA0] hover:bg-[#8BBAFF]/20">
+                            <CalendarPlus className="w-4 h-4 mr-2" />
+                            Agendar
+                          </Button>
+                        </Link>
+                      </div>
                     )}
                   </CardContent>
                 </Card>
