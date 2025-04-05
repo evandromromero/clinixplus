@@ -771,15 +771,15 @@ export default function ClientPackages() {
     setServiceSearchResults(filteredServices);
   };
 
-  const formatDateForInput = (dateString) => {
-    if (!dateString) return '';
-
+  const formatDateSafe = (dateStr) => {
+    if (!dateStr) return 'Data não definida';
     try {
-      const date = new Date(dateString);
-      return format(date, 'yyyy-MM-dd');
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return 'Data inválida';
+      return format(date, "dd/MM/yyyy", { locale: ptBR });
     } catch (error) {
       console.error("Erro ao formatar data:", error);
-      return '';
+      return 'Data inválida';
     }
   };
 
@@ -1139,7 +1139,7 @@ export default function ClientPackages() {
                       {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(sale.total_amount)}
                     </p>
                     <p className="text-xs text-yellow-600">
-                      Iniciado em: {format(new Date(sale.date_created), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                      Iniciado em: {formatDateSafe(sale.date_created)}
                     </p>
                   </div>
                   <div className="flex gap-2">
@@ -1275,7 +1275,7 @@ export default function ClientPackages() {
                         <div className="flex items-center gap-1 text-sm text-gray-500">
                           <Calendar className="w-4 h-4" />
                           <span>
-                            Válido até {format(new Date(clientPkg.expiration_date), "dd/MM/yyyy", { locale: ptBR })}
+                            Válido até {formatDateSafe(clientPkg.expiration_date)}
                           </span>
                         </div>
                         <Button 
@@ -1399,13 +1399,13 @@ export default function ClientPackages() {
                     <div>
                       <h3 className="text-sm font-medium text-gray-500">Data de Compra</h3>
                       <p className="text-base">
-                        {format(new Date(selectedPackage.purchase_date), "dd/MM/yyyy", { locale: ptBR })}
+                        {formatDateSafe(selectedPackage.purchase_date)}
                       </p>
                     </div>
                     <div>
                       <h3 className="text-sm font-medium text-gray-500">Data de Validade</h3>
                       <p className="text-base">
-                        {format(new Date(selectedPackage.expiration_date), "dd/MM/yyyy", { locale: ptBR })}
+                        {formatDateSafe(selectedPackage.expiration_date)}
                       </p>
                     </div>
                     <div>
@@ -1473,7 +1473,7 @@ export default function ClientPackages() {
                         <div>
                           <p className="font-medium">{getServiceName(session.service_id)}</p>
                           <p className="text-sm text-gray-500">
-                            {format(new Date(session.date), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                            {formatDateSafe(session.date)}
                           </p>
                           <p className="text-sm text-gray-500">
                             Profissional: {getEmployeeName(session.employee_id)}
@@ -1524,7 +1524,7 @@ export default function ClientPackages() {
                         <div>
                           <p className="font-medium">{dependent.name}</p>
                           <p className="text-sm text-gray-500">
-                            {format(new Date(dependent.birth_date), "dd/MM/yyyy", { locale: ptBR })}
+                            {formatDateSafe(dependent.birth_date)}
                           </p>
                           {dependent.relationship && (
                             <p className="text-sm text-gray-500">
@@ -1649,7 +1649,7 @@ export default function ClientPackages() {
 
                   {anamnesis?.last_update && !isEditingAnamnesis && (
                     <p className="text-sm text-gray-500">
-                      Última atualização: {format(new Date(anamnesis.last_update), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                      Última atualização: {formatDateSafe(anamnesis.last_update)}
                     </p>
                   )}
                 </div>
