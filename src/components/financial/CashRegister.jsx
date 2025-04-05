@@ -31,6 +31,7 @@ import {
   RefreshCcw,
   Trash2
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { FinancialTransaction, User, Client, Employee, Package, ClientPackage, Service, PaymentMethod, Sale } from "@/firebase/entities";
 import { InvokeLLM } from "@/api/integrations";
 import { toast } from "@/components/ui/toast";
@@ -99,6 +100,14 @@ export default function CashRegister() {
 
   const [initialAmountValue, setInitialAmountValue] = useState("");
   const [openingNotes, setOpeningNotes] = useState("");
+
+  // Função para formatar valores monetários
+  const formatCurrency = (value) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(value);
+  };
 
   // Efeito inicial para carregar dados
   useEffect(() => {
@@ -330,31 +339,41 @@ export default function CashRegister() {
       const today = format(new Date(), "yyyy-MM-dd");
       console.log("[CashRegister] Data de hoje formatada:", today);
       
-      // Buscar apenas as transações e métodos de pagamento
-      const [transactionsData, paymentMethodsData] = await Promise.all([
+      // Buscar transações, métodos de pagamento e clientes
+      const [transactionsData, paymentMethodsData, clientsData] = await Promise.all([
         FinancialTransaction.list(),
-        PaymentMethod.list()
+        PaymentMethod.list(),
+        Client.list()
       ]);
       
       console.log("[CashRegister] Dados carregados:", {
         transacoes: transactionsData.length,
-        metodosPagamento: paymentMethodsData.length
+        metodosPagamento: paymentMethodsData.length,
+        clientes: clientsData.length
       });
       
-      // Mapeamento de métodos de pagamento por ID para facilitar o acesso
+      // Mapeamento de métodos de pagamento por ID
       const paymentMethodsMap = paymentMethodsData.reduce((acc, method) => {
         acc[method.id] = method;
+        return acc;
+      }, {});
+
+      // Mapeamento de clientes por ID
+      const clientsMap = clientsData.reduce((acc, client) => {
+        acc[client.id] = client;
         return acc;
       }, {});
       
       // Processar transações
       const processedTransactions = transactionsData.map(t => {
-        // Encontrar o método de pagamento relacionado
+        // Encontrar o método de pagamento e cliente relacionados
         const paymentMethod = paymentMethodsMap[t.payment_method];
+        const client = clientsMap[t.client_id];
         
         return {
           ...t,
-          payment_method_name: paymentMethod ? paymentMethod.name : 'Método não identificado'
+          payment_method_name: paymentMethod ? paymentMethod.name : 'Método não identificado',
+          client_name: client ? client.name : 'Cliente não identificado'
         };
       });
 
@@ -362,6 +381,7 @@ export default function CashRegister() {
       
       setTransactions(processedTransactions);
       setPaymentMethods(paymentMethodsData);
+      setClients(clientsData);
       
     } catch (error) {
       console.error("[CashRegister] Erro ao carregar transações:", error);
@@ -1652,7 +1672,7 @@ export default function CashRegister() {
             <div className="flex items-center gap-2">
               <DollarSign className={`h-5 w-5 ${expectedCashAmount >= 0 ? 'text-green-500' : 'text-red-500'}`} />
               <span className="text-2xl font-bold">
-                R$ {expectedCashAmount.toFixed(2)}
+                {formatCurrency(expectedCashAmount)}
               </span>
             </div>
           </CardContent>
@@ -1666,7 +1686,7 @@ export default function CashRegister() {
             <div className="flex items-center gap-2">
               <ArrowUpRight className="h-5 w-5 text-green-500" />
               <span className="text-2xl font-bold text-green-600">
-                R$ {dailyReceipts.toFixed(2)}
+                {formatCurrency(dailyReceipts)}
               </span>
             </div>
           </CardContent>
@@ -1680,7 +1700,7 @@ export default function CashRegister() {
             <div className="flex items-center gap-2">
               <ArrowDownRight className="h-5 w-5 text-red-500" />
               <span className="text-2xl font-bold text-red-600">
-                R$ {dailyExpenses.toFixed(2)}
+                {formatCurrency(dailyExpenses)}
               </span>
             </div>
           </CardContent>
@@ -1694,7 +1714,7 @@ export default function CashRegister() {
             <div className="flex items-center gap-2">
               <CircleDollarSign className="h-5 w-5 text-[#F1F6CE]" />
               <span className="text-2xl font-bold text-[#F1F6CE]">
-                R$ {dailyBalance.toFixed(2)}
+                {formatCurrency(dailyBalance)}
               </span>
             </div>
           </CardContent>
@@ -1710,36 +1730,39 @@ export default function CashRegister() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Descrição</TableHead>
-                  <TableHead>Categoria</TableHead>
-                  <TableHead>Método</TableHead>
-                  <TableHead>Cliente</TableHead>
-                  <TableHead className="text-right">Valor</TableHead>
+                  <TableCell>Data/Hora</TableCell>
+                  <TableCell>Cliente</TableCell>
+                  <TableCell>Descrição</TableCell>
+                  <TableCell>Método</TableCell>
+                  <TableCell align="right">Valor</TableCell>
+                  <TableCell>Status</TableCell>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {getTodayTransactions().length > 0 ? (
                   getTodayTransactions().map((transaction, index) => (
                     <TableRow key={index}>
-                      <TableCell className="font-medium">{transaction.description}</TableCell>
                       <TableCell>
-                        {transaction.category.replace(/_/g, ' ')}
+                        {format(new Date(transaction.payment_date || transaction.created_date), "dd/MM/yyyy HH:mm")}
+                      </TableCell>
+                      <TableCell>{transaction.client_name}</TableCell>
+                      <TableCell>{transaction.description}</TableCell>
+                      <TableCell>{transaction.payment_method_name}</TableCell>
+                      <TableCell align="right">
+                        {formatCurrency(transaction.amount)}
                       </TableCell>
                       <TableCell>
-                        {transaction.payment_method_name}
-                      </TableCell>
-                      <TableCell>
-                        {transaction.client_name}
-                      </TableCell>
-                      <TableCell className={`text-right font-medium ${transaction.type === "receita" ? "text-green-500" : "text-red-500"}`}>
-                        {transaction.type === "receita" ? "+" : "-"}
-                        R$ {transaction.amount.toFixed(2)}
+                        <Badge 
+                          variant={transaction.status === "pago" ? "success" : "warning"}
+                        >
+                          {transaction.status === "pago" ? "Pago" : "Pendente"}
+                        </Badge>
                       </TableCell>
                     </TableRow>
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-4 text-gray-500">
+                    <TableCell colSpan={6} className="text-center py-4 text-gray-500">
                       Nenhuma transação registrada hoje
                     </TableCell>
                   </TableRow>
