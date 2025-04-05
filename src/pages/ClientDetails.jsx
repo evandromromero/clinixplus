@@ -204,17 +204,17 @@ export default function ClientDetails() {
       });
       
       // Carregar dados relacionados
-      const [appointmentsData, salesData, clientPackagesData, packagesData, servicesData] = await Promise.all([
+      const [appointmentsData, salesData, clientPackagesData, packagesData, servicesData, pendingServicesData] = await Promise.all([
         Appointment.filter({ client_id: clientId }),
         Sale.filter({ client_id: clientId }),
         ClientPackage.filter({ client_id: clientId }),
         Package.list(),
-        Service.list()
+        Service.list(),
+        PendingService.filter({ client_id: clientId, status: 'pendente' })
       ]);
 
-      console.log('Pacotes do cliente:', clientPackagesData);
-      console.log('Pacotes disponíveis:', packagesData);
       console.log('Serviços:', servicesData);
+      console.log('Serviços Pendentes:', pendingServicesData);
 
       // Ordenar pacotes por data de criação
       const sortedPackages = clientPackagesData.sort((a, b) => {
@@ -228,6 +228,7 @@ export default function ClientDetails() {
       setClientPackages(sortedPackages);
       setPackages(packagesData);
       setServices(servicesData);
+      setPendingServices(pendingServicesData);
     } catch (error) {
       console.error('Erro ao carregar dados do cliente:', error);
       setLoadError(error.message);
@@ -1082,40 +1083,59 @@ export default function ClientDetails() {
         </TabsContent>
 
         <TabsContent value="pending" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg font-medium">Serviços Pendentes para Agendamento</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {pendingServices.length > 0 ? (
-                <div className="space-y-4">
-                  {pendingServices.map((ps) => {
-                    const service = services.find(s => s.id === ps.service_id);
-                    if (!service) return null;
-                    
-                    return (
-                      <div key={ps.id} className="flex items-center justify-between p-4 border rounded-lg">
-                        <div>
-                          <h4 className="font-medium">{getServiceName(ps.service_id)}</h4>
-                          <p className="text-sm text-gray-500">
-                            Comprado em {format(new Date(ps.created_date), "dd/MM/yyyy")}
-                          </p>
-                        </div>
-                        <Link to={createPageUrl("Appointments", { client_id: clientId, pending_service_id: ps.id })}>
-                          <Button variant="outline" size="sm" className="bg-[#8BBAFF]/10 border-[#6EA3E7] text-[#175EA0] hover:bg-[#8BBAFF]/20">
-                            <Plus className="w-4 h-4" />
-                            Agendar
-                          </Button>
-                        </Link>
+          <div className="flex justify-between items-center">
+            <h2 className="text-2xl font-bold">Serviços Pendentes</h2>
+          </div>
+
+          {pendingServices.length === 0 ? (
+            <div className="text-center p-8 bg-gray-50 rounded-lg">
+              <Clock className="h-12 w-12 mx-auto text-gray-400 mb-2" />
+              <p className="text-gray-500">Nenhum serviço pendente</p>
+            </div>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {pendingServices.map((service) => (
+                <Card key={service.id} className="relative overflow-hidden">
+                  <CardHeader className="pb-4">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <CardTitle className="text-lg">
+                          {getServiceName(service.service_id)}
+                        </CardTitle>
+                        <p className="text-sm text-gray-500">
+                          Criado em: {format(new Date(service.created_date), 'dd/MM/yyyy')}
+                        </p>
                       </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="text-gray-500 text-sm">Nenhum serviço pendente para agendamento</p>
-              )}
-            </CardContent>
-          </Card>
+                      <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+                        service.status === 'pendente' ? 'bg-yellow-100 text-yellow-800' :
+                        service.status === 'agendado' ? 'bg-green-100 text-green-800' :
+                        service.status === 'cancelado' ? 'bg-red-100 text-red-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {service.status === 'pendente' ? 'Pendente' :
+                         service.status === 'agendado' ? 'Agendado' :
+                         service.status === 'cancelado' ? 'Cancelado' :
+                         service.status}
+                      </span>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {service.notes && (
+                      <p className="text-sm text-gray-600 mb-4">
+                        <span className="font-medium">Observações:</span> {service.notes}
+                      </p>
+                    )}
+                    {service.expiration_date && (
+                      <p className="text-sm text-gray-600">
+                        <span className="font-medium">Expira em:</span>{' '}
+                        {format(new Date(service.expiration_date), 'dd/MM/yyyy')}
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="pacotes" className="space-y-6">
