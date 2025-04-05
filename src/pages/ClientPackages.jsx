@@ -52,10 +52,18 @@ export default function ClientPackages() {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedClient, setSelectedClient] = useState("");
-  const [selectedStatus, setSelectedStatus] = useState("todos");
+  const [statusFilter, setStatusFilter] = useState("todos");
   const [selectedPackage, setSelectedPackage] = useState("");
   const [anamnesis, setAnamnesis] = useState(null);
   const [isEditingAnamnesis, setIsEditingAnamnesis] = useState(false);
+  const [showAnamnesisDialog, setShowAnamnesisDialog] = useState(false);
+  const [anamnesisTemplates, setAnamnesisTemplates] = useState([]);
+  const [selectedTemplate, setSelectedTemplate] = useState("");
+  const [dateFilter, setDateFilter] = useState("todos");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [packageToDelete, setPackageToDelete] = useState(null);
   const [anamnesisForm, setAnamnesisForm] = useState({
     skin_type: "",
     allergies: "",
@@ -64,7 +72,6 @@ export default function ClientPackages() {
     observations: "",
     last_update: ""
   });
-
   const [showSellDialog, setShowSellDialog] = useState(false);
   const [sellForm, setSellForm] = useState({
     client_id: "",
@@ -73,7 +80,6 @@ export default function ClientPackages() {
     total_sessions: 0,
     expiration_date: ""
   });
-
   const [showNewPackageDialog, setShowNewPackageDialog] = useState(false);
   const [packageForm, setPackageForm] = useState({
     name: "",
@@ -83,32 +89,19 @@ export default function ClientPackages() {
     discount: 0,
     services: []
   });
-
   const [clientSearchTerm, setClientSearchTerm] = useState("");
   const [clientSearchResults, setClientSearchResults] = useState([]);
   const [showClientSearch, setShowClientSearch] = useState(false);
-
   const [selectedServiceId, setSelectedServiceId] = useState("");
   const [selectedServiceQuantity, setSelectedServiceQuantity] = useState(1);
-
   const [serviceSearchTerm, setServiceSearchTerm] = useState("");
   const [serviceSearchResults, setServiceSearchResults] = useState([]);
   const [showServiceSearch, setShowServiceSearch] = useState(false);
-
   const [packageSearchTerm, setPackageSearchTerm] = useState("");
   const [packageSearchResults, setPackageSearchResults] = useState([]);
   const [showPackageSearch, setShowPackageSearch] = useState(false);
-
-  const [dateFilter, setDateFilter] = useState("todos");
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
-
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [packageToDelete, setPackageToDelete] = useState(null);
-
   const [hasUnfinishedSales, setHasUnfinishedSales] = useState(false);
   const [unfinishedSales, setUnfinishedSales] = useState([]);
-
   const [newPackage, setNewPackage] = useState({
     client_id: '',
     package_id: '',
@@ -116,7 +109,6 @@ export default function ClientPackages() {
     expiration_date: format(addDays(new Date(), 90), 'yyyy-MM-dd'),
     sell_now: false
   });
-
   const [showAddDependentDialog, setShowAddDependentDialog] = useState(false);
   const [dependentForm, setDependentForm] = useState({
     name: "",
@@ -529,21 +521,23 @@ export default function ClientPackages() {
   };
 
   const getFilteredPackages = () => {
-    let filtered = clientPackages.filter(pkg => {
-      const clientMatch = selectedClient ? pkg.client_id === selectedClient : true;
-      const statusMatch = selectedStatus !== "todos" ? pkg.status === selectedStatus : true;
-      return clientMatch && statusMatch;
-    });
+    let filtered = [...clientPackages];
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // Filtrar por status
+    if (statusFilter !== "todos") {
+      filtered = filtered.filter(pkg => pkg.status === statusFilter);
+    }
 
-    const thisWeekStart = new Date(today);
-    thisWeekStart.setDate(today.getDate() - today.getDay());
-
-    const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-
+    // Filtrar por data
     if (dateFilter !== "todos") {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const thisWeekStart = new Date(today);
+      thisWeekStart.setDate(today.getDate() - today.getDay());
+
+      const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+
       filtered = filtered.filter(pkg => {
         const purchaseDate = new Date(pkg.purchase_date);
         purchaseDate.setHours(0, 0, 0, 0);
@@ -561,16 +555,19 @@ export default function ClientPackages() {
       });
     }
 
+    // Ordenar por data de compra (mais recentes primeiro)
     filtered.sort((a, b) => new Date(b.purchase_date) - new Date(a.purchase_date));
 
     return filtered;
   };
 
-  const getPaginatedPackages = (packages) => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    return packages.slice(startIndex, endIndex);
-  };
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const paginatedPackages = getFilteredPackages().slice(indexOfFirstItem, indexOfLastItem);
+
+  const totalPages = Math.ceil(getFilteredPackages().length / itemsPerPage);
+
+  const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
   const getPackageInfo = (packageId) => {
     const clientPkg = clientPackages.find(cp => cp.id === packageId);
@@ -593,42 +590,30 @@ export default function ClientPackages() {
   };
 
   const getPackageServices = (clientPkgId) => {
-    console.log('getPackageServices - clientPkgId:', clientPkgId);
     const clientPkg = clientPackages.find(cp => cp.id === clientPkgId);
-    console.log('getPackageServices - clientPkg encontrado:', clientPkg);
-
     if (!clientPkg) return [];
 
     // Primeiro tenta pegar do snapshot
     if (clientPkg.package_snapshot?.services) {
-      console.log('getPackageServices - services do snapshot:', clientPkg.package_snapshot.services);
       return clientPkg.package_snapshot.services;
     }
 
     // Se não tem no snapshot, busca do pacote original
     const pkg = packages.find(p => p.id === clientPkg.package_id);
-    console.log('getPackageServices - pacote original:', pkg);
-    console.log('getPackageServices - services do pacote original:', pkg?.services);
     return pkg?.services || [];
   };
 
   const getPackageName = (clientPkgId) => {
-    console.log('getPackageName - clientPkgId:', clientPkgId);
     const clientPkg = clientPackages.find(cp => cp.id === clientPkgId);
-    console.log('getPackageName - clientPkg encontrado:', clientPkg);
-
     if (!clientPkg) return "Pacote não encontrado";
 
     // Primeiro tenta pegar do snapshot
     if (clientPkg.package_snapshot?.name) {
-      console.log('getPackageName - nome do snapshot:', clientPkg.package_snapshot.name);
       return clientPkg.package_snapshot.name;
     }
 
     // Se não tem no snapshot, busca do pacote original
     const pkg = packages.find(p => p.id === clientPkg.package_id);
-    console.log('getPackageName - pacote original:', pkg);
-    console.log('getPackageName - nome do pacote original:', pkg?.name);
     return pkg?.name || "Pacote não encontrado";
   };
 
@@ -1203,7 +1188,7 @@ export default function ClientPackages() {
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">Status</label>
-              <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger>
                   <SelectValue placeholder="Todos os status" />
                 </SelectTrigger>
@@ -1236,7 +1221,7 @@ export default function ClientPackages() {
                 className="w-full"
                 onClick={() => {
                   setSelectedClient("");
-                  setSelectedStatus("todos");
+                  setStatusFilter("todos");
                   setDateFilter("todos");
                   setCurrentPage(1);
                 }}
@@ -1256,7 +1241,7 @@ export default function ClientPackages() {
             <>
               <div className="flex justify-between items-center mb-4">
                 <p className="text-sm text-gray-500">
-                  Mostrando {Math.min(itemsPerPage, paginatedPackages.length)} de {filteredPackages.length} resultados
+                  Mostrando {Math.min(itemsPerPage, paginatedPackages.length)} de {getFilteredPackages().length} resultados
                 </p>
               </div>
 
