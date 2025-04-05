@@ -211,67 +211,25 @@ export default function ClientDetails() {
         Package.list(),
         Service.list()
       ]);
-      
-      // Carregar Gift Cards do cliente
-      const clientGiftCards = await GiftCard.filter({ client_id: clientId });
-      setGiftCards(clientGiftCards.sort((a, b) => {
-        // Primeiro os ativos, depois os utilizados
-        if ((a.status === 'active' || a.status === 'ativo') && (b.status !== 'active' && b.status !== 'ativo')) return -1;
-        if ((a.status !== 'active' && a.status !== 'ativo') && (b.status === 'active' || b.status === 'ativo')) return 1;
-        
-        // Depois por data de criação (mais recentes primeiro)
+
+      console.log('Pacotes do cliente:', clientPackagesData);
+      console.log('Pacotes disponíveis:', packagesData);
+      console.log('Serviços:', servicesData);
+
+      // Ordenar pacotes por data de criação
+      const sortedPackages = clientPackagesData.sort((a, b) => {
         const dateA = new Date(a.created_at || 0);
         const dateB = new Date(b.created_at || 0);
         return dateB - dateA;
-      }));
-      
-      // Carregar assinaturas do cliente
-      try {
-        // Carregar planos de assinatura
-        const plansData = await SubscriptionPlan.list();
-        setSubscriptionPlans(plansData);
-        
-        // Carregar assinaturas do cliente diretamente do Firestore
-        const { db } = await import('@/firebase/config');
-        const { collection, query, where, getDocs } = await import('firebase/firestore');
-        
-        const subscriptionsRef = collection(db, 'client_subscriptions');
-        const clientSubscriptionsQuery = query(subscriptionsRef, where('client_id', '==', clientId));
-        const querySnapshot = await getDocs(clientSubscriptionsQuery);
-        
-        const subscriptionsData = [];
-        querySnapshot.forEach((doc) => {
-          subscriptionsData.push({
-            id: doc.id,
-            ...doc.data()
-          });
-        });
-        
-        // Ordenar assinaturas (ativas primeiro, depois por data de criação)
-        const sortedSubscriptions = subscriptionsData.sort((a, b) => {
-          // Primeiro as ativas
-          if (a.status === 'ativa' && b.status !== 'ativa') return -1;
-          if (a.status !== 'ativa' && b.status === 'ativa') return 1;
-          
-          // Depois por data de criação (mais recentes primeiro)
-          const dateA = new Date(a.created_at || 0);
-          const dateB = new Date(b.created_at || 0);
-          return dateB - dateA;
-        });
-        
-        setClientSubscriptions(sortedSubscriptions);
-        console.log(`${sortedSubscriptions.length} assinaturas encontradas para o cliente ${clientId}`);
-      } catch (subscriptionsError) {
-        console.error('Erro ao carregar assinaturas do cliente:', subscriptionsError);
-      }
-      
+      });
+
       setAppointments(appointmentsData);
       setSales(salesData);
-      setClientPackages(clientPackagesData);
+      setClientPackages(sortedPackages);
       setPackages(packagesData);
       setServices(servicesData);
     } catch (error) {
-      console.error(error);
+      console.error('Erro ao carregar dados do cliente:', error);
       setLoadError(error.message);
     }
   };
@@ -726,6 +684,17 @@ export default function ClientDetails() {
     }).format(value);
   };
 
+  // Função para obter o nome do serviço
+  const getServiceName = (serviceId) => {
+    const service = services.find(s => s.id === serviceId);
+    return service ? service.name : 'Serviço não encontrado';
+  };
+
+  // Função para obter o nome do cliente
+  const getClientName = (clientId) => {
+    return client?.name || 'Cliente não encontrado';
+  };
+
   if (!client && !loadError) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -740,7 +709,7 @@ export default function ClientDetails() {
         <RateLimitHandler
           error={loadError}
           entityName="cliente"
-          onRetry={loadData}
+          onRetry={loadClient}
         />
       </div>
     );
@@ -1127,7 +1096,7 @@ export default function ClientDetails() {
                     return (
                       <div key={ps.id} className="flex items-center justify-between p-4 border rounded-lg">
                         <div>
-                          <h4 className="font-medium">{service.name}</h4>
+                          <h4 className="font-medium">{getServiceName(ps.service_id)}</h4>
                           <p className="text-sm text-gray-500">
                             Comprado em {format(new Date(ps.created_date), "dd/MM/yyyy")}
                           </p>
@@ -1199,7 +1168,7 @@ export default function ClientDetails() {
                     <div key={pkg.id} className="border rounded-lg p-4 bg-white shadow-sm hover:shadow-md transition-shadow">
                       <div className="flex justify-between items-start mb-2">
                         <div>
-                          <h4 className="font-medium text-lg text-[#175EA0]">{pkg.packageData?.name}</h4>
+                          <h4 className="font-medium text-lg text-[#175EA0]">{pkg.package_snapshot?.name || "Pacote não encontrado"}</h4>
                           <div className="flex items-center gap-2 mt-1">
                             <div className="flex items-center">
                               <Clock className="w-4 h-4 mr-1 text-[#3475B8]" />
@@ -1236,23 +1205,24 @@ export default function ClientDetails() {
                       <div className="mt-4">
                         <h5 className="text-sm font-medium mb-2 text-[#175EA0]">Serviços Incluídos:</h5>
                         <div className="space-y-1">
-                          {pkg.services && pkg.services.length > 0 ? (
-                            pkg.services.map((service) => (
-                              <div key={service.service_id} className="text-sm text-[#3475B8] flex items-center justify-between bg-[#8BBAFF]/5 p-2 rounded border border-[#6EA3E7] hover:bg-[#8BBAFF]/10">
-                                <div className="flex items-center">
-                                  <Clock className="w-4 h-4 mr-2 text-[#518CD0]" />
-                                  {service.name}
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <span className="font-medium text-[#175EA0] bg-[#8BBAFF]/10 px-2 py-0.5 rounded">
-                                    {service.quantity}x
-                                  </span>
+                          {(pkg.package_snapshot?.services || []).map((service, index) => {
+                            const serviceName = getServiceName(service.service_id);
+                            const usedSessions = pkg.session_history?.filter(
+                              s => s.service_id === service.service_id && s.status === 'concluido'
+                            ).length || 0;
+                            
+                            return (
+                              <div 
+                                key={index}
+                                className="p-3 bg-gray-50 rounded-lg border border-gray-200"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="font-medium">{serviceName}</span>
+                                  <span className="text-sm text-gray-600">{usedSessions}/{service.quantity} sessões</span>
                                 </div>
                               </div>
-                            ))
-                          ) : (
-                            <p className="text-sm text-[#518CD0] text-center py-2">Nenhum serviço incluído</p>
-                          )}
+                            );
+                          })}
                         </div>
                       </div>
 
@@ -2084,7 +2054,7 @@ export default function ClientDetails() {
                     ...client,
                     dependents: newDependents
                   });
-                  loadData();
+                  loadClient();
                 }}
               />
             </CardContent>
@@ -2112,7 +2082,7 @@ export default function ClientDetails() {
                   });
                   setShowDependentForm(false);
                   setEditingDependent(null);
-                  loadData();
+                  loadClient();
                 }}
                 onCancel={() => {
                   setShowDependentForm(false);

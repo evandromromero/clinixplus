@@ -499,16 +499,6 @@ export default function ClientPackages() {
     return client ? client.name : "Cliente não encontrado";
   };
 
-  const getPackageName = (packageId) => {
-    const clientPkg = clientPackages.find(cp => cp.id === selectedPackage?.id);
-    if (clientPkg && clientPkg.package_snapshot) {
-      return clientPkg.package_snapshot.name;
-    }
-
-    const pkg = packages.find(p => p.id === packageId);
-    return pkg ? pkg.name : "Pacote não encontrado";
-  };
-
   const getServiceName = (serviceId) => {
     const service = services.find(s => s.id === serviceId);
     return service ? service.name : "Serviço não encontrado";
@@ -582,9 +572,65 @@ export default function ClientPackages() {
     return packages.slice(startIndex, endIndex);
   };
 
-  const filteredPackages = getFilteredPackages();
-  const paginatedPackages = getPaginatedPackages(filteredPackages);
-  const totalPages = Math.ceil(filteredPackages.length / itemsPerPage);
+  const getPackageInfo = (packageId) => {
+    const clientPkg = clientPackages.find(cp => cp.id === packageId);
+    if (!clientPkg) return null;
+
+    // Se tiver package_snapshot, use ele
+    if (clientPkg.package_snapshot) {
+      return {
+        name: clientPkg.package_snapshot.name,
+        services: clientPkg.package_snapshot.services || []
+      };
+    }
+
+    // Se não tiver snapshot, busca o pacote original
+    const pkg = packages.find(p => p.id === clientPkg.package_id);
+    return pkg ? {
+      name: pkg.name,
+      services: pkg.services || []
+    } : null;
+  };
+
+  const getPackageServices = (clientPkgId) => {
+    console.log('getPackageServices - clientPkgId:', clientPkgId);
+    const clientPkg = clientPackages.find(cp => cp.id === clientPkgId);
+    console.log('getPackageServices - clientPkg encontrado:', clientPkg);
+
+    if (!clientPkg) return [];
+
+    // Primeiro tenta pegar do snapshot
+    if (clientPkg.package_snapshot?.services) {
+      console.log('getPackageServices - services do snapshot:', clientPkg.package_snapshot.services);
+      return clientPkg.package_snapshot.services;
+    }
+
+    // Se não tem no snapshot, busca do pacote original
+    const pkg = packages.find(p => p.id === clientPkg.package_id);
+    console.log('getPackageServices - pacote original:', pkg);
+    console.log('getPackageServices - services do pacote original:', pkg?.services);
+    return pkg?.services || [];
+  };
+
+  const getPackageName = (clientPkgId) => {
+    console.log('getPackageName - clientPkgId:', clientPkgId);
+    const clientPkg = clientPackages.find(cp => cp.id === clientPkgId);
+    console.log('getPackageName - clientPkg encontrado:', clientPkg);
+
+    if (!clientPkg) return "Pacote não encontrado";
+
+    // Primeiro tenta pegar do snapshot
+    if (clientPkg.package_snapshot?.name) {
+      console.log('getPackageName - nome do snapshot:', clientPkg.package_snapshot.name);
+      return clientPkg.package_snapshot.name;
+    }
+
+    // Se não tem no snapshot, busca do pacote original
+    const pkg = packages.find(p => p.id === clientPkg.package_id);
+    console.log('getPackageName - pacote original:', pkg);
+    console.log('getPackageName - nome do pacote original:', pkg?.name);
+    return pkg?.name || "Pacote não encontrado";
+  };
 
   const confirmDeletePackage = (packageId) => {
     if (!packageId) {
@@ -1228,7 +1274,7 @@ export default function ClientPackages() {
                     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                       <div className="space-y-1 flex-1">
                         <h3 className="font-medium text-gray-900">
-                          {getPackageName(clientPkg.package_id)}
+                          {getPackageName(clientPkg.id)}
                         </h3>
                         <p className="text-sm text-gray-600">
                           Cliente: {getClientName(clientPkg.client_id)}
@@ -1271,6 +1317,35 @@ export default function ClientPackages() {
                           className="bg-blue-500 h-2 rounded-full" 
                           style={{ width: getProgressBarWidth(clientPkg.sessions_used, clientPkg.total_sessions) }}
                         ></div>
+                      </div>
+
+                      {/* Lista de Serviços */}
+                      <div className="mt-4">
+                        <h4 className="text-sm font-medium mb-2">Serviços Incluídos:</h4>
+                        <div className="space-y-2">
+                          {console.log('Renderizando serviços para o pacote:', clientPkg)}
+                          {getPackageServices(clientPkg.id).map((service, index) => {
+                            console.log('Service encontrado:', service);
+                            const serviceName = getServiceName(service.service_id);
+                            console.log('Nome do serviço:', serviceName);
+                            const usedSessions = clientPkg.session_history?.filter(
+                              s => s.service_id === service.service_id && s.status === 'concluido'
+                            ).length || 0;
+                            console.log('Sessões usadas:', usedSessions);
+                            
+                            return (
+                              <div 
+                                key={index}
+                                className="p-3 bg-gray-50 rounded-lg border border-gray-200"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="font-medium">{serviceName}</span>
+                                  <span className="text-sm text-gray-600">{usedSessions}/{service.quantity} sessões</span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1326,9 +1401,7 @@ export default function ClientPackages() {
                     <div>
                       <h3 className="text-sm font-medium text-gray-500">Pacote</h3>
                       <p className="text-lg font-medium">
-                        {selectedPackage.package_snapshot 
-                          ? selectedPackage.package_snapshot.name 
-                          : getPackageName(selectedPackage.package_id)}
+                        {getPackageName(selectedPackage.id)}
                       </p>
                     </div>
                     <div>
@@ -1380,11 +1453,14 @@ export default function ClientPackages() {
                   <div>
                     <h3 className="text-sm font-medium text-gray-500 mb-2">Serviços Incluídos</h3>
                     <div className="space-y-2">
-                      {selectedPackage.package_snapshot?.services?.map((service, index) => (
-                        <div key={index} className="p-4 bg-gray-50 rounded-lg flex justify-between items-center">
-                          <div>
-                            <span className="font-medium">{service.name || getServiceName(service.service_id)}</span>
-                            <span className="text-gray-500 ml-2">({service.quantity}x)</span>
+                      {getPackageServices(selectedPackage.id).map((service, index) => (
+                        <div 
+                          key={index}
+                          className="p-3 bg-gray-50 rounded-lg border border-gray-200"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium">{getServiceName(service.service_id)}</span>
+                            <span className="text-sm text-gray-600">{service.quantity}x</span>
                           </div>
                         </div>
                       ))}
@@ -1405,32 +1481,33 @@ export default function ClientPackages() {
                 {selectedPackage.session_history && selectedPackage.session_history.length > 0 ? (
                   <div className="space-y-4">
                     {selectedPackage.session_history.map((session, index) => (
-                      <div key={index} className="p-3 border rounded-lg">
-                        <div className="flex justify-between items-center">
-                          <div>
-                            <p className="font-medium">{session.service_name || getServiceName(session.service_id)}</p>
-                            <p className="text-sm text-gray-500">
-                              {format(new Date(session.date), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-                            </p>
-                            <p className="text-sm text-gray-500">
-                              Profissional: {getEmployeeName(session.employee_id)}
-                            </p>
-                          </div>
-                          <Badge 
-                            variant="outline" 
-                            className={
-                              session.status === 'concluido' ? 'bg-green-50 text-green-700' :
-                              session.status === 'agendado' ? 'bg-blue-50 text-blue-700' :
-                              session.status === 'cancelado' ? 'bg-red-50 text-red-700' :
-                              'bg-gray-50 text-gray-700'
-                            }
-                          >
-                            {session.status === 'concluido' ? 'Concluído' :
-                             session.status === 'agendado' ? 'Agendado' :
-                             session.status === 'cancelado' ? 'Cancelado' :
-                             session.status}
-                          </Badge>
+                      <div 
+                        key={index}
+                        className="flex justify-between items-center p-2 bg-gray-50 rounded-md text-sm"
+                      >
+                        <div>
+                          <p className="font-medium">{getServiceName(session.service_id)}</p>
+                          <p className="text-sm text-gray-500">
+                            {format(new Date(session.date), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            Profissional: {getEmployeeName(session.employee_id)}
+                          </p>
                         </div>
+                        <Badge 
+                          variant="outline" 
+                          className={
+                            session.status === 'concluido' ? 'bg-green-50 text-green-700' :
+                            session.status === 'agendado' ? 'bg-blue-50 text-blue-700' :
+                            session.status === 'cancelado' ? 'bg-red-50 text-red-700' :
+                            'bg-gray-50 text-gray-700'
+                          }
+                        >
+                          {session.status === 'concluido' ? 'Concluído' :
+                           session.status === 'agendado' ? 'Agendado' :
+                           session.status === 'cancelado' ? 'Cancelado' :
+                           session.status}
+                        </Badge>
                       </div>
                     ))}
                   </div>
@@ -1455,28 +1532,29 @@ export default function ClientPackages() {
                 {selectedPackage.dependents && selectedPackage.dependents.length > 0 ? (
                   <div className="space-y-4">
                     {selectedPackage.dependents.map((dependent, index) => (
-                      <div key={index} className="p-4 border rounded-lg">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <p className="font-medium">{dependent.name}</p>
+                      <div 
+                        key={index}
+                        className="flex justify-between items-start p-2 bg-gray-50 rounded-md text-sm"
+                      >
+                        <div>
+                          <p className="font-medium">{dependent.name}</p>
+                          <p className="text-sm text-gray-500">
+                            {format(new Date(dependent.birth_date), "dd/MM/yyyy", { locale: ptBR })}
+                          </p>
+                          {dependent.relationship && (
                             <p className="text-sm text-gray-500">
-                              {format(new Date(dependent.birth_date), "dd/MM/yyyy", { locale: ptBR })}
+                              Parentesco: {dependent.relationship}
                             </p>
-                            {dependent.relationship && (
-                              <p className="text-sm text-gray-500">
-                                Parentesco: {dependent.relationship}
-                              </p>
-                            )}
-                          </div>
-                          <Button 
-                            variant="ghost" 
-                            size="icon"
-                            className="text-red-500 hover:bg-red-50"
-                            onClick={() => handleRemoveDependent(index)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          )}
                         </div>
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          className="text-red-500 hover:bg-red-50"
+                          onClick={() => handleRemoveDependent(index)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
                     ))}
                   </div>
@@ -1742,7 +1820,10 @@ export default function ClientPackages() {
             <Button variant="outline" onClick={() => setShowSellDialog(false)}>
               Cancelar
             </Button>
-            <Button className="bg-purple-600 hover:bg-purple-700" onClick={handleSellPackage}>
+            <Button 
+              className="bg-purple-600 hover:bg-purple-700" 
+              onClick={handleSellPackage}
+            >
               <ShoppingBag className="w-4 h-4 mr-2" />
               Finalizar Venda
             </Button>
