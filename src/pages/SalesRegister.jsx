@@ -217,9 +217,8 @@ export default function SalesRegister() {
     console.log("[SalesRegister] Adicionando item ao carrinho:", item);
     const cartItem = {
       id: item.id,
-      item_id: item.id,
       name: item.name,
-      type: saleType,
+      type: saleType, // O tipo vem do estado global que indica qual aba está selecionada
       price: parseFloat(item.price),
       quantity: 1,
       discount: 0,
@@ -541,18 +540,40 @@ export default function SalesRegister() {
       }
       
       // Criar serviços pendentes para cada serviço vendido
-      for (const item of cartItems) {
-        if (item.type === "serviço") {
-          console.log("[SalesRegister] Processando serviço para criar pendente:", item);
-          
-          const serviceId = item.id || item.item_id;
-          if (!serviceId) {
-            console.error("[SalesRegister] Serviço sem ID:", item);
-            continue;
-          }
+      const servicesToCreate = cartItems.filter(item => item.type === "serviço");
+      console.log("[SalesRegister] Total de serviços para criar:", servicesToCreate.length);
+      
+      for (const item of servicesToCreate) {
+        console.log("[SalesRegister] ==========================================");
+        console.log("[SalesRegister] Iniciando processamento de serviço:", {
+          item_id: item.id,
+          item_name: item.name,
+          sale_id: createdSale.id,
+          quantity: item.quantity
+        });
+        
+        const serviceId = item.id;
+        if (!serviceId) {
+          console.error("[SalesRegister] Serviço sem ID:", item);
+          continue;
+        }
 
-          try {
-            const pendingService = await PendingService.create({
+        try {
+          // Verificar se já existe um serviço pendente para esta venda e serviço
+          const existingPendingServices = await PendingService.filter({
+            sale_id: createdSale.id,
+            service_id: serviceId,
+            client_id: selectedClient.id
+          });
+
+          console.log("[SalesRegister] Serviços pendentes existentes:", {
+            count: existingPendingServices.length,
+            services: existingPendingServices
+          });
+
+          if (existingPendingServices.length === 0) {
+            // Criar um único serviço pendente com a quantidade especificada
+            const pendingServiceData = {
               client_id: selectedClient.id,
               service_id: serviceId,
               sale_id: createdSale.id,
@@ -561,59 +582,69 @@ export default function SalesRegister() {
               created_date: new Date().toISOString(),
               expiration_date: null,
               notes: `Serviço vendido em ${format(new Date(), "dd/MM/yyyy", { locale: ptBR })}`
-            });
-            console.log("[SalesRegister] Serviço pendente criado:", pendingService);
-          } catch (error) {
-            console.error("[SalesRegister] Erro ao criar serviço pendente:", error);
-            throw error;
+            };
+
+            console.log("[SalesRegister] Criando serviço pendente com dados:", pendingServiceData);
+            
+            const pendingService = await PendingService.create(pendingServiceData);
+            console.log("[SalesRegister] Serviço pendente criado com sucesso:", pendingService);
+          } else {
+            console.log("[SalesRegister] Serviço pendente já existe, não será criado novamente");
           }
+          console.log("[SalesRegister] ==========================================");
+        } catch (error) {
+          console.error("[SalesRegister] Erro ao criar serviço pendente:", error);
+          throw error;
         }
       }
       
-      // Limpar o estado e manter na página de vendas
+      // Limpar o estado
       setCartItems([]);
       setSelectedClient(null);
       setSalesEmployee("");
       setPaymentMethods([{ methodId: "", amount: 0, installments: 1 }]);
       setFinalDiscount(0);
       setFinalDiscountType("percentage");
+      setSearchTerm("");
+      setSearchResults([]);
       setShowConfirmDialog(false);
       
-      // Gerar comprovante de venda
-      const saleReceiptData = {
+      // Preparar dados do recibo
+      const receiptData = {
         sale_id: createdSale.id,
+        sale_date: createdSale.date,
         client_name: selectedClient.name,
         client_cpf: selectedClient.cpf,
-        sale_date: new Date().toISOString(),
-        sale_total: calculateCartTotal(),
-        payment_methods: paymentMethods.map(pm => ({
-          method_name: availablePaymentMethods.find(m => m.id === pm.methodId)?.name || 'Método não selecionado',
-          amount: pm.amount,
-          installments: pm.installments
-        })),
-        items: cartItems.map(item => ({
+        items: validCartItems.map(item => ({
           name: item.name,
           quantity: item.quantity,
-          unit_price: item.unit_price,
-          subtotal: getSubtotal(item)
-        }))
+          subtotal: item.quantity * item.unit_price
+        })),
+        sale_total: calculateCartTotal(),
+        payment_methods: paymentMethods.map(pm => {
+          const method = availablePaymentMethods.find(m => m.id === pm.methodId);
+          return {
+            method_name: method?.name || "Método não encontrado",
+            amount: parseFloat(pm.amount) || 0,
+            installments: parseInt(pm.installments) || 1
+          };
+        })
       };
-      setSaleReceipt(saleReceiptData);
+      
+      setSaleReceipt(receiptData);
       setShowReceiptDialog(true);
       
       toast({
         title: "Sucesso",
-        description: "Venda registrada com sucesso!",
+        description: "Venda finalizada com sucesso!",
         variant: "success"
       });
       
-      // Recarregar os dados
-      await loadDataWithRetry();
     } catch (error) {
-      console.error("[SalesRegister] Erro ao confirmar venda:", error);
+      console.error("[SalesRegister] Erro ao finalizar venda:", error);
       toast({
         title: "Erro",
-        description: "Erro ao registrar a venda. Tente novamente.",
+        description: "Erro ao finalizar venda. Tente novamente.",
         variant: "destructive"
       });
     } finally {

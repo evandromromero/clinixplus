@@ -616,59 +616,124 @@ const PendingServiceBase = {
     client_id: { type: 'string', required: true },
     service_id: { type: 'string', required: true },
     sale_id: { type: 'string', required: true },
-    quantity: { type: 'number', required: true },
-    status: { type: 'string', required: true }, // pendente, agendado, cancelado
+    status: { type: 'string', required: true },
     created_date: { type: 'string', required: true },
     expiration_date: { type: 'string', required: false },
     appointment_id: { type: 'string', required: false },
     notes: { type: 'string', required: false }
   },
-  create: async (data) => {
-    const docRef = await addDoc(collection(db, 'pending_services'), data);
-    return { id: docRef.id, ...data };
-  },
-  update: async (id, data) => {
-    const docRef = doc(db, 'pending_services', id);
-    await updateDoc(docRef, data);
-    return { id, ...data };
-  },
-  delete: async (id) => {
-    const docRef = doc(db, 'pending_services', id);
-    await deleteDoc(docRef);
-  },
-  get: async (id) => {
-    const docRef = doc(db, 'pending_services', id);
-    const docSnap = await getDoc(docRef);
-    if (!docSnap.exists()) return null;
-    return { id: docSnap.id, ...docSnap.data() };
-  },
-  list: async () => {
-    const querySnapshot = await getDocs(collection(db, 'pending_services'));
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
-  },
-  filter: async (filters) => {
+
+  async create(data) {
     try {
-      const querySnapshot = await getDocs(query(
-        collection(db, 'pending_services'),
-        where('client_id', '==', filters.client_id),
-        where('status', '==', filters.status)
-      ));
+      // Verifica se já existe um serviço pendente com os mesmos dados
+      const existingServices = await this.filter({
+        client_id: data.client_id,
+        service_id: data.service_id,
+        sale_id: data.sale_id,
+        status: data.status
+      });
+
+      if (existingServices && existingServices.length > 0) {
+        console.log('Serviço pendente já existe:', existingServices[0]);
+        return existingServices[0];
+      }
+
+      // Se não existe, cria um novo
+      const collectionRef = collection(db, 'pending_services');
+      const docRef = await addDoc(collectionRef, {
+        ...data,
+        created_date: new Date().toISOString()
+      });
+
+      return {
+        id: docRef.id,
+        ...data
+      };
+    } catch (error) {
+      console.error('Error creating pending service:', error);
+      throw error;
+    }
+  },
+
+  async update(id, data) {
+    try {
+      const docRef = doc(db, 'pending_services', id);
+      await updateDoc(docRef, data);
+      return {
+        id,
+        ...data
+      };
+    } catch (error) {
+      console.error('Error updating pending service:', error);
+      throw error;
+    }
+  },
+
+  async delete(id) {
+    try {
+      await deleteDoc(doc(db, 'pending_services', id));
+    } catch (error) {
+      console.error('Error deleting pending service:', error);
+      throw error;
+    }
+  },
+
+  async get(id) {
+    try {
+      const docRef = doc(db, 'pending_services', id);
+      const docSnap = await getDoc(docRef);
       
+      if (docSnap.exists()) {
+        return {
+          id: docSnap.id,
+          ...docSnap.data()
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting pending service:', error);
+      throw error;
+    }
+  },
+
+  async list() {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'pending_services'));
       return querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
     } catch (error) {
-      console.error('[PendingService] Erro ao filtrar serviços pendentes:', error);
-      throw error;
+      console.error('Error listing pending services:', error);
+      return [];
+    }
+  },
+
+  async filter(filters) {
+    try {
+      let q = collection(db, 'pending_services');
+      
+      if (filters) {
+        Object.entries(filters).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) {
+            q = query(q, where(key, '==', value));
+          }
+        });
+      }
+
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('Error filtering pending services:', error);
+      return [];
     }
   }
 };
 
-export const PendingService = createEnhancedEntity('pending_services', PendingServiceBase);
+export const PendingService = PendingServiceBase;
 
 // Implementação completa da entidade Employee usando Firebase
 export const Employee = {
