@@ -330,34 +330,16 @@ export default function CashRegister() {
       const today = format(new Date(), "yyyy-MM-dd");
       console.log("[CashRegister] Data de hoje formatada:", today);
       
-      // Buscar transações e dados relacionados
-      const [transactionsData, services, salesData, clientsData, paymentMethodsData] = await Promise.all([
+      // Buscar apenas as transações e métodos de pagamento
+      const [transactionsData, paymentMethodsData] = await Promise.all([
         FinancialTransaction.list(),
-        Service.list(),
-        Sale.list(),
-        Client.list(),
         PaymentMethod.list()
       ]);
       
       console.log("[CashRegister] Dados carregados:", {
         transacoes: transactionsData.length,
-        servicos: services.length,
-        vendas: salesData.length,
-        clientes: clientsData.length,
         metodosPagamento: paymentMethodsData.length
       });
-      
-      // Mapeamento de vendas por ID para facilitar o acesso
-      const salesMap = salesData.reduce((acc, sale) => {
-        acc[sale.id] = sale;
-        return acc;
-      }, {});
-      
-      // Mapeamento de clientes por ID para facilitar o acesso
-      const clientsMap = clientsData.reduce((acc, client) => {
-        acc[client.id] = client;
-        return acc;
-      }, {});
       
       // Mapeamento de métodos de pagamento por ID para facilitar o acesso
       const paymentMethodsMap = paymentMethodsData.reduce((acc, method) => {
@@ -367,63 +349,12 @@ export default function CashRegister() {
       
       // Processar transações
       const processedTransactions = transactionsData.map(t => {
-        // Encontrar o serviço relacionado
-        const service = services.find(s => s.id === t.service_id);
-        // Encontrar a venda relacionada
-        const sale = salesMap[t.sale_id];
-        // Encontrar o cliente relacionado
-        const client = clientsMap[t.client_id];
         // Encontrar o método de pagamento relacionado
         const paymentMethod = paymentMethodsMap[t.payment_method];
         
-        // Formatar a descrição da transação
-        let formattedDescription = t.description;
-        
-        // Se for uma venda e tiver itens, mostrar informações detalhadas
-        if (t.category === 'venda' && sale && sale.items && sale.items.length > 0) {
-          const firstItem = sale.items[0];
-          const itemName = firstItem.name || 'Item sem nome';
-          const itemType = firstItem.type || '';
-          
-          // Formatar o tipo do item para exibição
-          let typeDisplay = '';
-          switch (itemType.toLowerCase()) {
-            case 'produto':
-              typeDisplay = 'Produto';
-              break;
-            case 'serviço':
-            case 'servico':
-              typeDisplay = 'Serviço';
-              break;
-            case 'pacote':
-              typeDisplay = 'Pacote';
-              break;
-            case 'gift_card':
-              typeDisplay = 'Gift Card';
-              break;
-            case 'assinatura':
-              typeDisplay = 'Assinatura';
-              break;
-            default:
-              typeDisplay = itemType;
-          }
-          
-          // Se tiver mais de um item, indica a quantidade total
-          let additionalItems = '';
-          if (sale.items.length > 1) {
-            additionalItems = ` + ${sale.items.length - 1} item(s)`;
-          }
-          
-          formattedDescription = `${typeDisplay}: ${itemName}${additionalItems}`;
-        }
-        
         return {
           ...t,
-          description: formattedDescription, // Descrição formatada
-          created_at: t.created_at || t.created_date, // Garante que temos a hora
-          client_name: client ? client.name : 'Cliente não identificado', // Nome do cliente
-          payment_method: t.payment_method || 'Não especificado', // ID do método de pagamento
-          payment_method_name: paymentMethod ? paymentMethod.name : 'Método não identificado' // Nome do método de pagamento
+          payment_method_name: paymentMethod ? paymentMethod.name : 'Método não identificado'
         };
       });
 
@@ -622,8 +553,30 @@ export default function CashRegister() {
 
   const getTodayTransactions = () => {
     const today = format(new Date(), "yyyy-MM-dd");
+    console.log("[CashRegister] Filtrando transações para:", today);
+    
     return transactions.filter(t => {
-      const transactionDate = t.payment_date ? t.payment_date.split('T')[0] : null;
+      // Tentar pegar a data de várias propriedades possíveis
+      let transactionDate = null;
+      
+      if (t.payment_date) {
+        transactionDate = format(new Date(t.payment_date), "yyyy-MM-dd");
+      } else if (t.created_date) {
+        transactionDate = format(new Date(t.created_date), "yyyy-MM-dd");
+      } else if (t.date) {
+        transactionDate = format(new Date(t.date), "yyyy-MM-dd");
+      }
+      
+      console.log("[CashRegister] Transação:", {
+        id: t.id,
+        payment_date: t.payment_date,
+        created_date: t.created_date,
+        date: t.date,
+        normalized_date: transactionDate,
+        today: today,
+        matches: transactionDate === today
+      });
+
       return transactionDate === today && 
              t.category !== "abertura_caixa" && 
              t.category !== "fechamento_caixa";
