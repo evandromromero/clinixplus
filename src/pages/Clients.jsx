@@ -62,6 +62,13 @@ export default function Clients() {
     isOpen: false,
     client: null
   });
+  const [duplicateCheck, setDuplicateCheck] = useState({
+    isChecking: false,
+    results: null
+  });
+  const [duplicatesDialog, setDuplicatesDialog] = useState(false);
+  const [selectedForDeletion, setSelectedForDeletion] = useState([]);
+  const [isDeletingMultiple, setIsDeletingMultiple] = useState(false);
   const itemsPerPage = 50;
 
   useEffect(() => {
@@ -177,6 +184,136 @@ export default function Clients() {
     });
   };
 
+  const checkDuplicates = () => {
+    setDuplicateCheck({ isChecking: true, results: null });
+    setSelectedForDeletion([]);
+    
+    // Cria um mapa para rastrear números de telefone duplicados
+    const phoneMap = new Map();
+    const phoneMatches = [];
+    
+    // Encontra todos os telefones duplicados
+    clients.forEach(client => {
+      if (client.phone && client.phone.trim() !== '') {
+        if (phoneMap.has(client.phone)) {
+          // Se já encontramos este telefone antes, adicione aos resultados
+          const existingClient = phoneMap.get(client.phone);
+          
+          // Verifica se já adicionamos este telefone aos resultados
+          const alreadyAdded = phoneMatches.some(match => 
+            match.phone === client.phone
+          );
+          
+          if (!alreadyAdded) {
+            // Adiciona o primeiro cliente com este telefone
+            phoneMatches.push(existingClient);
+          }
+          
+          // Adiciona o cliente atual
+          phoneMatches.push(client);
+        } else {
+          // Primeira vez que encontramos este telefone
+          phoneMap.set(client.phone, client);
+        }
+      }
+    });
+    
+    // Cria um mapa para rastrear nomes duplicados
+    const nameMap = new Map();
+    const nameMatches = [];
+    
+    // Encontra todos os nomes duplicados
+    clients.forEach(client => {
+      if (client.name && client.name.trim() !== '') {
+        const normalizedName = client.name.toLowerCase().trim().replace(/\s+/g, ' ');
+        
+        if (nameMap.has(normalizedName)) {
+          // Se já encontramos este nome antes, adicione aos resultados
+          const existingClient = nameMap.get(normalizedName);
+          
+          // Verifica se já adicionamos este nome aos resultados
+          const alreadyAdded = nameMatches.some(match => 
+            match.name.toLowerCase().trim().replace(/\s+/g, ' ') === normalizedName
+          );
+          
+          if (!alreadyAdded) {
+            // Adiciona o primeiro cliente com este nome
+            nameMatches.push(existingClient);
+          }
+          
+          // Adiciona o cliente atual
+          nameMatches.push(client);
+        } else {
+          // Primeira vez que encontramos este nome
+          nameMap.set(normalizedName, client);
+        }
+      }
+    });
+    
+    const results = {
+      phoneMatches,
+      nameMatches
+    };
+    
+    setDuplicateCheck({
+      isChecking: false,
+      results
+    });
+    
+    // Se encontrou duplicatas, abre o diálogo
+    if (phoneMatches.length > 0 || nameMatches.length > 0) {
+      setDuplicatesDialog(true);
+    } else {
+      // Mostra apenas o resultado na página principal
+      setDuplicatesDialog(false);
+    }
+  };
+  
+  // Função para selecionar/deselecionar cliente para exclusão
+  const toggleClientSelection = (clientId) => {
+    setSelectedForDeletion(prev => {
+      if (prev.includes(clientId)) {
+        return prev.filter(id => id !== clientId);
+      } else {
+        return [...prev, clientId];
+      }
+    });
+  };
+  
+  // Função para excluir múltiplos clientes
+  const deleteSelectedClients = async () => {
+    setIsDeletingMultiple(true);
+    
+    try {
+      // Exclui cada cliente selecionado
+      for (const clientId of selectedForDeletion) {
+        await Client.delete(clientId);
+      }
+      
+      // Recarrega a lista de clientes
+      await loadClients();
+      
+      // Limpa a seleção
+      setSelectedForDeletion([]);
+      
+      // Fecha o diálogo
+      setDuplicatesDialog(false);
+      
+      // Mostra alerta de sucesso
+      setAlert({
+        message: `${selectedForDeletion.length} clientes excluídos com sucesso!`,
+        type: "success"
+      });
+    } catch (error) {
+      setAlert({
+        message: "Erro ao excluir clientes. Tente novamente.",
+        type: "error"
+      });
+    } finally {
+      setIsDeletingMultiple(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {alert && (
@@ -189,11 +326,59 @@ export default function Clients() {
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <h2 className="text-3xl font-bold text-[#0D0F36]">Clientes</h2>
-        <Button onClick={handleOpenNewClientDialog} className="bg-[#294380] hover:bg-[#0D0F36]">
-          <UserPlus className="w-4 h-4 mr-2" />
-          Novo Cliente
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={checkDuplicates}
+            className="bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100"
+          >
+            Verificar Duplicatas
+          </Button>
+          <Button onClick={handleOpenNewClientDialog} className="bg-[#294380] hover:bg-[#0D0F36]">
+            <UserPlus className="w-4 h-4 mr-2" />
+            Novo Cliente
+          </Button>
+        </div>
       </div>
+
+      {duplicateCheck.results && !duplicatesDialog && (
+        <div className="bg-amber-50 p-3 rounded-md border border-amber-200 mb-4">
+          <h4 className="font-medium text-amber-800 mb-2">Resultados da verificação:</h4>
+          {duplicateCheck.results.phoneMatches.length > 0 && (
+            <div className="mb-2">
+              <p className="text-sm font-medium text-amber-800">
+                Encontrados {duplicateCheck.results.phoneMatches.length} clientes com o mesmo telefone:
+              </p>
+              <ul className="text-sm list-disc pl-5 text-amber-700">
+                {duplicateCheck.results.phoneMatches.slice(0, 5).map(client => (
+                  <li key={client.id}>{client.name} - {client.phone}</li>
+                ))}
+                {duplicateCheck.results.phoneMatches.length > 5 && (
+                  <li>...e mais {duplicateCheck.results.phoneMatches.length - 5} clientes</li>
+                )}
+              </ul>
+            </div>
+          )}
+          {duplicateCheck.results.nameMatches.length > 0 && (
+            <div>
+              <p className="text-sm font-medium text-amber-800">
+                Encontrados {duplicateCheck.results.nameMatches.length} clientes com o mesmo nome:
+              </p>
+              <ul className="text-sm list-disc pl-5 text-amber-700">
+                {duplicateCheck.results.nameMatches.slice(0, 5).map(client => (
+                  <li key={client.id}>{client.name} - {client.phone}</li>
+                ))}
+                {duplicateCheck.results.nameMatches.length > 5 && (
+                  <li>...e mais {duplicateCheck.results.nameMatches.length - 5} clientes</li>
+                )}
+              </ul>
+            </div>
+          )}
+          {duplicateCheck.results.phoneMatches.length === 0 && duplicateCheck.results.nameMatches.length === 0 && (
+            <p className="text-sm text-green-700">Nenhuma duplicata encontrada.</p>
+          )}
+        </div>
+      )}
 
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <div className="p-4 border-b">
@@ -285,12 +470,10 @@ export default function Clients() {
           <div className="p-4 border-t">
             <Pagination>
               <PaginationContent>
-                <PaginationItem>
-                  <PaginationPrevious
-                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
-                  />
-                </PaginationItem>
+                <PaginationPrevious
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                />
                 {(() => {
                   const pageButtons = [];
                   const maxVisiblePages = 10;
@@ -312,12 +495,10 @@ export default function Clients() {
                   
                   return pageButtons;
                 })()}
-                <PaginationItem>
-                  <PaginationNext
-                    onClick={() => setCurrentPage(p => Math.min(pageCount, p + 1))}
-                    disabled={currentPage === pageCount}
-                  />
-                </PaginationItem>
+                <PaginationNext
+                  onClick={() => setCurrentPage(p => Math.min(pageCount, p + 1))}
+                  disabled={currentPage === pageCount}
+                />
               </PaginationContent>
             </Pagination>
           </div>
@@ -427,6 +608,7 @@ export default function Clients() {
                 />
               </div>
             </div>
+
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowClientDialog(false)}>
@@ -470,6 +652,128 @@ export default function Clients() {
             >
               Excluir
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Diálogo para mostrar e gerenciar duplicatas */}
+      <Dialog 
+        open={duplicatesDialog} 
+        onOpenChange={setDuplicatesDialog}
+        className="max-w-4xl"
+      >
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Gerenciar Clientes Duplicados</DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-6 max-h-[70vh] overflow-y-auto">
+            {duplicateCheck.results?.phoneMatches.length > 0 && (
+              <div>
+                <h3 className="text-lg font-semibold mb-2 text-amber-800">
+                  Clientes com telefones duplicados
+                </h3>
+                
+                <div className="border rounded-md overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-10">Selecionar</TableHead>
+                        <TableHead>Nome</TableHead>
+                        <TableHead>Telefone</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Cadastro</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {duplicateCheck.results.phoneMatches.map(client => (
+                        <TableRow key={client.id}>
+                          <TableCell>
+                            <input 
+                              type="checkbox" 
+                              checked={selectedForDeletion.includes(client.id)}
+                              onChange={() => toggleClientSelection(client.id)}
+                              className="h-4 w-4"
+                            />
+                          </TableCell>
+                          <TableCell>{client.name}</TableCell>
+                          <TableCell>{client.phone}</TableCell>
+                          <TableCell>{client.email}</TableCell>
+                          <TableCell>
+                            {client.created_date ? format(new Date(client.created_date), "dd/MM/yyyy") : "N/A"}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
+            
+            {duplicateCheck.results?.nameMatches.length > 0 && (
+              <div>
+                <h3 className="text-lg font-semibold mb-2 text-amber-800">
+                  Clientes com nomes duplicados
+                </h3>
+                
+                <div className="border rounded-md overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-10">Selecionar</TableHead>
+                        <TableHead>Nome</TableHead>
+                        <TableHead>Telefone</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Cadastro</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {duplicateCheck.results.nameMatches.map(client => (
+                        <TableRow key={client.id}>
+                          <TableCell>
+                            <input 
+                              type="checkbox" 
+                              checked={selectedForDeletion.includes(client.id)}
+                              onChange={() => toggleClientSelection(client.id)}
+                              className="h-4 w-4"
+                            />
+                          </TableCell>
+                          <TableCell>{client.name}</TableCell>
+                          <TableCell>{client.phone}</TableCell>
+                          <TableCell>{client.email}</TableCell>
+                          <TableCell>
+                            {client.created_date ? format(new Date(client.created_date), "dd/MM/yyyy") : "N/A"}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
+          </div>
+          
+          <DialogFooter className="flex justify-between items-center">
+            <div>
+              <span className="text-sm text-gray-600">
+                {selectedForDeletion.length} clientes selecionados para exclusão
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                onClick={() => setDuplicatesDialog(false)}
+              >
+                Cancelar
+              </Button>
+              <Button 
+                variant="destructive"
+                onClick={deleteSelectedClients}
+                disabled={selectedForDeletion.length === 0 || isDeletingMultiple}
+              >
+                {isDeletingMultiple ? "Excluindo..." : "Excluir Selecionados"}
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -6,6 +6,7 @@ export function createPageUrl(pageName, params) {
   const routes = {
     Dashboard: '/dashboard',
     Appointments: '/appointments',
+    Calendar: '/calendar',
     Clients: '/clients',
     ClientDetails: '/client-details',
     ClientPackages: '/client-packages',

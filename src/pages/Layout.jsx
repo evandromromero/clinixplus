@@ -45,6 +45,7 @@ export default function Layout() {
   const [financialMenuOpen, setFinancialMenuOpen] = useState(false);
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
   const [cadastrosMenuOpen, setCadastrosMenuOpen] = useState(false);
+  const [agendaMenuOpen, setAgendaMenuOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [userPermissions, setUserPermissions] = useState([]);
   const [userRole, setUserRole] = useState(null);
@@ -167,7 +168,15 @@ export default function Layout() {
 
   const menuItems = [
     { name: "Dashboard", icon: <Home className="w-5 h-5" />, url: "Dashboard", permission: "view_dashboard" },
-    { name: "Agenda", icon: <CalendarDays className="w-5 h-5" />, url: "Appointments", permission: "manage_appointments" },
+    {
+      name: "Agenda",
+      icon: <CalendarDays className="w-5 h-5" />,
+      permission: "manage_appointments",
+      submenu: [
+        { name: "Agendamentos", url: "Appointments", permission: "manage_appointments" },
+        { name: "Calendário", url: "Calendar", permission: "manage_appointments" }
+      ]
+    },
     {
       name: "Pessoas",
       icon: <Users className="w-5 h-5" />,
@@ -297,6 +306,7 @@ export default function Layout() {
                         if (item.name === "Financeiro") setFinancialMenuOpen(!financialMenuOpen);
                         if (item.name === "Configurações") setSettingsMenuOpen(!settingsMenuOpen);
                         if (item.name === "Cadastros") setCadastrosMenuOpen(!cadastrosMenuOpen);
+                        if (item.name === "Agenda") setAgendaMenuOpen(!agendaMenuOpen);
                       }}
                     >
                       <span className="flex items-center">
@@ -307,7 +317,8 @@ export default function Layout() {
                         (item.name === "Pessoas" && peopleMenuOpen) ||
                         (item.name === "Financeiro" && financialMenuOpen) ||
                         (item.name === "Configurações" && settingsMenuOpen) ||
-                        (item.name === "Cadastros" && cadastrosMenuOpen)
+                        (item.name === "Cadastros" && cadastrosMenuOpen) ||
+                        (item.name === "Agenda" && agendaMenuOpen)
                           ? "rotate-180"
                           : ""
                       }`} />
@@ -316,7 +327,8 @@ export default function Layout() {
                       (item.name === "Pessoas" && peopleMenuOpen) ||
                       (item.name === "Financeiro" && financialMenuOpen) ||
                       (item.name === "Configurações" && settingsMenuOpen) ||
-                      (item.name === "Cadastros" && cadastrosMenuOpen)
+                      (item.name === "Cadastros" && cadastrosMenuOpen) ||
+                      (item.name === "Agenda" && agendaMenuOpen)
                         ? "block"
                         : "hidden"
                     }`}>
@@ -398,6 +410,7 @@ export default function Layout() {
                         if (item.name === "Financeiro") setFinancialMenuOpen(!financialMenuOpen);
                         if (item.name === "Configurações") setSettingsMenuOpen(!settingsMenuOpen);
                         if (item.name === "Cadastros") setCadastrosMenuOpen(!cadastrosMenuOpen);
+                        if (item.name === "Agenda") setAgendaMenuOpen(!agendaMenuOpen);
                       }}
                     >
                       <span className="flex items-center">
@@ -408,7 +421,8 @@ export default function Layout() {
                         (item.name === "Pessoas" && peopleMenuOpen) ||
                         (item.name === "Financeiro" && financialMenuOpen) ||
                         (item.name === "Configurações" && settingsMenuOpen) ||
-                        (item.name === "Cadastros" && cadastrosMenuOpen)
+                        (item.name === "Cadastros" && cadastrosMenuOpen) ||
+                        (item.name === "Agenda" && agendaMenuOpen)
                           ? "rotate-180"
                           : ""
                       }`} />
@@ -417,7 +431,8 @@ export default function Layout() {
                       (item.name === "Pessoas" && peopleMenuOpen) ||
                       (item.name === "Financeiro" && financialMenuOpen) ||
                       (item.name === "Configurações" && settingsMenuOpen) ||
-                      (item.name === "Cadastros" && cadastrosMenuOpen)
+                      (item.name === "Cadastros" && cadastrosMenuOpen) ||
+                      (item.name === "Agenda" && agendaMenuOpen)
                         ? "block"
                         : "hidden"
                     }`}>

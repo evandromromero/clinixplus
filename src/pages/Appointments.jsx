@@ -58,6 +58,7 @@ export default function Appointments() {
   const [services, setServices] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [selectedEmployees, setSelectedEmployees] = useState([]);
+  const [hideCancelled, setHideCancelled] = useState(false);
   const [newAppointment, setNewAppointment] = useState({
     client_id: "",
     employee_id: "",
@@ -352,9 +353,11 @@ export default function Appointments() {
   };
 
   const getDayAppointments = (date) => {
-    return appointments.filter(app =>
-      format(new Date(app.date), 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd')
-    );
+    return appointments.filter(app => {
+      const dateMatch = format(new Date(app.date), 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd');
+      const statusMatch = !hideCancelled || app.status !== 'cancelado';
+      return dateMatch && statusMatch;
+    });
   };
 
   // Função para gerar horários baseados no intervalo do profissional
@@ -1115,6 +1118,19 @@ export default function Appointments() {
                     </Label>
                   </div>
                   ))}
+                </div>
+                
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="hide-cancelled"
+                      checked={hideCancelled}
+                      onCheckedChange={(checked) => setHideCancelled(checked)}
+                    />
+                    <Label htmlFor="hide-cancelled" className="flex items-center gap-2">
+                      Ocultar agendamentos cancelados
+                    </Label>
+                  </div>
                 </div>
               </div>
             </CardContent>

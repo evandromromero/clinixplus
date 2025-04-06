@@ -6,6 +6,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import Public from './pages/Public';
 import Dashboard from './pages/Dashboard';
 import Appointments from './pages/Appointments';
+import Calendar from './pages/Calendar';
 import Clients from './pages/Clients';
 import ClientDetails from './pages/ClientDetails';
 import ClientPackages from './pages/ClientPackages';
@@ -53,6 +54,8 @@ export default function AppRoutes() {
       }>
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/appointments" element={<Appointments />} />
+        <Route path="/calendar" element={<Calendar />} />
+        <Route path="/Calendar" element={<Calendar />} />
         <Route path="/clients" element={<Clients />} />
         <Route path="/client-details" element={<ClientDetails />} />
         <Route path="/client-packages" element={<ClientPackages />} />
