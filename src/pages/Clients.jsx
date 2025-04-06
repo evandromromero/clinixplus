@@ -62,7 +62,7 @@ export default function Clients() {
     isOpen: false,
     client: null
   });
-  const itemsPerPage = 10;
+  const itemsPerPage = 50;
 
   useEffect(() => {
     loadClients();
@@ -291,16 +291,27 @@ export default function Clients() {
                     disabled={currentPage === 1}
                   />
                 </PaginationItem>
-                {Array.from({ length: pageCount }).map((_, i) => (
-                  <PaginationItem key={i}>
-                    <PaginationLink
-                      onClick={() => setCurrentPage(i + 1)}
-                      isActive={currentPage === i + 1}
-                    >
-                      {i + 1}
-                    </PaginationLink>
-                  </PaginationItem>
-                ))}
+                {(() => {
+                  const pageButtons = [];
+                  const maxVisiblePages = 10;
+                  const startPage = Math.floor((currentPage - 1) / maxVisiblePages) * maxVisiblePages + 1;
+                  const endPage = Math.min(startPage + maxVisiblePages - 1, pageCount);
+                  
+                  for (let i = startPage; i <= endPage; i++) {
+                    pageButtons.push(
+                      <PaginationItem key={i}>
+                        <PaginationLink
+                          onClick={() => setCurrentPage(i)}
+                          isActive={currentPage === i}
+                        >
+                          {i}
+                        </PaginationLink>
+                      </PaginationItem>
+                    );
+                  }
+                  
+                  return pageButtons;
+                })()}
                 <PaginationItem>
                   <PaginationNext
                     onClick={() => setCurrentPage(p => Math.min(pageCount, p + 1))}
