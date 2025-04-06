@@ -592,50 +592,39 @@ export default function CashRegister() {
 
   const loadAuthorizedEmployees = async () => {
     try {
-      console.log("[CashRegister] Carregando funcionários do Firebase...");
+      console.log("[CashRegister] Carregando funcionários autorizados...");
       const employees = await Employee.list();
-      const authorized = employees.filter(emp => emp.can_manage_cash === true && emp.active === true);
+      console.log("[CashRegister] Todos os funcionários:", employees);
       
-      console.log(`[CashRegister] ${authorized.length} funcionários autorizados carregados do Firebase`);
+      // Filtrar apenas funcionários ativos e que podem gerenciar caixa
+      const authorized = employees.filter(emp => {
+        console.log("[CashRegister] Verificando funcionário:", emp.name, {
+          active: emp.active,
+          can_manage_cash: emp.can_manage_cash
+        });
+        return emp.active === true && emp.can_manage_cash === true;
+      });
+      
+      console.log("[CashRegister] Funcionários autorizados:", authorized);
       setAuthorizedEmployees(authorized);
+
+      // Garantir que o estado foi atualizado
+      console.log("[CashRegister] Estado authorizedEmployees:", authorized.length);
     } catch (error) {
-      console.error("[CashRegister] Erro ao carregar funcionários:", error);
-      
-      if (authorizedEmployees.length === 0) {
-        console.log("[CashRegister] Usando dados simulados de funcionários");
-        const simData = generateSimulatedData();
-        setAuthorizedEmployees(simData.employees);
-      }
+      console.error("[CashRegister] Erro ao carregar funcionários autorizados:", error);
+      toast.error("Erro ao carregar funcionários");
     }
   };
 
   useEffect(() => {
-    const loadEmployees = async () => {
-      try {
-        const cachedEmployees = localStorage.getItem('authorizedEmployees');
-        if (cachedEmployees) {
-          try {
-            const employeesData = JSON.parse(cachedEmployees);
-            if (Array.isArray(employeesData) && employeesData.length > 0) {
-              setAuthorizedEmployees(employeesData);
-              return;
-            }
-          } catch (e) {
-            console.warn("Erro ao usar dados de funcionários em cache:", e);
-          }
-        }
-        
-        const employees = await Employee.list();
-        const authorized = employees.filter(emp => emp.can_manage_cash === true && emp.active === true);
-        setAuthorizedEmployees(authorized);
-        localStorage.setItem('authorizedEmployees', JSON.stringify(authorized));
-      } catch (error) {
-        console.error("Erro ao carregar funcionários autorizados:", error);
-      }
-    };
-    
-    loadEmployees();
+    loadAuthorizedEmployees();
   }, []);
+
+  useEffect(() => {
+    if (showOpenCashDialog) {
+      loadAuthorizedEmployees();
+    }
+  }, [showOpenCashDialog]);
 
   const getTodayTransactions = () => {
     const today = format(new Date(), "yyyy-MM-dd");
@@ -720,161 +709,92 @@ export default function CashRegister() {
   };
 
   const OpenCashDialog = ({ open, onClose, onConfirm }) => {
-    const [employeeId, setEmployeeId] = useState("");
-    const [employeeName, setEmployeeName] = useState("");
-    const [initialAmount, setInitialAmount] = useState("0");
+    const [selectedEmployee, setSelectedEmployee] = useState("");
+    const [initialAmount, setInitialAmount] = useState(0);
     const [notes, setNotes] = useState("");
-    const [loading, setLoading] = useState(false);
-    const [selectedDate, setSelectedDate] = useState(new Date());
-    const [showCalendar, setShowCalendar] = useState(false);
-    
-    // Resetar o estado do diálogo quando ele for fechado
-    useEffect(() => {
-      if (!open) {
-        setEmployeeId("");
-        setEmployeeName("");
-        setInitialAmount("0");
-        setNotes("");
-        setLoading(false);
-        setSelectedDate(new Date());
-        setShowCalendar(false);
-      }
-    }, [open]);
-    
-    const handleSubmit = async () => {
-      try {
-        setLoading(true);
-        const numericValue = parseFloat(initialAmount.replace(',', '.'));
-        
-        if (isNaN(numericValue)) {
-          toast.error("Por favor, insira um valor válido.");
-          setLoading(false);
-          return;
-        }
+    const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
 
-        if (!employeeId) {
-          toast.error("Por favor, selecione um funcionário.");
-          setLoading(false);
-          return;
-        }
-        
-        // Fechar o diálogo antes de prosseguir
+    const handleSubmit = async () => {
+      if (!selectedEmployee) {
+        toast.error("Selecione um funcionário responsável");
+        return;
+      }
+
+      try {
+        await handleOpenCash(selectedEmployee, initialAmount, notes, date);
+        setSelectedEmployee("");
+        setInitialAmount(0);
+        setNotes("");
         onClose();
-        
-        // Chamar a função de confirmação com a data selecionada
-        await onConfirm(employeeName, numericValue, notes, format(selectedDate, "yyyy-MM-dd"));
       } catch (error) {
-        console.error("[OpenCashDialog] Erro ao abrir caixa:", error);
+        console.error("[CashRegister] Erro ao abrir caixa:", error);
         toast.error("Erro ao abrir o caixa");
-        setLoading(false);
       }
     };
-    
-    if (!open) return null;
-    
+
     return (
       <Dialog open={open} onOpenChange={onClose}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>Abrir Caixa</DialogTitle>
             <DialogDescription>
               Selecione um funcionário responsável, a data e informe o valor inicial em dinheiro.
             </DialogDescription>
           </DialogHeader>
-          
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="employeeId">Funcionário Responsável</Label>
-              <Select 
-                value={employeeId} 
-                onValueChange={(value) => {
-                  setEmployeeId(value);
-                  const emp = authorizedEmployees.find(e => e.id === value);
-                  setEmployeeName(emp ? emp.name : '');
-                }}
-              >
+              <Label>Funcionário Responsável</Label>
+              <Select value={selectedEmployee} onValueChange={setSelectedEmployee}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione o funcionário" />
                 </SelectTrigger>
                 <SelectContent>
-                  {authorizedEmployees.map(emp => (
-                    <SelectItem key={emp.id} value={emp.id}>{emp.name}</SelectItem>
+                  {authorizedEmployees.map((employee) => (
+                    <SelectItem key={employee.id} value={employee.name}>
+                      {employee.name}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            
+
             <div className="space-y-2">
-              <Label htmlFor="cashDate">Data do Caixa</Label>
-              <div className="relative">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full justify-start text-left font-normal"
-                  onClick={() => setShowCalendar(!showCalendar)}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {format(selectedDate, "dd/MM/yyyy")}
-                </Button>
-                {showCalendar && (
-                  <div className="absolute top-full left-0 z-50 mt-2 bg-white rounded-md shadow-md p-2 border">
-                    <Calendar
-                      mode="single"
-                      selected={selectedDate}
-                      onSelect={(date) => {
-                        setSelectedDate(date || new Date());
-                        setShowCalendar(false);
-                      }}
-                      className="rounded-md border"
-                    />
-                  </div>
-                )}
-              </div>
+              <Label>Data</Label>
+              <Input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+              />
             </div>
-            
+
             <div className="space-y-2">
-              <Label htmlFor="initialAmount">Valor Inicial</Label>
+              <Label>Valor Inicial</Label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2">R$</span>
+                <span className="absolute left-3 top-2.5">R$</span>
                 <Input
-                  id="initialAmount"
-                  className="pl-10"
+                  type="number"
                   value={initialAmount}
-                  onChange={(e) => {
-                    const value = e.target.value.replace(/[^0-9.,]/g, '');
-                    setInitialAmount(value);
-                  }}
-                  placeholder="0,00"
-                  type="text"
+                  onChange={(e) => setInitialAmount(parseFloat(e.target.value))}
+                  className="pl-9"
                 />
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="notes">Observações</Label>
+              <Label>Observações</Label>
               <Textarea
-                id="notes"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Observações sobre a abertura do caixa..."
               />
             </div>
           </div>
-          
-          <DialogFooter className="flex space-x-2 sm:justify-end">
-            <Button 
-              variant="outline" 
-              onClick={onClose}
-              disabled={loading}
-            >
+          <DialogFooter>
+            <Button variant="outline" onClick={onClose}>
               Cancelar
             </Button>
-            <Button 
-              onClick={handleSubmit}
-              disabled={!employeeId || loading}
-              className="bg-[#294380] hover:bg-[#0D0F36]"
-            >
-              {loading ? "Processando..." : "Abrir Caixa"}
+            <Button onClick={handleSubmit} className="bg-[#294380] hover:bg-[#0D0F36]">
+              Abrir Caixa
             </Button>
           </DialogFooter>
         </DialogContent>
