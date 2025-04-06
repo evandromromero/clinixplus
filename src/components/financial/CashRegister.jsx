@@ -109,6 +109,42 @@ export default function CashRegister() {
     }).format(value);
   };
 
+  // Funções utilitárias para datas
+  const formatDate = (date) => {
+    if (!date) return '';
+    try {
+      // Se for string ISO ou data simples, converter para objeto Date
+      if (typeof date === 'string') {
+        // Se já estiver no formato YYYY-MM-DD, retornar direto
+        if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+          return date;
+        }
+        // Remover a parte do tempo se existir
+        const datePart = date.split('T')[0];
+        if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) {
+          return datePart;
+        }
+        // Tentar criar um objeto Date
+        date = new Date(date);
+      }
+      
+      // Garantir que estamos usando a timezone correta
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      
+      return `${year}-${month}-${day}`;
+    } catch (error) {
+      console.error('[CashRegister] Erro ao formatar data:', error);
+      return '';
+    }
+  };
+
+  const getCurrentDate = () => {
+    const now = new Date();
+    return formatDate(now);
+  };
+
   // Efeito inicial para carregar dados
   useEffect(() => {
     const loadInitialData = async () => {
@@ -205,57 +241,87 @@ export default function CashRegister() {
   const loadCashRegisters = loadCashRegistersWithRetry;
 
   const checkCashStatus = async () => {
-    console.log("[CashRegister] Verificando status do caixa...");
     try {
-      const today = format(new Date(), "yyyy-MM-dd");
-      console.log("[CashRegister] Verificando transações para a data:", today);
+      console.log("[CashRegister] Verificando status do caixa...");
 
-      // Buscar todas as transações de abertura e fechamento
-      const transactions = await FinancialTransaction.list();
-      
-      // Filtrar apenas transações do dia atual
-      const todayTransactions = transactions.filter(t => {
-        const transactionDate = t.payment_date ? t.payment_date.split('T')[0] : null;
-        return transactionDate === today;
-      });
+      // Buscar todas as transações
+      const allTransactions = await FinancialTransaction.list();
+      console.log("[CashRegister] Todas as transações:", allTransactions);
 
-      // Filtrar por categoria
-      const cashTransactions = todayTransactions.filter(t => 
-        t.category === 'abertura_caixa' || t.category === 'fechamento_caixa'
-      );
-      
-      console.log("[CashRegister] Transações de caixa do dia:", cashTransactions);
-
-      // Ordenar por data de criação (mais recente primeiro)
-      const sortedTransactions = cashTransactions.sort((a, b) => 
-        new Date(b.created_date || b.created_at) - new Date(a.created_date || a.created_at)
+      // Filtrar transações de abertura não fechadas
+      const openCashTransactions = allTransactions.filter(t => 
+        t.category === 'abertura_caixa' && 
+        !t.closed_at &&
+        t.type === 'receita'
       );
 
-      // Verificar última transação
-      const lastTransaction = sortedTransactions[0];
-      if (lastTransaction) {
-        console.log("[CashRegister] Última transação do dia encontrada:", lastTransaction);
+      console.log("[CashRegister] Transações de abertura encontradas:", openCashTransactions);
 
-        // Se a última transação for de fechamento, o caixa está fechado
-        if (lastTransaction.category === 'fechamento_caixa') {
-          console.log("[CashRegister] Última transação é um fechamento, caixa está fechado");
+      if (openCashTransactions && openCashTransactions.length > 0) {
+        // Ordenar por data de criação (mais recente primeiro)
+        const sortedTransactions = openCashTransactions.sort((a, b) => {
+          const dateA = new Date(a.created_at || a.created_date);
+          const dateB = new Date(b.created_at || b.created_date);
+          return dateB - dateA;
+        });
+
+        const lastOpenTransaction = sortedTransactions[0];
+        console.log("[CashRegister] Última transação de caixa aberta:", lastOpenTransaction);
+
+        // Normalizar as datas para comparação
+        const transactionDate = formatDate(lastOpenTransaction.payment_date);
+        const today = getCurrentDate();
+        
+        console.log("[CashRegister] Comparando datas:", {
+          transactionDate,
+          today,
+          isBeforeToday: transactionDate < today,
+          rawTransactionDate: lastOpenTransaction.payment_date,
+          closed_at: lastOpenTransaction.closed_at
+        });
+
+        if (lastOpenTransaction.closed_at) {
+          // Se o caixa foi fechado, não mostrar como aberto
+          console.log("[CashRegister] Caixa já foi fechado em:", lastOpenTransaction.closed_at);
+          setHasPreviousDayOpenCash(false);
+          setPreviousOpenDate(null);
           setCashIsOpen(false);
-          setInitialAmount(0);
-        }
-        // Se a última transação for de abertura, o caixa está aberto
-        else if (lastTransaction.category === 'abertura_caixa') {
-          console.log("[CashRegister] Última transação é uma abertura, caixa está aberto");
+          setDailyBalance(0);
+          console.log("[CashRegister] Saldo do dia zerado por caixa fechado");
+        } else if (transactionDate < today) {
+          // Se a transação for de um dia anterior, mostrar alerta
+          console.log("[CashRegister] Caixa aberto em dia anterior");
+          setHasPreviousDayOpenCash(true);
+          setPreviousOpenDate(transactionDate);
+          setCashIsOpen(false);
+          setDailyBalance(0);
+          console.log("[CashRegister] Saldo do dia zerado por caixa anterior");
+        } else {
+          // Se for do dia atual, marcar como caixa aberto
+          console.log("[CashRegister] Caixa aberto hoje");
+          setHasPreviousDayOpenCash(false);
+          setPreviousOpenDate(null);
           setCashIsOpen(true);
-          setInitialAmount(parseFloat(lastTransaction.amount) || 0);
         }
+        
+        // Atualizar valor inicial
+        const initialValue = parseFloat(lastOpenTransaction.initial_amount || lastOpenTransaction.amount) || 0;
+        console.log("[CashRegister] Definindo valor inicial:", initialValue);
+        setInitialAmount(initialValue);
+        
       } else {
-        console.log("[CashRegister] Nenhuma transação de caixa encontrada para hoje");
+        console.log("[CashRegister] Nenhum caixa aberto encontrado");
         setCashIsOpen(false);
-        // Não zerar o valor inicial aqui para manter o saldo correto
+        setHasPreviousDayOpenCash(false);
+        setPreviousOpenDate(null);
+        setInitialAmount(0);
+        setDailyBalance(0);
+        console.log("[CashRegister] Saldo do dia zerado por não ter caixa aberto");
       }
 
     } catch (error) {
       console.error("[CashRegister] Erro ao verificar status do caixa:", error);
+      toast.error("Erro ao verificar status do caixa");
     }
   };
 
@@ -875,60 +941,63 @@ export default function CashRegister() {
   
   const handleCloseCash = async (employeeName) => {
     try {
-      // Determinar qual data usar para o fechamento
-      const dateToUse = hasPreviousDayOpenCash && previousOpenDate ? previousOpenDate : format(new Date(), "yyyy-MM-dd");
-      console.log("[CashRegister] Fechando caixa para a data:", dateToUse);
-      
-      if (!cashIsOpen && !hasPreviousDayOpenCash) {
-        toast.error("O caixa não está aberto!");
-        setShowCloseCashDialog(false);
-        return;
-      }
-      
-      // Verificar se há uma transação de abertura para a data em questão
-      const openingTransaction = await FinancialTransaction.filter({
-        category: "abertura_caixa",
-        payment_date: dateToUse
+      console.log("[CashRegister] Fechando caixa para a data:", previousOpenDate);
+
+      // Buscar a transação de abertura do caixa
+      const openCashTransaction = await FinancialTransaction.filter({
+        category: 'abertura_caixa',
+        payment_date: previousOpenDate
       }, true);
-      
-      if (openingTransaction.length === 0) {
-        toast.error(`Não foi encontrada uma abertura de caixa para ${format(new Date(dateToUse), "dd/MM/yyyy")}!`);
+
+      if (openCashTransaction && openCashTransaction.length > 0) {
+        const cashToClose = openCashTransaction[0];
+
+        // Criar transação de fechamento
+        const closingTransaction = {
+          type: 'despesa',
+          category: 'fechamento_caixa',
+          description: 'Fechamento de Caixa',
+          amount: dailyBalance,
+          payment_method: 'dinheiro',
+          status: 'pago',
+          payment_date: previousOpenDate,
+          created_by: employeeName || 'anonymous',
+          notes: closingNotes || '',
+          initial_amount: initialAmount,
+          final_amount: finalAmount,
+          expected_amount: expectedCashAmount,
+          difference: finalAmount - expectedCashAmount,
+          closed_by: employeeName || 'anonymous',
+          closed_at: format(new Date(), "yyyy-MM-dd'T'HH:mm:ss.SSSxxx")
+        };
+
+        // Criar a transação de fechamento
+        await FinancialTransaction.create(closingTransaction);
+
+        // Atualizar a transação de abertura com closed_at
+        await FinancialTransaction.update(cashToClose.id, {
+          closed_at: format(new Date(), "yyyy-MM-dd'T'HH:mm:ss.SSSxxx"),
+          closed_by: employeeName || 'anonymous'
+        });
+
+        // Resetar estados
+        setClosingNotes("");
+        setFinalAmount(0);
+        setExpectedCashAmount(0);
         setShowCloseCashDialog(false);
-        return;
+
+        // Recarregar dados
+        await loadTransactions();
+        await checkCashStatus();
+
+        toast.success("Caixa fechado com sucesso!");
+      } else {
+        console.error("[CashRegister] Nenhuma transação de abertura encontrada para fechar");
+        toast.error("Erro ao fechar o caixa: transação de abertura não encontrada");
       }
-      
-      // Garantir que temos um nome de funcionário válido
-      const closedByName = employeeName || openingTransaction[0].opened_by || "Administrador";
-      
-      const closingTransaction = {
-        type: "despesa",
-        category: "fechamento_caixa",
-        description: "Fechamento de Caixa",
-        amount: expectedCashAmount,
-        payment_method: "dinheiro",
-        payment_date: dateToUse,
-        status: "pago",
-        notes: closingNotes || "",
-        closed_by: closedByName,
-        initial_amount: initialAmount,
-        final_amount: expectedCashAmount
-      };
-      
-      setShowCloseCashDialog(false);
-      
-      await FinancialTransaction.create(closingTransaction);
-      
-      setInitialAmount(0);
-      setCashIsOpen(false);
-      
-      await loadTransactions();
-      await loadCashRegisters();
-      await checkCashStatus();
-      
-      toast.success("Caixa fechado com sucesso!");
     } catch (error) {
-      console.error("[CashRegister] Erro ao fechar o caixa:", error);
-      toast.error("Erro ao fechar o caixa. Tente novamente.");
+      console.error("[CashRegister] Erro ao fechar caixa:", error);
+      toast.error("Erro ao fechar o caixa");
     }
   };
 
@@ -1466,6 +1535,7 @@ export default function CashRegister() {
         setCashIsOpen(false);
         setHasPreviousDayOpenCash(false);
         setPreviousOpenDate(null);
+        setInitialAmount(0);
       }
 
     } catch (error) {
@@ -1647,7 +1717,7 @@ export default function CashRegister() {
           <CardContent className="p-4">
             <div className="flex items-center gap-2 text-yellow-700">
               <AlertTriangle className="w-5 h-5" />
-              <p>O caixa do dia {previousOpenDate ? format(new Date(previousOpenDate), "dd/MM/yyyy") : "anterior"} ainda está aberto. Feche o caixa anterior antes de abrir um novo.</p>
+              <p>O caixa do dia {previousOpenDate} ainda está aberto. Feche o caixa anterior antes de abrir um novo.</p>
             </div>
             <div className="mt-2 flex justify-end">
               <Button 
