@@ -65,6 +65,7 @@ export default function Settings() {
     city: "São Paulo",
     state: "SP",
     zipcode: "00000-000",
+    timezone: "America/Sao_Paulo",
     opening_hours: {
       weekdays: "8h às 20h",
       weekend: "9h às 18h"
@@ -122,6 +123,22 @@ export default function Settings() {
   const [selectedMessage, setSelectedMessage] = useState(null);
   const [showMessageDetails, setShowMessageDetails] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+
+  // Lista de fusos horários do Brasil
+  const timezones = [
+    { value: "America/Sao_Paulo", label: "São Paulo (UTC-3)" },
+    { value: "America/Manaus", label: "Manaus (UTC-4)" },
+    { value: "America/Belem", label: "Belém (UTC-3)" },
+    { value: "America/Fortaleza", label: "Fortaleza (UTC-3)" },
+    { value: "America/Recife", label: "Recife (UTC-3)" },
+    { value: "America/Noronha", label: "Fernando de Noronha (UTC-2)" },
+    { value: "America/Rio_Branco", label: "Rio Branco (UTC-5)" },
+    { value: "America/Campo_Grande", label: "Campo Grande (UTC-4)" },
+    { value: "America/Cuiaba", label: "Cuiabá (UTC-4)" },
+    { value: "America/Boa_Vista", label: "Boa Vista (UTC-4)" },
+    { value: "America/Porto_Velho", label: "Porto Velho (UTC-4)" },
+    { value: "America/Eirunepe", label: "Eirunepé (UTC-5)" }
+  ];
 
   useEffect(() => {
     console.log('Initial useEffect triggered');
@@ -242,44 +259,15 @@ export default function Settings() {
 
   const loadCompanySettings = async () => {
     try {
-      const settings = await CompanySettings.list();
-      console.log('Company settings API response:', settings);
-      
-      if (settings && settings.length > 0) {
-        console.log('Found existing settings:', settings[0]);
-        
-        // Garantir que payment_settings exista
-        const loadedSettings = {
-          ...settings[0],
-          payment_settings: settings[0].payment_settings || {
-            mercadopago_enabled: false,
-            mercadopago_public_key: "",
-            mercadopago_access_token: "",
-            mercadopago_client_id: "",
-            mercadopago_client_secret: "",
-            mercadopago_sandbox: true
-          },
-          seo_settings: settings[0].seo_settings || {
-            meta_title: "",
-            meta_description: "",
-            meta_keywords: "",
-            meta_author: "",
-            favicon_url: "",
-            site_name: ""
-          }
-        };
-        
-        setCompanySettings(loadedSettings);
-        setPreviewLogo(loadedSettings.logo_url || '');
-        setPreviewAboutImage(loadedSettings.about_image_url || '');
-        return loadedSettings;
-      } else {
-        console.log('No settings found, will use defaults');
-        return null;
+      const settings = await CompanySettings.get();
+      if (settings) {
+        setCompanySettings(settings);
+        setPreviewLogo(settings.logo_url || '');
+        setPreviewAboutImage(settings.about_image_url || '');
       }
     } catch (error) {
       console.error('Error in loadCompanySettings:', error);
-      return null;
+      setLoadError(prev => ({ ...prev, companySettings: error }));
     }
   };
 
@@ -354,24 +342,21 @@ export default function Settings() {
       setIsLoading(true);
       console.log('Saving company settings:', companySettings);
       
-      if (companySettings.id) {
-        await CompanySettings.update(companySettings.id, companySettings);
-        console.log('Settings updated successfully');
-      } else {
-        const created = await CompanySettings.create(companySettings);
-        console.log('Settings created successfully:', created);
-        setCompanySettings(created);
-      }
+      // Remove o ID antes de salvar
+      const { id, ...settingsToSave } = companySettings;
       
+      const updatedSettings = await CompanySettings.update(settingsToSave);
+      
+      setCompanySettings(updatedSettings);
       setAlert({
         type: 'success',
-        message: 'Configurações salvas com sucesso!'
+        message: 'Configurações da empresa salvas com sucesso!'
       });
     } catch (error) {
       console.error('Error saving company settings:', error);
       setAlert({
         type: 'error',
-        message: 'Erro ao salvar configurações: ' + (error?.message || 'Erro desconhecido')
+        message: 'Erro ao salvar as configurações da empresa'
       });
     } finally {
       setIsLoading(false);
@@ -790,6 +775,28 @@ export default function Settings() {
                     onChange={(e) => setCompanySettings({...companySettings, zipcode: e.target.value})}
                     placeholder="XXXXX-XXX"
                   />
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Fuso Horário</label>
+                  <Select
+                    value={companySettings.timezone}
+                    onValueChange={(value) => setCompanySettings({...companySettings, timezone: value})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o fuso horário" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {timezones.map((tz) => (
+                        <SelectItem key={tz.value} value={tz.value}>
+                          {tz.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-sm text-gray-500">
+                    Este fuso horário será usado para todos os agendamentos e relatórios
+                  </p>
                 </div>
               </div>
               

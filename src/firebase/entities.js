@@ -1323,7 +1323,63 @@ export const ClientSubscription = {
 export const ClientPackageSession = createEnhancedEntity('client_package_sessions', base44.entities.ClientPackageSession);
 export const Receipt = createEnhancedEntity('receipts', base44.entities.Receipt);
 export const UnfinishedSale = createEnhancedEntity('unfinished_sales', null); 
-export const CompanySettings = createEnhancedEntity('company_settings', base44.entities.CompanySettings);
+export const CompanySettings = {
+  collection: 'company_settings',
+
+  async get() {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'company_settings'));
+      const settings = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))[0] || {
+        name: "ClinixPlus",
+        cnpj: "",
+        email: "contato@exemplo.com",
+        phone: "(00) 0000-0000",
+        whatsapp: "(00) 0000-0000",
+        address: "Rua Exemplo, 123",
+        city: "São Paulo",
+        state: "SP",
+        zipcode: "00000-000",
+        timezone: "America/Sao_Paulo", // Fuso horário padrão
+        opening_hours: {
+          weekdays: "8h às 20h",
+          weekend: "9h às 18h"
+        }
+      };
+      return settings;
+    } catch (error) {
+      console.error('Error getting company settings:', error);
+      throw error;
+    }
+  },
+
+  async update(data) {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'company_settings'));
+      const settingsDoc = querySnapshot.docs[0];
+      
+      if (settingsDoc) {
+        await updateDoc(doc(db, 'company_settings', settingsDoc.id), data);
+        return {
+          id: settingsDoc.id,
+          ...data
+        };
+      } else {
+        const docRef = await addDoc(collection(db, 'company_settings'), data);
+        return {
+          id: docRef.id,
+          ...data
+        };
+      }
+    } catch (error) {
+      console.error('Error updating company settings:', error);
+      throw error;
+    }
+  }
+}; 
+
 export const SlideShowImage = createEnhancedEntity('slideshow_images', base44.entities.SlideShowImage);
 export const Testimonial = createEnhancedEntity('testimonials', base44.entities.Testimonial);
 export const Anamnesis = createEnhancedEntity('anamnesis', {
