@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 
 // Configuração do projeto Firebase
-const firebaseConfig = {
+export const firebaseConfig = {
   apiKey: "AIzaSyD8EBMO2hTzBuP5oSN6dflTPJ8oNA6XaNk",
   authDomain: "alpha-ponto.firebaseapp.com",
   projectId: "alpha-ponto",
