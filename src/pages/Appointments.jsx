@@ -78,6 +78,7 @@ export default function Appointments() {
   const [clientPackages, setClientPackages] = useState([]);
   const [filteredPackages, setFilteredPackages] = useState([]);
   const [selectedPackageId, setSelectedPackageId] = useState("");
+  const [procedimentoTipo, setProcedimentoTipo] = useState("avulso");
   const [packages, setPackages] = useState([]);
   const [availableHours, setAvailableHours] = useState([]);
   const [pendingServices, setPendingServices] = useState([]);
@@ -292,8 +293,8 @@ export default function Appointments() {
         updatedAppointment = await Appointment.create(appointmentData);
       }
 
-      // Se houver um pacote selecionado, atualiza o histórico
-      if (selectedPackageId && selectedPackageId !== "") {
+      // Se houver um pacote selecionado e o tipo de procedimento for pacote, atualiza o histórico
+      if (procedimentoTipo === "pacote" && selectedPackageId && selectedPackageId !== "") {
         try {
           const currentPackage = await ClientPackage.get(selectedPackageId);
           const serviceData = services.find(s => s.id === newAppointment.service_id);
@@ -500,6 +501,7 @@ export default function Appointments() {
     const employee = employees.find(emp => emp.id === employeeId);
     console.log("[DEBUG] Atualizando serviços para profissional:", employeeId);
     console.log("[DEBUG] Pacote atual:", currentPackageId || selectedPackageId);
+    console.log("[DEBUG] Tipo de procedimento:", procedimentoTipo);
     
     if (employee && employee.specialties && employee.specialties.length > 0) {
       let availableServices = [];
@@ -507,8 +509,8 @@ export default function Appointments() {
       // Usa o pacote passado como parâmetro ou o estado atual
       const packageId = currentPackageId || selectedPackageId;
       
-      // Se um pacote foi selecionado, mostrar apenas os serviços do pacote
-      if (packageId && packageId !== "") {
+      // Se for procedimento de pacote e um pacote foi selecionado, mostrar apenas os serviços do pacote
+      if (procedimentoTipo === "pacote" && packageId && packageId !== "") {
         console.log("[DEBUG] Filtrando por pacote:", {
           packageId,
           selectedClientPackage
@@ -554,7 +556,7 @@ export default function Appointments() {
           }
         }
       } else {
-        // Se não houver pacote selecionado, mostrar todos os serviços que o profissional pode realizar
+        // Se for procedimento avulso ou não houver pacote selecionado, mostrar todos os serviços que o profissional pode realizar
         availableServices = services.filter(service =>
           employee.specialties.includes(service.id)
         );
@@ -611,24 +613,20 @@ export default function Appointments() {
   const handlePackageSelection = async (packageId) => {
     console.log("[DEBUG] Pacote selecionado na função handlePackageSelection:", packageId);
     
-    // Se o valor for "none", considere como nenhum pacote selecionado
-    if (packageId === "none") {
+    const selectedPackage = clientPackages.find(pkg => pkg.id === packageId);
+    if (!selectedPackage) {
+      console.error("[ERROR] Pacote não encontrado:", packageId);
       setSelectedPackageId("");
       setSelectedClientPackage(null);
-    } else {
-      const selectedPackage = clientPackages.find(pkg => pkg.id === packageId);
-      if (!selectedPackage) {
-        console.error("[ERROR] Pacote não encontrado:", packageId);
-        return;
-      }
-      
-      const packageInfo = packages.find(p => p.id === selectedPackage.package_id);
-      console.log("[DEBUG] Informações do pacote selecionado:", packageInfo);
-      
-      // Atualiza os estados do pacote
-      setSelectedPackageId(packageId);
-      setSelectedClientPackage(selectedPackage);
+      return;
     }
+    
+    const packageInfo = packages.find(p => p.id === selectedPackage.package_id);
+    console.log("[DEBUG] Informações do pacote selecionado:", packageInfo);
+    
+    // Atualiza os estados do pacote
+    setSelectedPackageId(packageId);
+    setSelectedClientPackage(selectedPackage);
     
     // Limpa o serviço selecionado para forçar uma nova seleção
     setNewAppointment(prev => ({
@@ -1066,6 +1064,7 @@ export default function Appointments() {
     });
     setSelectedClientPackage(null);
     setSelectedPackageId("");
+    setProcedimentoTipo("avulso");
   };
 
   return (
@@ -1474,7 +1473,32 @@ export default function Appointments() {
               </div>
             </div>
 
-            {newAppointment.client_id && clientPackages.length > 0 && (
+            {newAppointment.client_id && (
+              <div className="space-y-2">
+                <Label>Tipo de Procedimento</Label>
+                <Select
+                  value={procedimentoTipo}
+                  onValueChange={(value) => {
+                    setProcedimentoTipo(value);
+                    if (value === "avulso") {
+                      setSelectedPackageId("");
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o tipo de procedimento" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="avulso">Procedimento Avulso</SelectItem>
+                    {clientPackages.length > 0 && (
+                      <SelectItem value="pacote">Usar Pacote do Cliente</SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {newAppointment.client_id && clientPackages.length > 0 && procedimentoTipo === "pacote" && (
               <div className="space-y-2">
                 <Label>Pacote do Cliente</Label>
                 <Select
@@ -1482,10 +1506,9 @@ export default function Appointments() {
                   onValueChange={handlePackageSelection}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Selecione um pacote (opcional)..." />
+                    <SelectValue placeholder="Selecione um pacote..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">Nenhum pacote (pagamento normal)</SelectItem>
                     {clientPackages.map((pkg) => {
                       const packageData = packages.find(p => p.id === pkg.package_id);
                       return (
