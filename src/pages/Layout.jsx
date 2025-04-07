@@ -287,7 +287,12 @@ export default function Layout() {
         <div className="p-4 border-b border-[#2D2F59]">
           <div className="flex flex-shrink-0 items-center justify-center">
             {companySettings.logo_url ? (
-              <img className="h-10 w-auto" src={companySettings.logo_url} alt={companySettings.name || "ClinixPlus"} />
+              <img 
+                className={`w-auto ${companySettings.logo_size?.admin === 'small' ? 'h-8' : 
+                  companySettings.logo_size?.admin === 'large' ? 'h-16' : 'h-12'}`} 
+                src={companySettings.logo_url} 
+                alt={companySettings.name || "ClinixPlus"} 
+              />
             ) : (
               <span className="text-xl font-bold text-white">ClinixPlus</span>
             )}
@@ -385,7 +390,12 @@ export default function Layout() {
         <div className="flex items-center justify-between p-4 border-b border-[#0D0F36]/20">
           <div className="flex flex-shrink-0 items-center justify-center">
             {companySettings.logo_url ? (
-              <img className="h-8 w-auto" src={companySettings.logo_url} alt={companySettings.name || "ClinixPlus"} />
+              <img 
+                className={`w-auto ${companySettings.logo_size?.admin === 'small' ? 'h-6' : 
+                  companySettings.logo_size?.admin === 'large' ? 'h-12' : 'h-8'}`} 
+                src={companySettings.logo_url} 
+                alt={companySettings.name || "ClinixPlus"} 
+              />
             ) : (
               <span className="text-lg font-bold text-white">ClinixPlus</span>
             )}

@@ -153,8 +153,12 @@ export default function CalendarView() {
                           key={app.id}
                           className={`p-3 rounded-md cursor-pointer hover:bg-gray-50 ${
                             app.status === 'cancelado' ? 'bg-red-50' : 
-                            app.status === 'concluido' ? 'bg-green-50' : 'bg-purple-50'
+                            app.status === 'concluido' ? 'bg-green-50' : 'bg-white'
                           }`}
+                          style={{
+                            borderLeft: `3px solid ${employee?.color || '#94a3b8'}`,
+                            backgroundColor: `${employee?.color}15` || 'white'
+                          }}
                           onClick={() => handleViewAppointment(app.id)}
                         >
                           <div className="flex justify-between items-start">
@@ -228,8 +232,12 @@ export default function CalendarView() {
                               key={app.id}
                               className={`p-2 rounded-md cursor-pointer hover:bg-gray-50 text-sm ${
                                 app.status === 'cancelado' ? 'bg-red-50' : 
-                                app.status === 'concluido' ? 'bg-green-50' : 'bg-purple-50'
+                                app.status === 'concluido' ? 'bg-green-50' : 'bg-white'
                               }`}
+                              style={{
+                                borderLeft: `3px solid ${employees.find(e => e.id === app.employee_id)?.color || '#94a3b8'}`,
+                                backgroundColor: `${employees.find(e => e.id === app.employee_id)?.color}15` || 'white'
+                              }}
                               onClick={() => handleViewAppointment(app.id)}
                             >
                               <p className="font-medium truncate">{client?.name}</p>
@@ -320,8 +328,12 @@ export default function CalendarView() {
                               key={app.id}
                               className={`text-xs p-1 mb-1 rounded truncate ${
                                 app.status === 'cancelado' ? 'bg-red-100' : 
-                                app.status === 'concluido' ? 'bg-green-100' : 'bg-purple-100'
+                                app.status === 'concluido' ? 'bg-green-100' : 'bg-white'
                               }`}
+                              style={{
+                                borderLeft: `2px solid ${employees.find(e => e.id === app.employee_id)?.color || '#94a3b8'}`,
+                                backgroundColor: `${employees.find(e => e.id === app.employee_id)?.color}15` || 'white'
+                              }}
                               onClick={() => handleViewAppointment(app.id)}
                             >
                               {format(new Date(app.date), "HH:mm")}
@@ -420,6 +432,10 @@ export default function CalendarView() {
                           id={`emp-${employee.id}`}
                           checked={selectedEmployees.includes(employee.id)}
                           onCheckedChange={() => toggleEmployeeFilter(employee.id)}
+                        />
+                        <div 
+                          className="w-3 h-3 rounded-full mr-2" 
+                          style={{ backgroundColor: employee.color || '#94a3b8' }}
                         />
                         <Label htmlFor={`emp-${employee.id}`} className="flex items-center gap-2">
                           {employee.name.length > 16 ? employee.name.substring(0, 16) + '...' : employee.name}

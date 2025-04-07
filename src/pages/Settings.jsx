@@ -71,6 +71,10 @@ export default function Settings() {
       weekend: "9h às 18h"
     },
     logo_url: "",
+    logo_size: {
+      admin: "medium",  // small, medium, large
+      site: "medium"    // small, medium, large
+    },
     facebook_url: "",
     instagram_url: "",
     website_description: "Descrição da empresa para o site",
@@ -261,6 +265,14 @@ export default function Settings() {
     try {
       const settings = await CompanySettings.get();
       if (settings) {
+        // Garantir que as configurações de tamanho da logo existam
+        if (!settings.logo_size) {
+          settings.logo_size = {
+            admin: "medium",
+            site: "medium"
+          };
+        }
+        
         setCompanySettings(settings);
         setPreviewLogo(settings.logo_url || '');
         setPreviewAboutImage(settings.about_image_url || '');
@@ -832,11 +844,14 @@ export default function Settings() {
                 </div>
               </div>
               
-              <div className="space-y-2">
+              <div className="space-y-4">
                 <label className="text-sm font-medium">Logo da Empresa</label>
-                <div className="flex items-center gap-4">
+                <div className="flex flex-col md:flex-row md:items-center gap-4">
                   {previewLogo && (
-                    <div className="w-32 h-32 border rounded flex items-center justify-center overflow-hidden">
+                    <div className={`border rounded flex items-center justify-center overflow-hidden
+                      ${companySettings.logo_size?.admin === 'small' ? 'w-24 h-24' : 
+                        companySettings.logo_size?.admin === 'large' ? 'w-48 h-48' : 'w-32 h-32'}`}
+                    >
                       <img 
                         src={previewLogo} 
                         alt="Logo" 
@@ -844,17 +859,97 @@ export default function Settings() {
                       />
                     </div>
                   )}
-                  <label className="cursor-pointer">
-                    <div className="px-4 py-2 bg-gray-100 rounded-md hover:bg-gray-200 transition">
-                      Selecionar imagem
+                  <div className="flex flex-col gap-3">
+                    <label className="cursor-pointer">
+                      <div className="px-4 py-2 bg-gray-100 rounded-md hover:bg-gray-200 transition">
+                        Selecionar imagem
+                      </div>
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        className="hidden" 
+                        onChange={handleLogoChange}
+                      />
+                    </label>
+                    
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Tamanho no Painel Admin</label>
+                      <div className="flex gap-2">
+                        <Button 
+                          type="button" 
+                          variant={companySettings.logo_size?.admin === 'small' ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setCompanySettings({
+                            ...companySettings, 
+                            logo_size: { ...companySettings.logo_size, admin: 'small' }
+                          })}
+                        >
+                          Pequeno
+                        </Button>
+                        <Button 
+                          type="button" 
+                          variant={companySettings.logo_size?.admin === 'medium' ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setCompanySettings({
+                            ...companySettings, 
+                            logo_size: { ...companySettings.logo_size, admin: 'medium' }
+                          })}
+                        >
+                          Médio
+                        </Button>
+                        <Button 
+                          type="button" 
+                          variant={companySettings.logo_size?.admin === 'large' ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setCompanySettings({
+                            ...companySettings, 
+                            logo_size: { ...companySettings.logo_size, admin: 'large' }
+                          })}
+                        >
+                          Grande
+                        </Button>
+                      </div>
                     </div>
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      className="hidden" 
-                      onChange={handleLogoChange}
-                    />
-                  </label>
+                    
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Tamanho no Site</label>
+                      <div className="flex gap-2">
+                        <Button 
+                          type="button" 
+                          variant={companySettings.logo_size?.site === 'small' ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setCompanySettings({
+                            ...companySettings, 
+                            logo_size: { ...companySettings.logo_size, site: 'small' }
+                          })}
+                        >
+                          Pequeno
+                        </Button>
+                        <Button 
+                          type="button" 
+                          variant={companySettings.logo_size?.site === 'medium' ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setCompanySettings({
+                            ...companySettings, 
+                            logo_size: { ...companySettings.logo_size, site: 'medium' }
+                          })}
+                        >
+                          Médio
+                        </Button>
+                        <Button 
+                          type="button" 
+                          variant={companySettings.logo_size?.site === 'large' ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setCompanySettings({
+                            ...companySettings, 
+                            logo_size: { ...companySettings.logo_size, site: 'large' }
+                          })}
+                        >
+                          Grande
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
               

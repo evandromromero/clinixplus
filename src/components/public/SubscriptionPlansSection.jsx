@@ -53,10 +53,8 @@ export default function SubscriptionPlansSection({ plans = [] }) {
   
   const loadCompanySettings = async () => {
     try {
-      const settingsList = await CompanySettings.list();
-      if (settingsList && settingsList.length > 0) {
-        const settings = settingsList[0];
-        
+      const settings = await CompanySettings.get();
+      if (settings) {
         // Garantir que payment_settings exista
         const loadedSettings = {
           ...settings,

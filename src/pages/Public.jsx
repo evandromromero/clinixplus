@@ -95,9 +95,9 @@ export default function Public() {
 
   const loadCompanySettings = async () => {
     try {
-      const settings = await CompanySettings.list();
-      if (settings && settings.length > 0) {
-        setCompany(settings[0]);
+      const settings = await CompanySettings.get();
+      if (settings) {
+        setCompany(settings);
       }
     } catch (error) {
       console.error("Erro ao carregar configurações da empresa:", error);
