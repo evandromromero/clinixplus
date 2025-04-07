@@ -30,6 +30,7 @@ import SEOHead from '../components/SEOHead';
 export default function Public() {
   const [featuredServices, setFeaturedServices] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [showCookieConsent, setShowCookieConsent] = useState(false);
   const [company, setCompany] = useState({
     name: "ClinixPlus",
     email: "contato@clinixplus.com.br",
@@ -91,6 +92,12 @@ export default function Public() {
     loadTestimonials();
     loadSubscriptionPlans();
     checkFeaturePermissions();
+    
+    // Verificar se o usuário já aceitou os cookies
+    const cookieConsent = localStorage.getItem('cookieConsent');
+    if (!cookieConsent) {
+      setShowCookieConsent(true);
+    }
   }, []);
 
   const loadCompanySettings = async () => {
@@ -111,7 +118,7 @@ export default function Public() {
       const filtered = allServices
         .filter(service => service.show_on_website)
         .sort((a, b) => (a.website_order || 999) - (b.website_order || 999))
-        .slice(0, 6);
+        .slice(0, 12);
       
       setFeaturedServices(filtered);
 
@@ -241,6 +248,12 @@ export default function Public() {
       style: 'currency',
       currency: 'BRL'
     }).format(price || 0);
+  };
+  
+  // Função para aceitar os cookies
+  const acceptCookies = () => {
+    localStorage.setItem('cookieConsent', 'true');
+    setShowCookieConsent(false);
   };
 
   const getFormattedAddress = () => {
@@ -897,6 +910,40 @@ export default function Public() {
           </div>
         </div>
       </footer>
+      
+      {/* Banner de Cookies */}
+      {showCookieConsent && (
+        <div className="fixed bottom-0 left-0 right-0 bg-gray-900 text-white p-4 z-50 shadow-lg">
+          <div className="container mx-auto flex flex-col sm:flex-row items-center justify-between">
+            <div className="flex-1 mb-4 sm:mb-0">
+              <p className="text-sm sm:text-base">
+                <span className="font-semibold">Política de Cookies:</span> Este site utiliza cookies para melhorar sua experiência. 
+                Ao continuar navegando, você concorda com nossa política de privacidade e uso de cookies.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <Button 
+                variant="outline" 
+                className="text-white border-white hover:bg-white hover:text-gray-900 transition-colors"
+                onClick={acceptCookies}
+              >
+                Aceitar
+              </Button>
+              <a 
+                href="#" 
+                className="text-sm underline text-gray-300 hover:text-white"
+                onClick={(e) => {
+                  e.preventDefault();
+                  // Aqui poderia abrir um modal com mais informações sobre a política de cookies
+                  acceptCookies();
+                }}
+              >
+                Saiba mais
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
