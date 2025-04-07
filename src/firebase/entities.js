@@ -1189,6 +1189,43 @@ export const ClientPackage = {
       console.error('Erro ao filtrar pacotes:', error);
       return [];
     }
+  },
+  
+  async removeSessionFromHistory(packageId, sessionIndex) {
+    try {
+      if (!packageId) {
+        throw new Error('ID do pacote não fornecido');
+      }
+      
+      // Obter o pacote atual
+      const packageData = await this.get(packageId);
+      if (!packageData) {
+        throw new Error('Pacote não encontrado');
+      }
+      
+      // Verificar se o histórico de sessões existe
+      if (!packageData.session_history || !Array.isArray(packageData.session_history)) {
+        throw new Error('Histórico de sessões não encontrado ou inválido');
+      }
+      
+      // Remover a sessão pelo índice
+      const updatedSessionHistory = [...packageData.session_history];
+      if (sessionIndex >= 0 && sessionIndex < updatedSessionHistory.length) {
+        updatedSessionHistory.splice(sessionIndex, 1);
+      } else {
+        throw new Error('Índice de sessão inválido');
+      }
+      
+      // Atualizar o pacote com o novo histórico
+      await this.update(packageId, {
+        session_history: updatedSessionHistory
+      });
+      
+      return { success: true };
+    } catch (error) {
+      console.error(`Erro ao remover sessão do pacote ${packageId}:`, error);
+      throw error;
+    }
   }
 };
 

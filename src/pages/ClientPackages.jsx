@@ -49,6 +49,7 @@ export default function ClientPackages() {
   const [packages, setPackages] = useState([]);
   const [clients, setClients] = useState([]);
   const [services, setServices] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedClient, setSelectedClient] = useState("");
@@ -289,6 +290,22 @@ export default function ClientPackages() {
   };
 
   useEffect(() => {
+    // Carregar o usuário atual do localStorage
+    const userData = localStorage.getItem('user');
+    console.log('Dados do usuário do localStorage:', userData);
+    
+    if (userData) {
+      try {
+        const parsedUser = JSON.parse(userData);
+        console.log('Usuário carregado:', parsedUser);
+        setCurrentUser(parsedUser);
+      } catch (error) {
+        console.error('Erro ao carregar dados do usuário:', error);
+      }
+    } else {
+      console.log('Nenhum usuário encontrado no localStorage');
+    }
+    
     loadData();
     checkUnfinishedSales();
     
@@ -300,6 +317,43 @@ export default function ClientPackages() {
     // Limpar o intervalo quando o componente for desmontado
     return () => clearInterval(interval);
   }, []);
+
+  const handleRemoveSession = async (sessionIndex) => {
+    if (!window.confirm('Tem certeza que deseja excluir esta sessão do histórico? Esta ação não pode ser desfeita.')) {
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      
+      // Verificação de administrador removida para permitir que todos os usuários possam excluir sessões
+      
+      // Chamar a função para remover a sessão
+      await ClientPackage.removeSessionFromHistory(selectedPackage.id, sessionIndex);
+      
+      // Atualizar o pacote selecionado
+      const updatedPackage = await ClientPackage.get(selectedPackage.id);
+      setSelectedPackage(updatedPackage);
+      
+      // Atualizar a lista de pacotes
+      await loadData();
+      
+      toast({
+        title: "Sucesso",
+        description: "Sessão removida com sucesso!",
+        variant: "success"
+      });
+    } catch (error) {
+      console.error('Erro ao remover sessão:', error);
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao remover sessão. Tente novamente.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -1479,20 +1533,33 @@ export default function ClientPackages() {
                             Profissional: {getEmployeeName(session.employee_id)}
                           </p>
                         </div>
-                        <Badge 
-                          variant="outline" 
-                          className={
-                            session.status === 'concluido' ? 'bg-green-50 text-green-700' :
-                            session.status === 'agendado' ? 'bg-blue-50 text-blue-700' :
-                            session.status === 'cancelado' ? 'bg-red-50 text-red-700' :
-                            'bg-gray-50 text-gray-700'
-                          }
-                        >
-                          {session.status === 'concluido' ? 'Concluído' :
-                           session.status === 'agendado' ? 'Agendado' :
-                           session.status === 'cancelado' ? 'Cancelado' :
-                           session.status}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge 
+                            variant="outline" 
+                            className={
+                              session.status === 'concluido' ? 'bg-green-50 text-green-700' :
+                              session.status === 'agendado' ? 'bg-blue-50 text-blue-700' :
+                              session.status === 'cancelado' ? 'bg-red-50 text-red-700' :
+                              'bg-gray-50 text-gray-700'
+                            }
+                          >
+                            {session.status === 'concluido' ? 'Concluído' :
+                             session.status === 'agendado' ? 'Agendado' :
+                             session.status === 'cancelado' ? 'Cancelado' :
+                             session.status}
+                          </Badge>
+                          {(
+                            <Button 
+                              variant="ghost" 
+                              size="icon"
+                              className="text-red-500 hover:bg-red-50 h-8 w-8"
+                              onClick={() => handleRemoveSession(index)}
+                              title="Excluir sessão"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
