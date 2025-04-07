@@ -337,9 +337,17 @@ export default function Appointments() {
         });
       }
 
+      // Recarrega os dados
+      await loadData();
+      
+      // Se for reagendamento, atualiza a modal
+      if (newAppointment.original_appointment_id && selectedAppointmentDetails?.appointment?.id === newAppointment.original_appointment_id) {
+        await handleSelectAppointment(updatedAppointment);
+      }
+      
+      // Limpa o formulário e fecha a modal de novo agendamento
       setShowNewAppointmentDialog(false);
       clearNewAppointmentForm();
-      await loadData();
 
       toast({
         title: "Sucesso",
@@ -1229,6 +1237,80 @@ export default function Appointments() {
                                 backgroundColor: `${employee.color}05`,  // Fundo muito suave da cor do funcionário
                                 borderLeft: `1px solid ${employee.color}30` // Borda lateral suave da cor do funcionário
                               } : {}}
+                              onDragOver={(e) => {
+                                if (isAvailable) {
+                                  e.preventDefault(); // Permite o drop
+                                  e.currentTarget.style.backgroundColor = `${employee.color}30`;
+                                }
+                              }}
+                              onDragLeave={(e) => {
+                                if (isAvailable) {
+                                  e.currentTarget.style.backgroundColor = `${employee.color}05`;
+                                }
+                              }}
+                              onDrop={async (e) => {
+                                e.preventDefault();
+                                e.currentTarget.style.backgroundColor = `${employee.color}05`;
+                                
+                                if (!isAvailable) return;
+                                
+                                try {
+                                  const data = JSON.parse(e.dataTransfer.getData('application/json'));
+                                  const { appointmentId, clientId, serviceId, originalEmployeeId, originalHour } = data;
+                                  
+                                  // Evita mover para o mesmo lugar
+                                  if (originalEmployeeId === employee.id && originalHour === hour) return;
+                                  
+                                  // Verifica se já existe agendamento neste horário
+                                  const hasConflict = slotAppointments.some(app => 
+                                    app.employee_id === employee.id && app.id !== appointmentId
+                                  );
+                                  
+                                  if (hasConflict) {
+                                    toast({
+                                      title: "Conflito de horário",
+                                      description: "Já existe um agendamento neste horário",
+                                      variant: "destructive"
+                                    });
+                                    return;
+                                  }
+                                  
+                                  // Atualiza o agendamento
+                                  const appointment = appointments.find(app => app.id === appointmentId);
+                                  if (!appointment) return;
+                                  
+                                  const newDate = new Date(date);
+                                  newDate.setHours(hour, 0, 0, 0);
+                                  
+                                  await Appointment.update(appointmentId, {
+                                    employee_id: employee.id,
+                                    date: format(newDate, "yyyy-MM-dd'T'HH:mm:ss")
+                                  });
+                                  
+                                  // Recarrega os dados e atualiza a modal se necessário
+                                  await loadData();
+                                  
+                                  if (selectedAppointmentDetails?.appointment?.id === appointmentId) {
+                                    const updatedAppointment = await Appointment.get(appointmentId);
+                                    if (updatedAppointment) {
+                                      await handleSelectAppointment(updatedAppointment);
+                                    }
+                                  }
+                                  
+                                  toast({
+                                    title: "Sucesso",
+                                    description: "Agendamento movido com sucesso",
+                                    variant: "success"
+                                  });
+                                } catch (error) {
+                                  console.error("Erro ao mover agendamento:", error);
+                                  toast({
+                                    title: "Erro",
+                                    description: "Não foi possível mover o agendamento",
+                                    variant: "destructive"
+                                  });
+                                }
+                              }}
                             >
                               {empAppointments.map((app) => {
                                 const client = clients.find(c => c.id === app.client_id);
@@ -1249,6 +1331,40 @@ export default function Appointments() {
                                       borderLeft: `3px solid ${employee.color}`
                                     } : {}}
                                     onClick={() => handleSelectAppointment(app)}
+                                    draggable={app.status === 'agendado'}
+                                    onDragStart={(e) => {
+                                      if (app.status !== 'agendado') return;
+                                      e.dataTransfer.setData('application/json', JSON.stringify({
+                                        appointmentId: app.id,
+                                        clientId: app.client_id,
+                                        serviceId: app.service_id,
+                                        originalEmployeeId: app.employee_id,
+                                        originalHour: new Date(app.date).getHours()
+                                      }));
+                                      e.dataTransfer.effectAllowed = 'move';
+                                      
+                                      // Adiciona efeito visual
+                                      e.currentTarget.classList.add('opacity-50', 'ring-2', 'ring-blue-500');
+                                      
+                                      // Cria uma imagem fantasma para o arrasto (opcional)
+                                      const ghost = document.createElement('div');
+                                      ghost.classList.add('p-2', 'bg-white', 'rounded', 'shadow', 'text-sm');
+                                      ghost.innerHTML = `<p>${client?.name}</p><p>${service?.name}</p>`;
+                                      ghost.style.width = '150px';
+                                      ghost.style.position = 'absolute';
+                                      ghost.style.top = '-1000px';
+                                      document.body.appendChild(ghost);
+                                      e.dataTransfer.setDragImage(ghost, 75, 20);
+                                      
+                                      // Remove o elemento fantasma após o arrasto
+                                      setTimeout(() => {
+                                        document.body.removeChild(ghost);
+                                      }, 0);
+                                    }}
+                                    onDragEnd={(e) => {
+                                      // Remove o efeito visual
+                                      e.currentTarget.classList.remove('opacity-50', 'ring-2', 'ring-blue-500');
+                                    }}
                                   >
                                     <div className="flex flex-col">
                                       <p className="font-medium text-sm truncate">{client?.name}</p>
