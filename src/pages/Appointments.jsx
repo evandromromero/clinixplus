@@ -270,27 +270,26 @@ export default function Appointments() {
         return;
       }
 
-      // Criar o agendamento
+      // Dados do agendamento
       const appointmentData = {
         client_id: newAppointment.client_id,
         employee_id: newAppointment.employee_id,
         service_id: newAppointment.service_id,
         date: format(newAppointment.date, "yyyy-MM-dd'T'HH:mm:ss"),
-        status: newAppointment.original_appointment_id ? 'agendado' : newAppointment.status || 'agendado',
+        status: 'agendado',
         notes: newAppointment.notes || "",
-        original_appointment_id: newAppointment.original_appointment_id || null,
         pending_service_id: newAppointment.pending_service_id || null,
         dependent_index: newAppointment.dependent_index || null
       };
       
-      const createdAppointment = await Appointment.create(appointmentData);
-
-      // Se for um reagendamento, atualiza o agendamento original
+      let updatedAppointment;
+      
+      // Se for um reagendamento, atualiza o agendamento existente
       if (newAppointment.original_appointment_id) {
-        await Appointment.update(newAppointment.original_appointment_id, {
-          rescheduled: true,
-          rescheduled_to: createdAppointment.id
-        });
+        updatedAppointment = await Appointment.update(newAppointment.original_appointment_id, appointmentData);
+      } else {
+        // Se não for reagendamento, cria um novo
+        updatedAppointment = await Appointment.create(appointmentData);
       }
 
       // Se houver um pacote selecionado, atualiza o histórico
@@ -307,15 +306,20 @@ export default function Appointments() {
             employee_id: newAppointment.employee_id,
             employee_name: employeeData?.name || "Profissional não encontrado",
             date: appointmentData.date,
-            appointment_id: createdAppointment.id,
-            status: 'agendado' // Começa como agendado, muda para concluido quando o agendamento for concluído
+            appointment_id: updatedAppointment.id,
+            status: 'agendado'
           };
 
-          // Atualiza o histórico de sessões sem incrementar o contador
-          const updatedSessionHistory = [
-            ...(currentPackage.session_history || []),
-            sessionHistoryEntry
-          ];
+          // Se for reagendamento, remove a entrada antiga do histórico
+          let updatedSessionHistory = [...(currentPackage.session_history || [])];
+          if (newAppointment.original_appointment_id) {
+            updatedSessionHistory = updatedSessionHistory.filter(
+              entry => entry.appointment_id !== newAppointment.original_appointment_id
+            );
+          }
+          
+          // Adiciona a nova entrada
+          updatedSessionHistory.push(sessionHistoryEntry);
 
           await ClientPackage.update(selectedPackageId, {
             session_history: updatedSessionHistory
@@ -329,7 +333,7 @@ export default function Appointments() {
       if (newAppointment.pending_service_id) {
         await PendingService.update(newAppointment.pending_service_id, {
           status: 'agendado',
-          appointment_id: createdAppointment.id
+          appointment_id: updatedAppointment.id
         });
       }
 
@@ -339,14 +343,16 @@ export default function Appointments() {
 
       toast({
         title: "Sucesso",
-        description: "Agendamento criado com sucesso!",
+        description: newAppointment.original_appointment_id
+          ? "Agendamento atualizado com sucesso!"
+          : "Agendamento criado com sucesso!",
         variant: "success"
       });
     } catch (error) {
-      console.error("[Appointments] Erro ao criar agendamento:", error);
+      console.error("[Appointments] Erro ao ", newAppointment.original_appointment_id ? "atualizar" : "criar", " agendamento:", error);
       toast({
         title: "Erro",
-        description: "Erro ao criar agendamento",
+        description: `Erro ao ${newAppointment.original_appointment_id ? 'atualizar' : 'criar'} agendamento`,
         variant: "destructive"
       });
     }
@@ -703,20 +709,36 @@ export default function Appointments() {
 
   const handleDeleteAppointment = async (appointmentId) => {
     try {
+      // Exclui o agendamento
       await Appointment.delete(appointmentId);
+      
+      // Recarrega os dados
       await loadData();
       
-      if (selectedAppointmentDetails?.appointment?.id === appointmentId) {
-        setShowAppointmentDetails(false);
-      }
-      
+      // Limpa os detalhes e fecha as modais
+      setSelectedAppointmentDetails(null);
+      setShowAppointmentDetails(false);
       setConfirmationDialog({ isOpen: false, type: null, appointmentId: null });
+      
+      // Mostra mensagem de sucesso
+      toast({
+        title: "Sucesso",
+        description: "Agendamento excluído com sucesso",
+        variant: "success"
+      });
     } catch (error) {
       console.error("Erro ao excluir agendamento:", error);
-      await loadData();
-      if (selectedAppointmentDetails?.appointment?.id === appointmentId) {
-        setShowAppointmentDetails(false);
-      }
+      
+      // Mostra mensagem de erro
+      toast({
+        title: "Erro",
+        description: "Ocorreu um erro ao excluir o agendamento",
+        variant: "destructive"
+      });
+      
+      // Mesmo em caso de erro, fecha as modais
+      setSelectedAppointmentDetails(null);
+      setShowAppointmentDetails(false);
       setConfirmationDialog({ isOpen: false, type: null, appointmentId: null });
     }
   };
@@ -803,12 +825,26 @@ export default function Appointments() {
           break;
       }
 
+      // Recarrega os dados gerais
+      await loadData();
+
+      // Se não for uma exclusão, atualiza os detalhes do agendamento
       if (confirmationDialog.type !== 'delete') {
+        // Busca o agendamento atualizado
+        const updatedAppointment = await Appointment.get(confirmationDialog.appointmentId);
+        if (updatedAppointment) {
+          // Atualiza os detalhes do agendamento na modal
+          await handleSelectAppointment(updatedAppointment);
+        }
         setConfirmationDialog({ isOpen: false, type: null, appointmentId: null });
       }
-      await loadData();
     } catch (error) {
       console.error("Erro ao executar ação:", error);
+      toast({
+        title: "Erro",
+        description: "Ocorreu um erro ao executar a ação",
+        variant: "destructive"
+      });
       setConfirmationDialog({ isOpen: false, type: null, appointmentId: null });
     }
   };
