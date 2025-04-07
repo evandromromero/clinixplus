@@ -16,9 +16,9 @@ import { Package } from "@/firebase/entities";
 import { ClientSubscription } from "@/firebase/entities";
 import { GiftCard } from "@/firebase/entities";
 import { Sale } from "@/firebase/entities";
-import { CompanySettings } from "@/firebase/entities";
 import { Service } from "@/firebase/entities";
 import { Employee } from "@/firebase/entities";
+import { CompanySettings } from "@/api/entities"; // Corrigido: importando do caminho correto
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
