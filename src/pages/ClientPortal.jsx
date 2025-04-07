@@ -33,10 +33,30 @@ export default function ClientPortal() {
   const [company, setCompany] = useState({});
   const [services, setServices] = useState([]);
   const [employees, setEmployees] = useState([]);
+  const [loading, setLoading] = useState(true);
+  
+  // Verificar se há dados de login salvos ao carregar a página
+  useEffect(() => {
+    const savedLoginData = localStorage.getItem('clientPortalLogin');
+    if (savedLoginData) {
+      try {
+        const loginData = JSON.parse(savedLoginData);
+        setIsLoggedIn(true);
+        loadClientData(loginData);
+      } catch (error) {
+        console.error('Erro ao recuperar dados de login:', error);
+        localStorage.removeItem('clientPortalLogin');
+      }
+    }
+    setLoading(false);
+  }, []);
 
   const loadClientData = async (clientData) => {
     const clientId = clientData.client.id;
     setCurrentClient(clientData.client);
+    
+    // Salvar dados de login no localStorage
+    localStorage.setItem('clientPortalLogin', JSON.stringify(clientData));
     
     try {
       const [appointmentsData, packagesData, clientPackagesData, subscriptionsData, giftCardsData, salesData, companyData, servicesData, employeesData] = await Promise.all([
@@ -166,6 +186,10 @@ export default function ClientPortal() {
   };
   
   const handleLogout = () => {
+    // Limpar dados de login do localStorage
+    localStorage.removeItem('clientPortalLogin');
+    
+    // Limpar estados
     setIsLoggedIn(false);
     setCurrentClient(null);
     setAppointments([]);
@@ -174,6 +198,17 @@ export default function ClientPortal() {
     setGiftCards([]);
     setSalesHistory([]);
   };
+  
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-purple-100 flex items-center justify-center p-4">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-700 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Carregando...</p>
+        </div>
+      </div>
+    );
+  }
   
   if (!isLoggedIn) {
     return (
