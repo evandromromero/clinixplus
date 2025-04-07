@@ -90,15 +90,37 @@ src/
 - Não mexer no layout das páginas
 - Sempre manter a lógica e o estilo de escrita do projeto original
 
-### Atualizações (Março 2025)
+### Atualizações
 
-#### Sistema de Gerenciamento de Dados
+#### Sistema de Gerenciamento de Dados (Março 2025)
 1. **Backup e Restauração de Dados**:
    - Backup completo do banco de dados Firebase
    - Download de arquivos de backup em formato JSON
    - Upload e restauração de backups
    - Dois modos de restauração: Substituir (deleta dados existentes) ou Mesclar (adiciona aos dados existentes)
    - Seleção de entidades específicas para restauração
+
+#### Sistema de Agendamentos (Abril 2025)
+1. **Atualização Automática da Modal de Detalhes**:
+   - Modal de detalhes agora atualiza automaticamente após ações como cancelamento, conclusão ou exclusão
+   - Não é mais necessário fechar e reabrir a modal para ver as atualizações
+   - Feedback visual imediato após cada ação
+
+2. **Reagendamento Aprimorado**:
+   - Reagendamento agora atualiza o agendamento existente em vez de criar um novo
+   - Histórico de pacotes atualizado corretamente durante reagendamentos
+   - Mensagens de feedback específicas para atualização vs. criação
+
+3. **Funcionalidade de Arrastar e Soltar (Drag and Drop)**:
+   - Arraste agendamentos diretamente na agenda para movê-los entre horários e profissionais
+   - Validações automáticas para verificar disponibilidade e conflitos
+   - Efeitos visuais durante o arrasto para melhor experiência do usuário
+   - Atualização automática da modal de detalhes após movimentação
+
+4. **Build para Produção**:
+   - Build otimizado para hospedagem compartilhada
+   - Arquivos gerados na pasta `dist`
+   - Configurações para suporte a rotas SPA
    - Tratamento de rate limits do Firebase com delays e retentativas
    - Indicadores de progresso durante operações
 
