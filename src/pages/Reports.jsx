@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import html2pdf from 'html2pdf.js';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -114,6 +115,7 @@ export default function Reports() {
     peakDayLabel: ''
   });
   const [efficiencyData, setEfficiencyData] = useState([]);
+  const efficiencyTableRef = useRef(null);
   const [expensesData, setExpensesData] = useState({
     totalExpenses: 0,
     categorizedExpenses: [],
@@ -1074,6 +1076,57 @@ export default function Reports() {
       monthlyExpenses: monthlyExpensesArray,
       topExpenses
     };
+  };
+
+  // Função para exportar a tabela de eficiência para PDF
+  const exportToPdf = () => {
+    // Selecionar a tabela de eficiência diretamente pelo DOM
+    const tableContainer = document.getElementById('efficiency-table');
+    if (!tableContainer) {
+      console.error('Tabela de eficiência não encontrada');
+      return;
+    }
+    
+    // Criar um clone da tabela para não modificar a original
+    const element = tableContainer.cloneNode(true);
+    
+    // Configurações do PDF
+    const opt = {
+      margin: [10, 10, 10, 10],
+      filename: `relatorio-eficiencia-profissionais-${format(new Date(), 'dd-MM-yyyy')}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
+      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+    };
+
+    // Adicionar um título temporário para o PDF
+    const title = document.createElement('div');
+    title.innerHTML = `
+      <div style="text-align: center; margin-bottom: 20px;">
+        <h2 style="font-size: 18px; color: #333;">Relatório de Desempenho dos Profissionais</h2>
+        <p style="font-size: 14px; color: #666;">Período: ${getPeriodLabel(period)} | Data de emissão: ${format(new Date(), 'dd/MM/yyyy')}</p>
+      </div>
+    `;
+    element.prepend(title);
+
+    // Gerar o PDF
+    html2pdf()
+      .from(element)
+      .set(opt)
+      .save()
+      .catch(err => console.error('Erro ao gerar PDF:', err));
+  };
+
+  // Função auxiliar para obter o rótulo do período selecionado
+  const getPeriodLabel = (periodValue) => {
+    switch(periodValue) {
+      case 'last_7_days': return 'Últimos 7 dias';
+      case 'last_30_days': return 'Últimos 30 dias';
+      case 'last_90_days': return 'Últimos 90 dias';
+      case 'last_12_months': return 'Últimos 12 meses';
+      default: return 'Período personalizado';
+    }
   };
 
   return (
@@ -2503,8 +2556,19 @@ export default function Reports() {
             </div>
 
             <Card>
-              <CardHeader>
+              <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                 <CardTitle>Desempenho dos Profissionais no Período</CardTitle>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  className="flex items-center gap-1 text-sm"
+                  onClick={() => exportToPdf()}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Exportar PDF
+                </Button>
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
