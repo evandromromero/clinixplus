@@ -25,12 +25,13 @@ import {
   Gift,
   Clock,
   RefreshCw,
-  Printer
+  Printer,
+  CalendarIcon
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription, DialogClose } from "@/components/ui/dialog";
 import { createPageUrl } from "@/utils";
 import { AlertTriangle } from "lucide-react";
 import RateLimitHandler from '@/components/RateLimitHandler';
@@ -215,14 +216,28 @@ export default function SalesRegister() {
   // Função para adicionar item ao carrinho
   const handleAddToCart = (item) => {
     console.log("[SalesRegister] Adicionando item ao carrinho:", item);
+    
+    // Determinar o preço correto com base no tipo de item
+    let itemPrice = 0;
+    if (saleType === "pacote") {
+      itemPrice = parseFloat(item.total_price || 0);
+      console.log("[SalesRegister] Usando total_price para pacote:", itemPrice);
+    } else if (saleType === "giftcard") {
+      itemPrice = parseFloat(item.value || 0);
+    } else if (saleType === "assinatura") {
+      itemPrice = parseFloat(item.monthly_price || 0);
+    } else {
+      itemPrice = parseFloat(item.price || 0);
+    }
+    
     const cartItem = {
       id: item.id,
       name: item.name,
       type: saleType, // O tipo vem do estado global que indica qual aba está selecionada
-      price: parseFloat(item.price),
+      price: itemPrice,
       quantity: 1,
       discount: 0,
-      unit_price: parseFloat(item.price)
+      unit_price: itemPrice
     };
     
     console.log("[SalesRegister] Item formatado para o carrinho:", cartItem);
@@ -520,6 +535,10 @@ export default function SalesRegister() {
         const paymentMethod = availablePaymentMethods.find(m => m.id === payment.methodId);
         const isPaid = !paymentMethod?.name?.toLowerCase().includes("crédito");
         
+        // Usar a data do caixa selecionado ou a data atual
+        const paymentDate = selectedCashDate || format(new Date(), "yyyy-MM-dd");
+        console.log("[SalesRegister] Usando data para transação:", paymentDate);
+        
         // Criar transação financeira
         await FinancialTransaction.create({
           type: "receita",
@@ -528,8 +547,8 @@ export default function SalesRegister() {
           amount: parseFloat(payment.amount) || 0,
           payment_method: payment.methodId,
           status: isPaid ? "pago" : "pendente",
-          due_date: new Date().toISOString(),
-          payment_date: isPaid ? new Date().toISOString() : null,
+          due_date: `${paymentDate}T00:00:00.000Z`,
+          payment_date: isPaid ? `${paymentDate}T00:00:00.000Z` : null,
           sale_id: createdSale.id,
           client_id: selectedClient.id,
           employee_id: salesEmployee,
@@ -652,17 +671,47 @@ export default function SalesRegister() {
     }
   };
 
+  // Estado para controlar o diálogo de seleção de data de caixa
+  const [showCashDateDialog, setShowCashDateDialog] = useState(false);
+  // Estado para armazenar caixas abertos disponíveis
+  const [openCashRegisters, setOpenCashRegisters] = useState([]);
+  // Estado para armazenar a data do caixa selecionado
+  const [selectedCashDate, setSelectedCashDate] = useState("");
+
   // Função para verificar se o caixa está aberto
   const checkCashRegister = async () => {
     try {
       const today = format(new Date(), "yyyy-MM-dd");
       const transactions = await FinancialTransaction.list();
-      const cashOpening = transactions.find(t => 
-        t.category === "abertura_caixa" && 
-        t.payment_date.split('T')[0] === today
-      );
-
-      if (!cashOpening) {
+      
+      // Buscar todos os caixas abertos (que têm abertura mas não têm fechamento)
+      const openingTransactions = transactions.filter(t => t.category === "abertura_caixa");
+      
+      // Para cada transação de abertura, verificar se existe uma de fechamento correspondente
+      const openCashRegisters = [];
+      
+      for (const opening of openingTransactions) {
+        const openingDate = opening.payment_date.split('T')[0];
+        const hasClosing = transactions.some(t => 
+          t.category === "fechamento_caixa" && 
+          t.payment_date.split('T')[0] === openingDate
+        );
+        
+        if (!hasClosing) {
+          // Este caixa está aberto
+          openCashRegisters.push({
+            date: openingDate,
+            formattedDate: format(new Date(openingDate), "dd/MM/yyyy"),
+            id: opening.id,
+            isToday: openingDate === today
+          });
+        }
+      }
+      
+      console.log("[SalesRegister] Caixas abertos encontrados:", openCashRegisters);
+      
+      // Verificar se há pelo menos um caixa aberto
+      if (openCashRegisters.length === 0) {
         toast({
           title: "Aviso",
           description: "O caixa precisa ser aberto antes de realizar vendas",
@@ -671,11 +720,30 @@ export default function SalesRegister() {
         navigate(createPageUrl('CashRegister'));
         return false;
       }
-
-      setCashIsOpen(true);
-      return true;
+      
+      // Verificar se há um caixa aberto para hoje
+      const todayCash = openCashRegisters.find(cash => cash.isToday);
+      
+      if (todayCash) {
+        // Se há um caixa aberto para hoje, usá-lo diretamente
+        console.log("[SalesRegister] Usando caixa de hoje:", todayCash);
+        setSelectedCashDate(todayCash.date);
+        setCashIsOpen(true);
+        return true;
+      } else if (openCashRegisters.length === 1) {
+        // Se há apenas um caixa aberto (de um dia anterior), usá-lo diretamente
+        console.log("[SalesRegister] Usando único caixa disponível:", openCashRegisters[0]);
+        setSelectedCashDate(openCashRegisters[0].date);
+        setCashIsOpen(true);
+        return true;
+      } else {
+        // Se há múltiplos caixas abertos, mostrar diálogo para escolher
+        setOpenCashRegisters(openCashRegisters);
+        setShowCashDateDialog(true);
+        return false; // Retornar false para aguardar a seleção do usuário
+      }
     } catch (error) {
-      console.error('Erro ao verificar caixa:', error);
+      console.error('[SalesRegister] Erro ao verificar caixa:', error);
       toast({
         title: "Erro",
         description: "Erro ao verificar status do caixa",
@@ -1315,6 +1383,45 @@ export default function SalesRegister() {
         </div>
       </div>
 
+      {/* Diálogo para seleção de data do caixa */}
+      <Dialog open={showCashDateDialog} onOpenChange={setShowCashDateDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Selecionar Data do Caixa</DialogTitle>
+            <DialogDescription>
+              Existem múltiplos caixas abertos. Selecione para qual data deseja lançar a venda.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            {openCashRegisters.map((cash) => (
+              <Button 
+                key={cash.id} 
+                onClick={() => {
+                  console.log("[SalesRegister] Data de caixa selecionada:", cash.date);
+                  setSelectedCashDate(cash.date);
+                  setShowCashDateDialog(false);
+                  setCashIsOpen(true);
+                }}
+                variant={cash.isToday ? "default" : "outline"}
+                className="w-full justify-start"
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {cash.formattedDate}
+                {cash.isToday && <span className="ml-2 text-xs bg-primary/20 text-primary px-2 py-1 rounded-full">Hoje</span>}
+              </Button>
+            ))}
+          </div>
+          <DialogFooter className="sm:justify-start">
+            <DialogClose asChild>
+              <Button type="button" variant="secondary" onClick={() => navigate(createPageUrl('Dashboard'))}>
+                Cancelar
+              </Button>
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Diálogo de confirmação de venda */}
       <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
         <DialogContent>
           <DialogHeader>
