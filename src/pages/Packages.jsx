@@ -46,7 +46,7 @@ export default function Packages() {
     discount_type: "percentage",
     color: "#294380", // Cor padrão
     services: [],
-    desired_price: 0
+    desired_price: ""
   });
   const [selectedServiceId, setSelectedServiceId] = useState("");
   const [selectedServiceQuantity, setSelectedServiceQuantity] = useState(1);
@@ -209,28 +209,37 @@ export default function Packages() {
   };
 
   const calculateFinalPrice = () => {
+    // Certifique-se de que estamos trabalhando com números
     const subtotal = packageForm.services.reduce((total, service) => {
-      return total + (service.price * service.quantity);
+      return total + (parseFloat(service.price) * parseInt(service.quantity));
     }, 0);
 
     let discount = 0;
     let finalPrice = subtotal;
     
     if (packageForm.discount_type === "percentage") {
-      discount = (subtotal * packageForm.discount) / 100;
+      discount = (subtotal * parseFloat(packageForm.discount)) / 100;
       finalPrice = subtotal - discount;
     } else if (packageForm.discount_type === "fixed") {
-      discount = packageForm.discount;
+      discount = parseFloat(packageForm.discount);
       finalPrice = subtotal - discount;
     } else if (packageForm.discount_type === "desired_price") {
-      // Se o preço desejado for maior que o subtotal, não aplicamos desconto
-      if (packageForm.desired_price >= subtotal) {
+      // Só aplicamos desconto se houver um valor no campo de preço desejado
+      if (packageForm.desired_price === "") {
         discount = 0;
         finalPrice = subtotal;
       } else {
-        // Calculamos o desconto necessário para atingir o preço desejado
-        discount = subtotal - packageForm.desired_price;
-        finalPrice = packageForm.desired_price;
+        const desiredPrice = parseFloat(packageForm.desired_price);
+        
+        // Se o preço desejado for maior que o subtotal, aceitamos o valor maior
+        if (desiredPrice >= subtotal) {
+          discount = 0;
+          finalPrice = desiredPrice; // Usamos o preço desejado mesmo sendo maior
+        } else {
+          // Calculamos o desconto necessário para atingir o preço desejado
+          discount = subtotal - desiredPrice;
+          finalPrice = desiredPrice;
+        }
       }
     }
 
@@ -238,7 +247,10 @@ export default function Packages() {
     setPackageForm(prev => ({
       ...prev,
       discount: discount,
-      total_price: packageForm.discount_type === "desired_price" ? packageForm.desired_price : finalPrice
+      // Se o tipo for preço desejado, verificamos se há um valor antes de aplicar
+      total_price: packageForm.discount_type === "desired_price" && packageForm.desired_price !== "" 
+        ? parseFloat(packageForm.desired_price)
+        : finalPrice
     }));
   };
   
@@ -261,16 +273,18 @@ export default function Packages() {
   };
   
   const handleDesiredPriceChange = (value) => {
+    // Permitir campo vazio (sem valor 0)
+    const numericValue = value === "" ? "" : parseFloat(value) || 0;
     setPackageForm(prev => ({
       ...prev,
-      desired_price: value
+      desired_price: numericValue
     }));
     calculateFinalPrice();
   };
 
   useEffect(() => {
     calculateFinalPrice();
-  }, [packageForm.services, packageForm.discount, packageForm.discount_type]);
+  }, [packageForm.services, packageForm.discount, packageForm.discount_type, packageForm.desired_price]);
 
   const handleCreatePackage = async () => {
     try {
@@ -556,7 +570,8 @@ export default function Packages() {
                           id="desired_price"
                           type="number"
                           value={packageForm.desired_price}
-                          onChange={(e) => handleDesiredPriceChange(parseFloat(e.target.value) || 0)}
+                          onChange={(e) => handleDesiredPriceChange(e.target.value)}
+                          placeholder="Digite o preço desejado"
                         />
                         {packageForm.services.length > 0 && (
                           <div className="text-sm">
