@@ -48,6 +48,7 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/use-toast"; // Import the useToast hook
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 export default function Appointments() {
   const { toast } = useToast(); // Get the toast function from the hook
@@ -1316,65 +1317,83 @@ export default function Appointments() {
                                 const service = services.find(s => s.id === app.service_id);
 
                                 return (
-                                  <div
-                                    key={app.id}
-                                    className={`p-2 rounded-lg mb-1 cursor-pointer ${
-                                      app.status === 'cancelado'
-                                        ? 'bg-red-50 border-red-100'
-                                        : app.status === 'concluido'
-                                        ? 'bg-green-50 border-green-100'
-                                        : ''
-                                    } hover:ring-2 hover:ring-purple-300 transition-all`}
-                                    style={app.status === 'agendado' ? {
-                                      backgroundColor: `${employee.color}20`,
-                                      borderLeft: `3px solid ${employee.color}`
-                                    } : {}}
-                                    onClick={() => handleSelectAppointment(app)}
-                                    draggable={app.status === 'agendado'}
-                                    onDragStart={(e) => {
-                                      if (app.status !== 'agendado') return;
-                                      e.dataTransfer.setData('application/json', JSON.stringify({
-                                        appointmentId: app.id,
-                                        clientId: app.client_id,
-                                        serviceId: app.service_id,
-                                        originalEmployeeId: app.employee_id,
-                                        originalHour: new Date(app.date).getHours()
-                                      }));
-                                      e.dataTransfer.effectAllowed = 'move';
-                                      
-                                      // Adiciona efeito visual
-                                      e.currentTarget.classList.add('opacity-50', 'ring-2', 'ring-blue-500');
-                                      
-                                      // Cria uma imagem fantasma para o arrasto (opcional)
-                                      const ghost = document.createElement('div');
-                                      ghost.classList.add('p-2', 'bg-white', 'rounded', 'shadow', 'text-sm');
-                                      ghost.innerHTML = `<p>${client?.name}</p><p>${service?.name}</p>`;
-                                      ghost.style.width = '150px';
-                                      ghost.style.position = 'absolute';
-                                      ghost.style.top = '-1000px';
-                                      document.body.appendChild(ghost);
-                                      e.dataTransfer.setDragImage(ghost, 75, 20);
-                                      
-                                      // Remove o elemento fantasma após o arrasto
-                                      setTimeout(() => {
-                                        document.body.removeChild(ghost);
-                                      }, 0);
-                                    }}
-                                    onDragEnd={(e) => {
-                                      // Remove o efeito visual
-                                      e.currentTarget.classList.remove('opacity-50', 'ring-2', 'ring-blue-500');
-                                    }}
-                                  >
-                                    <div className="flex flex-col">
-                                      <p className="font-medium text-sm truncate">{client?.name}</p>
-                                      <p className="text-xs text-gray-600 truncate">
-                                        {service?.name}
-                                      </p>
-                                      <p className="text-xs text-gray-500">
-                                        {format(new Date(app.date), "HH:mm")}
-                                      </p>
-                                    </div>
-                                  </div>
+                                  <TooltipProvider key={app.id}>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <div
+                                          className={`p-2 rounded-lg mb-1 cursor-pointer ${
+                                            app.status === 'cancelado'
+                                              ? 'bg-red-50 border-red-100'
+                                              : app.status === 'concluido'
+                                              ? 'bg-green-50 border-green-100'
+                                              : ''
+                                          } hover:ring-2 hover:ring-purple-300 transition-all`}
+                                          style={app.status === 'agendado' ? {
+                                            backgroundColor: `${employee.color}20`,
+                                            borderLeft: `3px solid ${employee.color}`
+                                          } : {}}
+                                          onClick={() => handleSelectAppointment(app)}
+                                          draggable={app.status === 'agendado'}
+                                          onDragStart={(e) => {
+                                            if (app.status !== 'agendado') return;
+                                            e.dataTransfer.setData('application/json', JSON.stringify({
+                                              appointmentId: app.id,
+                                              clientId: app.client_id,
+                                              serviceId: app.service_id,
+                                              originalEmployeeId: app.employee_id,
+                                              originalHour: new Date(app.date).getHours()
+                                            }));
+                                            e.dataTransfer.effectAllowed = 'move';
+                                            
+                                            // Adiciona efeito visual
+                                            e.currentTarget.classList.add('opacity-50', 'ring-2', 'ring-blue-500');
+                                            
+                                            // Cria uma imagem fantasma para o arrasto (opcional)
+                                            const ghost = document.createElement('div');
+                                            ghost.classList.add('p-2', 'bg-white', 'rounded', 'shadow', 'text-sm');
+                                            ghost.innerHTML = `<p>${client?.name}</p><p>${service?.name}</p>`;
+                                            ghost.style.width = '150px';
+                                            ghost.style.position = 'absolute';
+                                            ghost.style.top = '-1000px';
+                                            document.body.appendChild(ghost);
+                                            e.dataTransfer.setDragImage(ghost, 75, 20);
+                                            
+                                            // Remove o elemento fantasma após o arrasto
+                                            setTimeout(() => {
+                                              document.body.removeChild(ghost);
+                                            }, 0);
+                                          }}
+                                          onDragEnd={(e) => {
+                                            // Remove o efeito visual
+                                            e.currentTarget.classList.remove('opacity-50', 'ring-2', 'ring-blue-500');
+                                          }}
+                                        >
+                                          <div className="flex flex-col">
+                                            <p className="font-medium text-sm truncate">{client?.name?.length > 11 ? client.name.substring(0, 11) + '...' : client?.name}</p>
+                                            <p className="text-xs text-gray-600 truncate">
+                                              {service?.name?.length > 11 ? service.name.substring(0, 11) + '...' : service?.name}
+                                            </p>
+                                            <p className="text-xs text-gray-500">
+                                              {format(new Date(app.date), "HH:mm")}
+                                            </p>
+                                          </div>
+                                        </div>
+                                      </TooltipTrigger>
+                                      <TooltipContent 
+                                        style={{ 
+                                          backgroundColor: employee.color || '#94a3b8',
+                                          color: '#ffffff'
+                                        }}
+                                      >
+                                        <div className="text-xs">
+                                          <p><strong>Nome:</strong> {client?.name || 'N/A'}</p>
+                                          <p><strong>Procedimento:</strong> {service?.name || 'N/A'}</p>
+                                          <p><strong>Profissional:</strong> {employee?.name || 'N/A'}</p>
+                                          <p><strong>Horário:</strong> {format(new Date(app.date), "HH:mm")}</p>
+                                        </div>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
                                 );
                               })}
 

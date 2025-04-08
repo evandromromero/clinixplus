@@ -45,10 +45,13 @@ export default function Packages() {
     discount: 0,
     discount_type: "percentage",
     color: "#294380", // Cor padrão
-    services: []
+    services: [],
+    desired_price: 0
   });
   const [selectedServiceId, setSelectedServiceId] = useState("");
   const [selectedServiceQuantity, setSelectedServiceQuantity] = useState(1);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isServiceDropdownOpen, setIsServiceDropdownOpen] = useState(false);
   const [alert, setAlert] = useState({ type: '', message: '' });
   const [showEditPackageDialog, setShowEditPackageDialog] = useState(false);
   
@@ -211,23 +214,56 @@ export default function Packages() {
     }, 0);
 
     let discount = 0;
+    let finalPrice = subtotal;
+    
     if (packageForm.discount_type === "percentage") {
       discount = (subtotal * packageForm.discount) / 100;
-    } else {
+      finalPrice = subtotal - discount;
+    } else if (packageForm.discount_type === "fixed") {
       discount = packageForm.discount;
+      finalPrice = subtotal - discount;
+    } else if (packageForm.discount_type === "desired_price") {
+      // Se o preço desejado for maior que o subtotal, não aplicamos desconto
+      if (packageForm.desired_price >= subtotal) {
+        discount = 0;
+        finalPrice = subtotal;
+      } else {
+        // Calculamos o desconto necessário para atingir o preço desejado
+        discount = subtotal - packageForm.desired_price;
+        finalPrice = packageForm.desired_price;
+      }
     }
 
+    // Atualizamos o formulário com os novos valores calculados
     setPackageForm(prev => ({
       ...prev,
-      total_price: subtotal - discount
+      discount: discount,
+      total_price: packageForm.discount_type === "desired_price" ? packageForm.desired_price : finalPrice
     }));
   };
+  
 
   const handleDiscountChange = (value, type) => {
+    if (type === "desired_price") {
+      setPackageForm(prev => ({
+        ...prev,
+        desired_price: value,
+        discount_type: type
+      }));
+    } else {
+      setPackageForm(prev => ({
+        ...prev,
+        discount: value,
+        discount_type: type
+      }));
+    }
+    calculateFinalPrice();
+  };
+  
+  const handleDesiredPriceChange = (value) => {
     setPackageForm(prev => ({
       ...prev,
-      discount: value,
-      discount_type: type
+      desired_price: value
     }));
     calculateFinalPrice();
   };
@@ -496,48 +532,125 @@ export default function Packages() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="discount">Desconto</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      id="discount"
-                      type="number"
-                      value={packageForm.discount}
-                      onChange={(e) => handleDiscountChange(parseFloat(e.target.value) || 0, packageForm.discount_type)}
-                    />
+                  <div className="flex gap-2 mb-2">
                     <Select
                       value={packageForm.discount_type}
                       onValueChange={(value) => handleDiscountChange(packageForm.discount, value)}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className="w-full">
                         <SelectValue placeholder="Tipo de desconto" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="percentage">Porcentagem (%)</SelectItem>
                         <SelectItem value="fixed">Valor fixo (R$)</SelectItem>
+                        <SelectItem value="desired_price">Preço final desejado</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
+                  
+                  {packageForm.discount_type === "desired_price" ? (
+                    <div className="space-y-2">
+                      <Label htmlFor="desired_price">Preço final desejado (R$)</Label>
+                      <div className="flex gap-2 items-center">
+                        <Input
+                          id="desired_price"
+                          type="number"
+                          value={packageForm.desired_price}
+                          onChange={(e) => handleDesiredPriceChange(parseFloat(e.target.value) || 0)}
+                        />
+                        {packageForm.services.length > 0 && (
+                          <div className="text-sm">
+                            <span className="text-gray-500">Desconto aplicado:</span> 
+                            <span className="font-medium ml-1 text-red-500">
+                              {formatCurrency(packageForm.discount)}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <Label htmlFor="discount">{packageForm.discount_type === "percentage" ? "Porcentagem (%)" : "Valor fixo (R$)"}</Label>
+                      <Input
+                        id="discount"
+                        type="number"
+                        value={packageForm.discount}
+                        onChange={(e) => handleDiscountChange(parseFloat(e.target.value) || 0, packageForm.discount_type)}
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
 
               <div className="pt-2 border-t">
                 <Label className="mb-2 block">Adicionar Serviços</Label>
                 <div className="grid grid-cols-6 gap-2">
-                  <div className="col-span-4">
-                    <Select
-                      value={selectedServiceId}
-                      onValueChange={setSelectedServiceId}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione um serviço" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {services.map(service => (
-                          <SelectItem key={service.id} value={service.id}>
-                            {service.name} - {formatCurrency(service.price)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                  <div className="col-span-4 relative">
+                    <div className="relative">
+                      <div 
+                        className="flex items-center border rounded-md px-3 py-2 w-full text-sm focus-within:ring-1 focus-within:ring-ring"
+                        onClick={() => setIsServiceDropdownOpen(true)}
+                      >
+                        {selectedServiceId ? (
+                          <span>
+                            {services.find(s => s.id === selectedServiceId)?.name} - 
+                            {formatCurrency(services.find(s => s.id === selectedServiceId)?.price || 0)}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">Selecione um serviço</span>
+                        )}
+                      </div>
+                      
+                      {isServiceDropdownOpen && (
+                        <div className="absolute z-50 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-y-auto">
+                          <div className="sticky top-0 bg-white p-2 border-b">
+                            <Input
+                              placeholder="Buscar serviço..."
+                              value={searchTerm}
+                              onChange={(e) => setSearchTerm(e.target.value)}
+                              className="w-full"
+                              autoFocus
+                            />
+                          </div>
+                          
+                          <div>
+                            {/* Filtrar serviços com base no termo de busca */}
+                            {(() => {
+                              const filteredServices = services.filter(service => 
+                                service.name.toLowerCase().includes(searchTerm.toLowerCase())
+                              );
+                              
+                              return filteredServices.length > 0 ? (
+                                filteredServices.map(service => (
+                                  <div
+                                    key={service.id}
+                                    className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                                    onClick={() => {
+                                      setSelectedServiceId(service.id);
+                                      setIsServiceDropdownOpen(false);
+                                      setSearchTerm("");
+                                    }}
+                                  >
+                                    {service.name} - {formatCurrency(service.price)}
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="px-3 py-2 text-gray-500 text-center">
+                                  Nenhum serviço encontrado
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {isServiceDropdownOpen && (
+                        <div 
+                          className="fixed inset-0 z-40" 
+                          onClick={() => setIsServiceDropdownOpen(false)}
+                        />
+                      )}
+                    </div>
                   </div>
                   <div className="col-span-1">
                     <Input
@@ -593,7 +706,10 @@ export default function Packages() {
                       {packageForm.discount > 0 && (
                         <TableRow>
                           <TableCell colSpan={3} className="text-right font-medium">
-                            Desconto ({packageForm.discount_type === "percentage" ? `${packageForm.discount}%` : `R$ ${formatCurrency(packageForm.discount)}`})
+                            {packageForm.discount_type === "desired_price" 
+                              ? "Desconto (Preço final desejado)" 
+                              : `Desconto (${packageForm.discount_type === "percentage" ? `${packageForm.discount}%` : `R$ ${formatCurrency(packageForm.discount)}`})`
+                            }
                           </TableCell>
                           <TableCell className="text-right text-red-500">
                             -{formatCurrency(
