@@ -53,6 +53,8 @@ export default function ClientPackages() {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedClient, setSelectedClient] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filteredClients, setFilteredClients] = useState([]);
   const [statusFilter, setStatusFilter] = useState("todos");
   const [selectedPackage, setSelectedPackage] = useState("");
   const [anamnesis, setAnamnesis] = useState(null);
@@ -1549,7 +1551,113 @@ export default function ClientPackages() {
       )}
       <Card>
         <CardContent className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          {/* Versão Mobile */}
+          <div className="md:hidden space-y-4 mb-6">
+            {/* Barra de Pesquisa e Botão Novo */}
+            <div className="flex gap-2">
+              <div className="flex-1 relative">
+                <Input
+                  type="text"
+                  placeholder="Buscar cliente..."
+                  value={clientSearchTerm || ''}
+                  onChange={(e) => {
+                    setClientSearchTerm(e.target.value);
+                    handleSearchClients(e.target.value);
+                    setShowClientSearch(true);
+                  }}
+                  className="pl-9"
+                />
+                <Search className="w-4 h-4 absolute left-3 top-3 text-gray-400" />
+              </div>
+              <Button
+                onClick={() => setShowSellDialog(true)}
+                size="icon"
+                className="shrink-0 bg-primary hover:bg-primary/90"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* Filtros em Linha */}
+            <div className="flex gap-2">
+              {/* Status */}
+              <div className="flex-1">
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos</SelectItem>
+                    <SelectItem value="ativo">Ativos</SelectItem>
+                    <SelectItem value="finalizado">Finalizados</SelectItem>
+                    <SelectItem value="expirado">Expirados</SelectItem>
+                    <SelectItem value="cancelado">Cancelados</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              {/* Período */}
+              <div className="flex-1">
+                <Select value={dateFilter} onValueChange={setDateFilter}>
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="Período" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos</SelectItem>
+                    <SelectItem value="hoje">Hoje</SelectItem>
+                    <SelectItem value="semana">Semana</SelectItem>
+                    <SelectItem value="mes">Mês</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Botões de Ação */}
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                className="flex-1 h-9"
+                onClick={() => {
+                  setSelectedClient('');
+                  setStatusFilter('todos');
+                  setDateFilter('todos');
+                  setSearchTerm('');
+                }}
+              >
+                Limpar Filtros
+              </Button>
+              <Button 
+                variant="outline" 
+                className="flex-1 h-9"
+                onClick={() => setShowNewPackageDialog(true)}
+              >
+                Novo Pacote
+              </Button>
+            </div>
+
+            {/* Lista de Clientes Filtrados (se houver busca) */}
+            {showClientSearch && clientSearchResults?.length > 0 && (
+              <div className="bg-white border rounded-md shadow-sm max-h-48 overflow-y-auto">
+                {clientSearchResults.map(client => (
+                  <button
+                    key={client.id}
+                    className="w-full px-4 py-2 text-left hover:bg-gray-50 focus:bg-gray-50 focus:outline-none"
+                    onClick={() => {
+                      setSelectedClient(client.id);
+                      setClientSearchTerm('');
+                      setShowClientSearch(false);
+                    }}
+                  >
+                    <div className="font-medium">{client.name}</div>
+                    <div className="text-sm text-gray-500">{client.phone || 'Sem telefone'}</div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Versão Desktop */}
+          <div className="hidden md:grid grid-cols-4 gap-4 mb-6">
             <div>
               <label className="block text-sm font-medium mb-1">Cliente</label>
               <Select value={selectedClient} onValueChange={setSelectedClient}>

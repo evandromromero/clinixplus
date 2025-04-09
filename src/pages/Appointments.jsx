@@ -112,6 +112,9 @@ export default function Appointments() {
     timeSlot: null,
     existingAppointments: []
   });
+  
+  // Estado para controlar a visibilidade dos filtros
+  const [showFilters, setShowFilters] = useState(true);
 
   const navigate = useNavigate();
 
@@ -1068,10 +1071,45 @@ export default function Appointments() {
     setProcedimentoTipo("avulso");
   };
 
+  // Carregar a preferência do usuário do localStorage ao inicializar
+  useEffect(() => {
+    const savedPreference = localStorage.getItem('showAgendaFilters');
+    if (savedPreference !== null) {
+      setShowFilters(savedPreference === 'true');
+    }
+  }, []);
+
+  // Salvar a preferência do usuário no localStorage quando mudar
+  const toggleFilters = () => {
+    const newValue = !showFilters;
+    setShowFilters(newValue);
+    localStorage.setItem('showAgendaFilters', newValue.toString());
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <h2 className="text-3xl font-bold text-gray-800">Agenda</h2>
+        <div className="flex items-center gap-3">
+          <h2 className="text-3xl font-bold text-gray-800">Agenda</h2>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={toggleFilters}
+            className="flex items-center text-gray-600 hover:text-gray-900"
+          >
+            {showFilters ? (
+              <>
+                <ChevronLeft className="h-4 w-4 mr-1" />
+                Ocultar Filtros
+              </>
+            ) : (
+              <>
+                <ChevronRight className="h-4 w-4 mr-1" />
+                Mostrar Filtros
+              </>
+            )}
+          </Button>
+        </div>
         <Button 
           onClick={() => setShowNewAppointmentDialog(true)}
           className="bg-purple-600 hover:bg-purple-700"
@@ -1081,8 +1119,8 @@ export default function Appointments() {
         </Button>
       </div>
 
-      <div className="grid md:grid-cols-[300px,1fr] gap-6">
-        <div className="space-y-4">
+      <div className={`grid ${showFilters ? 'md:grid-cols-[300px,1fr]' : 'md:grid-cols-[0fr,1fr]'} gap-6`}>
+        <div className={`space-y-4 transition-all duration-300 ${showFilters ? 'opacity-100 w-full' : 'opacity-0 w-0 overflow-hidden'}`}>
           <Card>
             <CardContent className="p-4">
               <div className="space-y-4">
@@ -1183,6 +1221,19 @@ export default function Appointments() {
 
         <Card>
           <CardContent className="p-6">
+            {!showFilters && (
+              <div className="flex justify-start mb-4">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={toggleFilters}
+                  className="flex items-center"
+                >
+                  <Filter className="h-4 w-4 mr-2" />
+                  Mostrar Filtros
+                </Button>
+              </div>
+            )}
             <div className="relative overflow-x-auto">
               <table className="w-full border-collapse">
                 <thead>
