@@ -248,168 +248,134 @@ export default function CashRegister() {
       // Buscar todas as transações
       const allTransactions = await FinancialTransaction.list();
       
-      // Obter a data atual no formato yyyy-MM-dd
-      const today = format(new Date(), "yyyy-MM-dd");
+      // Obter a data atual usando normalizeDate para consistência
+      const today = normalizeDate(new Date());
       console.log("[CashRegister] Filtrando transações para:", today);
       
-      // Filtrar transações do dia atual
-      console.log("[CashRegister] Hora atual:", new Date().toISOString());
-      console.log("[CashRegister] Data de hoje:", today);
+      // Criar um cache de datas normalizadas para evitar recálculos
+      const dateCache = new Map();
       
-      // Primeiro encontrar a última transação de fechamento
-      const lastCloseTransaction = allTransactions
-        .filter(t => t.category === "fechamento_caixa")
-        .sort((a, b) => new Date(b.created_date) - new Date(a.created_date))[0];
-      
-      console.log("[CashRegister] Última transação de fechamento:", lastCloseTransaction);
-      
-      // Se tiver uma transação de fechamento hoje, o caixa está fechado
-      if (lastCloseTransaction && format(new Date(lastCloseTransaction.created_date), "yyyy-MM-dd") === today) {
-        console.log("[CashRegister] Encontrada transação de fechamento para hoje");
-        setCashIsOpen(false);
-        setHasPreviousDayOpenCash(false);
-        setPreviousOpenDate(null);
-        setDailyBalance(0);
-        setInitialAmount(0);
-        return;
-      }
-      
-      // Filtrar transações do dia atual
-      const todayTransactions = allTransactions.filter(t => {
-        const transDate = format(new Date(t.created_date), "yyyy-MM-dd");
-        const isToday = transDate === today;
+      // Função para obter a data normalizada de uma transação com cache
+      const getTransactionDate = (transaction) => {
+        if (!transaction) return null;
         
-        console.log("[CashRegister] Verificando transação:", {
-          id: t.id,
-          category: t.category,
-          created_date: t.created_date,
-          transDate,
-          isToday,
-          today
-        });
-        
-        return isToday;
-      });
-      
-      // Procurar por transações de abertura e fechamento em ordem cronológica reversa
-      const cashTransactions = allTransactions
-        .filter(t => t.category === "abertura_caixa" || t.category === "fechamento_caixa")
-        .sort((a, b) => new Date(b.created_date) - new Date(a.created_date));
-      
-      console.log("[CashRegister] Transações de caixa ordenadas:", 
-        cashTransactions.map(t => ({
-          id: t.id,
-          category: t.category,
-          created_date: t.created_date
-        })));
-      
-      // Pegar a última transação de caixa
-      const lastCashTransaction = cashTransactions[0];
-      
-      console.log("[CashRegister] Última transação de caixa:", lastCashTransaction);
-      
-      // Se a última transação for de fechamento, o caixa está fechado
-      const isOpen = lastCashTransaction && lastCashTransaction.category === "abertura_caixa";
-      
-      console.log("[CashRegister] Status do caixa:", {
-        isOpen,
-        lastTransactionCategory: lastCashTransaction?.category,
-        lastTransactionDate: lastCashTransaction?.created_date
-      });
-      
-      setCashIsOpen(isOpen);
-      setHasPreviousDayOpenCash(false);
-      setPreviousOpenDate(null);
-      
-      if (!isOpen) {
-        setDailyBalance(0);
-        setInitialAmount(0);
-      }
-      
-      console.log("[CashRegister] Status do caixa alterado:", isOpen ? "Aberto" : "Fechado");
-      console.log("[CashRegister] Valor inicial:", isOpen ? todayOpen?.initial_amount || 0 : 0);
-      console.log("[CashRegister] Saldo do dia:", isOpen ? (todayOpen?.amount || 0) : 0);
-
-      // Filtrar transações de abertura não fechadas
-      const openCashTransactions = allTransactions.filter(t => 
-        t.category === 'abertura_caixa' && 
-        !t.closed_at &&
-        t.type === 'receita'
-      );
-
-      console.log("[CashRegister] Transações de abertura encontradas:", openCashTransactions);
-
-      if (openCashTransactions && openCashTransactions.length > 0) {
-        // Ordenar por data de criação (mais recente primeiro)
-        const sortedTransactions = openCashTransactions.sort((a, b) => {
-          const dateA = new Date(a.created_at || a.created_date);
-          const dateB = new Date(b.created_at || b.created_date);
-          return dateB - dateA;
-        });
-
-        const lastOpenTransaction = sortedTransactions[0];
-        console.log("[CashRegister] Última transação de caixa aberta:", lastOpenTransaction);
-
-        // Normalizar as datas para comparação
-        const transactionDate = formatDate(lastOpenTransaction.payment_date) || formatDate(lastOpenTransaction.created_date);
-        const today = getCurrentDate();
-        
-        console.log("[CashRegister] Comparando datas:", {
-          transactionDate,
-          today,
-          isBeforeToday: transactionDate < today,
-          rawTransactionDate: lastOpenTransaction.payment_date,
-          rawCreatedDate: lastOpenTransaction.created_date,
-          closed_at: lastOpenTransaction.closed_at
-        });
-
-        // Verificar primeiro se o caixa foi fechado
-        if (lastOpenTransaction.closed_at) {
-          console.log("[CashRegister] Caixa já foi fechado em:", lastOpenTransaction.closed_at);
-          setHasPreviousDayOpenCash(false);
-          setPreviousOpenDate(null);
-          setCashIsOpen(false);
-          setDailyBalance(0);
-          console.log("[CashRegister] Saldo do dia zerado por caixa fechado");
-          return; // Sair da função se o caixa estiver fechado
+        // Se já calculamos esta data antes, retornar do cache
+        if (dateCache.has(transaction.id)) {
+          return dateCache.get(transaction.id);
         }
-
-        // Se não estiver fechado, verificar as datas
-        if (transactionDate < today) {
-          console.log("[CashRegister] Caixa aberto em dia anterior");
-          setHasPreviousDayOpenCash(true);
-          setPreviousOpenDate(transactionDate);
-          setCashIsOpen(false); // Caixa não está aberto para o dia atual
-          setDailyBalance(0);
-          console.log("[CashRegister] Saldo do dia zerado por caixa anterior");
-        } else if (transactionDate === today) {
-          console.log("[CashRegister] Caixa aberto hoje");
-          setHasPreviousDayOpenCash(false);
-          setPreviousOpenDate(null);
-          setCashIsOpen(true);
+        
+        // Prioridade de campos para data: payment_date > created_date > date
+        let normalizedDate;
+        let sourceField = '';
+        
+        if (transaction.payment_date) {
+          normalizedDate = normalizeDate(transaction.payment_date);
+          sourceField = 'payment_date';
+        } else if (transaction.created_date) {
+          normalizedDate = normalizeDate(transaction.created_date);
+          sourceField = 'created_date';
+        } else if (transaction.date) {
+          normalizedDate = normalizeDate(transaction.date);
+          sourceField = 'date';
         } else {
-          // Se a data da transação for futura (não deveria acontecer)
-          console.log("[CashRegister] Data de transação inválida");
-          setHasPreviousDayOpenCash(false);
-          setPreviousOpenDate(null);
-          setCashIsOpen(false);
-          setDailyBalance(0);
+          // Se não tiver nenhuma data, retornar null
+          return null;
         }
         
-        // Atualizar valor inicial
-        const initialValue = parseFloat(lastOpenTransaction.initial_amount || lastOpenTransaction.amount) || 0;
-        console.log("[CashRegister] Definindo valor inicial:", initialValue);
-        setInitialAmount(initialValue);
+        // Armazenar no cache para uso futuro
+        dateCache.set(transaction.id, normalizedDate);
         
-      } else {
-        console.log("[CashRegister] Nenhum caixa aberto encontrado");
-        setCashIsOpen(false);
-        setHasPreviousDayOpenCash(false);
-        setPreviousOpenDate(null);
-        setInitialAmount(0);
-        setDailyBalance(0);
-        console.log("[CashRegister] Saldo do dia zerado por não ter caixa aberto");
+        console.log("[CashRegister] Data normalizada para transação", transaction.id, {
+          normalizedDate,
+          sourceField,
+          originalValue: transaction[sourceField]
+        });
+        
+        return normalizedDate;
+      };
+      
+      // Filtrar e ordenar todas as transações de abertura e fechamento
+      const openingTransactions = allTransactions
+        .filter(t => t.category === "abertura_caixa" && t.type === "receita")
+        .sort((a, b) => new Date(b.created_date || b.created_at) - new Date(a.created_date || a.created_at));
+        
+      const closingTransactions = allTransactions
+        .filter(t => t.category === "fechamento_caixa")
+        .sort((a, b) => new Date(b.created_date || b.created_at) - new Date(a.created_date || a.created_at));
+      
+      console.log("[CashRegister] Total de transações:", allTransactions.length, "Ativas:", allTransactions.filter(t => !t.deleted).length);
+      
+      // Encontrar a última transação de abertura
+      const lastOpeningTransaction = openingTransactions[0];
+      console.log("[CashRegister] Última transação de abertura encontrada:", lastOpeningTransaction);
+      
+      // Verificar se existe uma transação de abertura para hoje
+      const todayOpeningTransaction = openingTransactions.find(t => getTransactionDate(t) === today);
+      console.log("[CashRegister] Caixa aberto encontrado para a data:", today, todayOpeningTransaction ? "Sim" : "Não");
+      
+      // Verificar se existe uma transação de fechamento para hoje
+      const todayClosingTransaction = closingTransactions.find(t => getTransactionDate(t) === today);
+      
+      // Determinar o status do caixa com base nas transações encontradas
+      let isCashOpen = false;
+      let hasPreviousDayOpen = false;
+      let previousDate = null;
+      let initialValue = 0;
+      
+      if (todayOpeningTransaction) {
+        // Se temos uma abertura para hoje
+        if (todayClosingTransaction) {
+          // Se também temos um fechamento para hoje, verificar qual é mais recente
+          const openingTime = new Date(todayOpeningTransaction.created_date || todayOpeningTransaction.created_at).getTime();
+          const closingTime = new Date(todayClosingTransaction.created_date || todayClosingTransaction.created_at).getTime();
+          
+          // Se a abertura é mais recente que o fechamento, o caixa está aberto
+          isCashOpen = openingTime > closingTime;
+          console.log("[CashRegister] Comparação de timestamps:", {
+            openingTime,
+            closingTime,
+            isCashOpen
+          });
+        } else {
+          // Se temos abertura mas não fechamento para hoje, o caixa está aberto
+          isCashOpen = true;
+        }
+        
+        // Definir o valor inicial
+        initialValue = parseFloat(todayOpeningTransaction.initial_amount || todayOpeningTransaction.amount) || 0;
+      } else if (lastOpeningTransaction) {
+        // Se não temos abertura para hoje, mas temos uma abertura anterior
+        const lastOpeningDate = getTransactionDate(lastOpeningTransaction);
+        
+        // Verificar se esta abertura já foi fechada
+        const matchingClosing = closingTransactions.find(t => {
+          // Verificar se há um fechamento com a mesma data ou posterior
+          const closingDate = getTransactionDate(t);
+          return closingDate >= lastOpeningDate;
+        });
+        
+        if (!matchingClosing) {
+          // Se não encontramos um fechamento correspondente, temos um caixa aberto de dia anterior
+          hasPreviousDayOpen = true;
+          previousDate = lastOpeningDate;
+          console.log("[CashRegister] Caixa aberto em dia anterior:", previousDate);
+        }
       }
+      
+      // Atualizar o estado com os valores calculados
+      setCashIsOpen(isCashOpen);
+      setHasPreviousDayOpenCash(hasPreviousDayOpen);
+      setPreviousOpenDate(previousDate);
+      setInitialAmount(initialValue);
+      
+      // Se o caixa não estiver aberto, zerar o saldo
+      if (!isCashOpen) {
+        setDailyBalance(0);
+      }
+      
+      console.log("[CashRegister] Status do caixa alterado:", isCashOpen ? "Aberto" : "Fechado");
+      console.log("[CashRegister] Valor inicial:", initialValue);
+      console.log("[CashRegister] Saldo do dia:", isCashOpen ? dailyBalance : 0);
 
     } catch (error) {
       console.error("[CashRegister] Erro ao verificar status do caixa:", error);
