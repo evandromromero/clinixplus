@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { normalizeDate, createISODateWithoutTimezone } from "@/utils/dateUtils";
 import { 
   Client, Sale, FinancialTransaction, Product, Service, 
   Employee, PaymentMethod, Package, ClientPackage, 
@@ -66,6 +67,8 @@ export default function SalesRegister() {
   
   const [finalDiscount, setFinalDiscount] = useState(0);
   const [finalDiscountType, setFinalDiscountType] = useState("percentage");
+  const [finalPrice, setFinalPrice] = useState(0);
+  const [saleDate, setSaleDate] = useState(format(new Date(), "yyyy-MM-dd"));
   
   const [isLoading, setIsLoading] = useState(true);
   const [retryCount, setRetryCount] = useState(0);
@@ -162,6 +165,8 @@ export default function SalesRegister() {
       currency: 'BRL'
     }).format(value);
   };
+  
+  // Usamos a função normalizeDate importada de utils/dateUtils.js
 
   // Função para buscar clientes
   const searchClients = (term) => {
@@ -325,16 +330,42 @@ export default function SalesRegister() {
       return total + getSubtotal(item);
     }, 0);
     
+    // Se o tipo de desconto for preço final, retorna o valor definido
+    if (finalDiscountType === "final_price" && finalPrice > 0) {
+      return Math.min(subtotal, finalPrice); // Não permite que o preço final seja maior que o subtotal
+    }
+    
     let finalDiscountValue = 0;
     if (finalDiscount > 0) {
       if (finalDiscountType === "percentage") {
         finalDiscountValue = subtotal * (finalDiscount / 100);
-      } else {
+      } else if (finalDiscountType === "fixed") {
         finalDiscountValue = finalDiscount;
       }
     }
     
     return Math.max(0, subtotal - finalDiscountValue);
+  };
+  
+  // Função para calcular o valor do desconto geral
+  const calculateGeneralDiscount = () => {
+    const subtotal = cartItems.reduce((total, item) => {
+      return total + getSubtotal(item);
+    }, 0);
+    
+    if (finalDiscountType === "final_price" && finalPrice > 0) {
+      return Math.max(0, subtotal - finalPrice);
+    }
+    
+    if (finalDiscount > 0) {
+      if (finalDiscountType === "percentage") {
+        return subtotal * (finalDiscount / 100);
+      } else if (finalDiscountType === "fixed") {
+        return finalDiscount;
+      }
+    }
+    
+    return 0;
   };
 
   // Função para obter o número máximo de parcelas
@@ -502,8 +533,9 @@ export default function SalesRegister() {
         type: saleType || "produto",
         items: validCartItems,
         total_amount: calculateCartTotal(),
-        final_discount: parseFloat(finalDiscount) || 0,
+        final_discount: calculateGeneralDiscount(),
         final_discount_type: finalDiscountType || "percentage",
+        final_price: finalDiscountType === "final_price" ? finalPrice : null,
         payment_methods: paymentMethods.map(pm => ({
           method_id: pm.methodId || "",
           amount: parseFloat(pm.amount) || 0,
@@ -511,7 +543,7 @@ export default function SalesRegister() {
         })),
         installments: paymentMethods.reduce((total, pm) => total + (pm.installments > 1 ? parseInt(pm.installments) : 0), 0),
         status: "pago",
-        date: new Date().toISOString(),
+        date: normalizeDate(saleDate), // Usa a data formatada sem conversão de fuso horário
         notes: ""
       };
       
@@ -535,9 +567,9 @@ export default function SalesRegister() {
         const paymentMethod = availablePaymentMethods.find(m => m.id === payment.methodId);
         const isPaid = !paymentMethod?.name?.toLowerCase().includes("crédito");
         
-        // Usar a data do caixa selecionado ou a data atual
-        const paymentDate = selectedCashDate || format(new Date(), "yyyy-MM-dd");
-        console.log("[SalesRegister] Usando data para transação:", paymentDate);
+        // Usar a data selecionada pelo usuário, garantindo que não haja problemas de fuso horário
+        const paymentDate = createISODateWithoutTimezone(saleDate);
+        console.log("[SalesRegister] Usando data ISO sem fuso horário para transação:", paymentDate);
         
         // Criar transação financeira
         await FinancialTransaction.create({
@@ -547,8 +579,8 @@ export default function SalesRegister() {
           amount: parseFloat(payment.amount) || 0,
           payment_method: payment.methodId,
           status: isPaid ? "pago" : "pendente",
-          due_date: `${paymentDate}T00:00:00.000Z`,
-          payment_date: isPaid ? `${paymentDate}T00:00:00.000Z` : null,
+          due_date: paymentDate,
+          payment_date: isPaid ? paymentDate : null,
           sale_id: createdSale.id,
           client_id: selectedClient.id,
           employee_id: salesEmployee,
@@ -631,7 +663,7 @@ export default function SalesRegister() {
       // Preparar dados do recibo
       const receiptData = {
         sale_id: createdSale.id,
-        sale_date: createdSale.date,
+        sale_date: saleDate, // Usar a data selecionada pelo usuário diretamente
         client_name: selectedClient.name,
         client_cpf: selectedClient.cpf,
         items: validCartItems.map(item => ({
@@ -1205,6 +1237,17 @@ export default function SalesRegister() {
               <div>
                 <h3 className="text-lg font-medium mb-4">Resumo da Venda</h3>
                 
+                <div className="mb-4">
+                  <Label htmlFor="sale-date" className="mb-2 block">Data da Venda</Label>
+                  <Input
+                    id="sale-date"
+                    type="date"
+                    value={saleDate}
+                    onChange={(e) => setSaleDate(e.target.value)}
+                    className="w-full"
+                  />
+                </div>
+                
                 <div className="space-y-3">
                   <div className="flex justify-between">
                     <span className="text-gray-600">Subtotal:</span>
@@ -1225,6 +1268,92 @@ export default function SalesRegister() {
                         }, 0)
                       )}
                     </span>
+                  </div>
+                  
+                  <div className="border-t pt-3 pb-1">
+                    <div className="mb-2">
+                      <Label className="font-medium">Desconto Geral</Label>
+                      <div className="flex space-x-3 mt-2">
+                        <div className="flex items-center">
+                          <input
+                            type="radio"
+                            id="discount-percentage"
+                            name="discount-type"
+                            checked={finalDiscountType === "percentage"}
+                            onChange={() => setFinalDiscountType("percentage")}
+                            className="mr-1"
+                          />
+                          <label htmlFor="discount-percentage">Percentual (%)</label>
+                        </div>
+                        <div className="flex items-center">
+                          <input
+                            type="radio"
+                            id="discount-fixed"
+                            name="discount-type"
+                            checked={finalDiscountType === "fixed"}
+                            onChange={() => setFinalDiscountType("fixed")}
+                            className="mr-1"
+                          />
+                          <label htmlFor="discount-fixed">Valor Fixo (R$)</label>
+                        </div>
+                        <div className="flex items-center">
+                          <input
+                            type="radio"
+                            id="discount-final-price"
+                            name="discount-type"
+                            checked={finalDiscountType === "final_price"}
+                            onChange={() => setFinalDiscountType("final_price")}
+                            className="mr-1"
+                          />
+                          <label htmlFor="discount-final-price">Preço Final</label>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {finalDiscountType === "percentage" && (
+                      <div className="flex items-center space-x-2">
+                        <Input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={finalDiscount}
+                          onChange={(e) => setFinalDiscount(parseFloat(e.target.value) || 0)}
+                          className="w-24"
+                        />
+                        <span>%</span>
+                      </div>
+                    )}
+                    
+                    {finalDiscountType === "fixed" && (
+                      <div className="flex items-center space-x-2">
+                        <span>R$</span>
+                        <Input
+                          type="number"
+                          min="0"
+                          value={finalDiscount}
+                          onChange={(e) => setFinalDiscount(parseFloat(e.target.value) || 0)}
+                          className="w-24"
+                        />
+                      </div>
+                    )}
+                    
+                    {finalDiscountType === "final_price" && (
+                      <div className="flex items-center space-x-2">
+                        <span>R$</span>
+                        <Input
+                          type="number"
+                          min="0"
+                          value={finalPrice}
+                          onChange={(e) => setFinalPrice(parseFloat(e.target.value) || 0)}
+                          className="w-24"
+                        />
+                      </div>
+                    )}
+                    
+                    <div className="flex justify-between mt-2 text-red-500">
+                      <span>Desconto geral:</span>
+                      <span>-{formatCurrency(calculateGeneralDiscount())}</span>
+                    </div>
                   </div>
                   
                   <div className="pt-2 border-t flex justify-between font-bold">
@@ -1498,7 +1627,11 @@ export default function SalesRegister() {
               <p className="text-sm">Rua Eduardo Santos Pereira, 2221</p>
               <p className="text-sm">Campo Grande MS 79020-170</p>
               <p className="text-sm mt-2">COMPROVANTE DE VENDA</p>
-              <p className="text-sm">{format(new Date(saleReceipt?.sale_date || new Date()), "dd/MM/yyyy HH:mm", { locale: ptBR })}</p>
+              <p className="text-sm">
+                {saleReceipt?.sale_date 
+                  ? `${format(new Date(saleReceipt.sale_date.split('T')[0].split('-').map((v, i) => i === 1 ? parseInt(v) - 1 : parseInt(v))), "dd/MM/yyyy")} ${new Date().getHours()}:${String(new Date().getMinutes()).padStart(2, '0')}` 
+                  : format(new Date(), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+              </p>
             </div>
             
             <div className="space-y-2">

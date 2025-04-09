@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { format, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { normalizeDate } from "@/utils/dateUtils";
 import { Plus, Search, AlertCircle, FileText, TrendingUp, CalendarIcon, CheckCircle, XCircle } from "lucide-react";
 import { FinancialTransaction } from "@/api/entities";
 import { Client } from "@/api/entities";
@@ -77,7 +78,8 @@ export default function AccountsReceivable() {
     try {
       await FinancialTransaction.create({
         ...newTransaction,
-        payment_date: newTransaction.status === 'pago' ? format(new Date(), "yyyy-MM-dd") : null
+        due_date: normalizeDate(newTransaction.due_date),
+        payment_date: newTransaction.status === 'pago' ? normalizeDate(new Date()) : null
       });
       setShowNewTransactionDialog(false);
       setNewTransaction({
@@ -101,7 +103,7 @@ export default function AccountsReceivable() {
       await FinancialTransaction.update(transaction.id, { 
         ...transaction, 
         status: newStatus,
-        payment_date: newStatus === 'pago' ? format(new Date(), "yyyy-MM-dd") : null
+        payment_date: newStatus === 'pago' ? normalizeDate(new Date()) : null
       });
       loadData();
     } catch (error) {
@@ -120,7 +122,9 @@ export default function AccountsReceivable() {
   });
 
   const groupedTransactions = filteredTransactionsData.reduce((acc, transaction) => {
-    const month = transaction.due_date.substring(0, 7);
+    // Garantir que estamos usando a data correta sem problemas de fuso horário
+    const dateParts = transaction.due_date.split('T')[0].split('-');
+    const month = `${dateParts[0]}-${dateParts[1]}`; // Formato YYYY-MM
     if (!acc[month]) acc[month] = [];
     acc[month].push(transaction);
     return acc;
@@ -142,7 +146,9 @@ export default function AccountsReceivable() {
     
     return filteredTransactionsData
       .filter(t => {
-        const dueDate = new Date(t.due_date);
+        // Criar data sem problemas de fuso horário
+        const dateParts = t.due_date.split('T')[0].split('-').map(Number);
+        const dueDate = new Date(dateParts[0], dateParts[1] - 1, dateParts[2], 12, 0, 0);
         return t.status === "pendente" && dueDate >= today && dueDate <= nextWeek;
       })
       .reduce((sum, t) => sum + t.amount, 0);
@@ -258,7 +264,7 @@ export default function AccountsReceivable() {
                       </TableCell>
                       <TableCell>{client?.name || '-'}</TableCell>
                       <TableCell>
-                        {format(new Date(transaction.due_date), "dd/MM/yyyy")}
+                        {transaction.due_date ? format(new Date(transaction.due_date.split('T')[0].split('-').map((v, i) => i === 1 ? parseInt(v) - 1 : parseInt(v))), "dd/MM/yyyy") : '-'}
                       </TableCell>
                       <TableCell className="font-medium">
                         R$ {transaction.amount.toFixed(2)}
