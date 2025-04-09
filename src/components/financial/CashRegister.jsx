@@ -1318,9 +1318,18 @@ export default function CashRegister() {
         return;
       }
       
-      // Verificar se o caixa está aberto
-      if (!cashIsOpen) {
-        toast.error("O caixa precisa estar aberto para registrar transações.");
+      // Verificar se a data é válida
+      if (!transaction.payment_date) {
+        toast.error("Selecione uma data válida para a transação.");
+        return;
+      }
+      
+      // Verificar se o caixa está aberto para transações do dia atual
+      const today = format(new Date(), "yyyy-MM-dd");
+      const transactionDate = format(new Date(transaction.payment_date), "yyyy-MM-dd");
+      
+      if (transactionDate === today && !cashIsOpen) {
+        toast.error("O caixa precisa estar aberto para registrar transações do dia atual.");
         return;
       }
       
@@ -1329,7 +1338,8 @@ export default function CashRegister() {
       const transactionData = {
         ...transaction,
         created_date: format(now, "yyyy-MM-dd'T'HH:mm:ss.SSSxxx"),
-        payment_date: format(now, "yyyy-MM-dd'T'HH:mm:ss.SSSxxx"),
+        // Usar normalizeDate para formatar a data corretamente
+        payment_date: normalizeDate(transaction.payment_date),
         status: "pago",
         user_id: userData?.id || "sistema",
         created_by: userData?.full_name || "sistema"
@@ -2226,7 +2236,7 @@ export default function CashRegister() {
           <DialogHeader>
             <DialogTitle>Nova Movimentação de Caixa</DialogTitle>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
+          <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto pr-2">
             <div className="space-y-2">
               <Label>Tipo</Label>
               <Select
@@ -2258,6 +2268,16 @@ export default function CashRegister() {
                 type="number"
                 value={newTransaction.amount}
                 onChange={(e) => setNewTransaction({...newTransaction, amount: parseFloat(e.target.value)})}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Data da Transação</Label>
+              <Input
+                type="date"
+                value={newTransaction.payment_date}
+                onChange={(e) => setNewTransaction({...newTransaction, payment_date: e.target.value})}
+                max={format(new Date(), "yyyy-MM-dd")}
               />
             </div>
 
