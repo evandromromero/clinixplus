@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Calendar } from "@/components/ui/calendar";
 import { format, subDays, isSameDay, startOfDay, parseISO, addDays } from "date-fns";
+import { normalizeDate } from "@/utils/dateUtils";
 import { ptBR } from "date-fns/locale";
 import { 
   Plus, 
@@ -457,6 +458,10 @@ export default function CashRegister() {
       setIsLoading(false);
     }
   };
+  
+
+  
+
 
   useEffect(() => {
     loadTransactions();
@@ -1301,10 +1306,368 @@ export default function CashRegister() {
     }
   };
 
-  const viewHistoricCash = (date) => {
-    setSelectedDate(format(date, "yyyy-MM-dd"));
-    setShowHistoricCashDialog(false);
-    handleOpenReport();
+  // Função para gerar o HTML do relatório de caixa
+  // Função para criar uma nova transação no caixa
+  const handleCreateTransaction = async (transaction) => {
+    try {
+      setIsLoading(true);
+      
+      // Validar dados da transação
+      if (!transaction.description || !transaction.amount || transaction.amount <= 0) {
+        toast.error("Preencha todos os campos obrigatórios corretamente.");
+        return;
+      }
+      
+      // Verificar se o caixa está aberto
+      if (!cashIsOpen) {
+        toast.error("O caixa precisa estar aberto para registrar transações.");
+        return;
+      }
+      
+      // Preparar dados da transação
+      const now = new Date();
+      const transactionData = {
+        ...transaction,
+        created_date: format(now, "yyyy-MM-dd'T'HH:mm:ss.SSSxxx"),
+        payment_date: format(now, "yyyy-MM-dd'T'HH:mm:ss.SSSxxx"),
+        status: "pago",
+        user_id: userData?.id || "sistema",
+        created_by: userData?.full_name || "sistema"
+      };
+      
+      console.log("[CashRegister] Criando nova transação:", transactionData);
+      
+      // Salvar transação no Firebase
+      const savedTransaction = await FinancialTransaction.create(transactionData);
+      
+      if (savedTransaction) {
+        console.log("[CashRegister] Transação criada com sucesso:", savedTransaction);
+        toast.success("Transação registrada com sucesso!");
+        
+        // Atualizar lista de transações
+        await loadTransactionsWithRetry();
+        
+        // Resetar formulário
+        setNewTransaction({
+          type: "receita",
+          category: "outros",
+          description: "",
+          amount: 0,
+          payment_method: "dinheiro",
+          status: "pago",
+          payment_date: format(new Date(), "yyyy-MM-dd"),
+          due_date: format(new Date(), "yyyy-MM-dd"),
+          client_id: "",
+          client_name: ""
+        });
+        
+        // Fechar diálogo
+        setShowNewTransactionDialog(false);
+      } else {
+        throw new Error("Falha ao criar transação");
+      }
+    } catch (error) {
+      console.error("[CashRegister] Erro ao criar transação:", error);
+      toast.error("Ocorreu um erro ao registrar a transação. Tente novamente.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const generateCashReport = async (cashData, transactions) => {
+    try {
+      // Formatar datas para exibição
+      const openedAtFormatted = cashData.opened_at ? 
+        format(new Date(cashData.opened_at), "dd/MM/yyyy HH:mm") : "N/A";
+      const closedAtFormatted = cashData.closed_at ? 
+        format(new Date(cashData.closed_at), "dd/MM/yyyy HH:mm") : "N/A";
+      
+      // Calcular totais por método de pagamento
+      const paymentMethodTotals = {};
+      let totalReceipts = 0;
+      let totalExpenses = 0;
+      
+      transactions.forEach(transaction => {
+        const methodName = transaction.payment_method_name || 'Não especificado';
+        const amount = parseFloat(transaction.amount) || 0;
+        
+        if (!paymentMethodTotals[methodName]) {
+          paymentMethodTotals[methodName] = { receipts: 0, expenses: 0 };
+        }
+        
+        if (transaction.type === 'receita') {
+          paymentMethodTotals[methodName].receipts += amount;
+          totalReceipts += amount;
+        } else {
+          paymentMethodTotals[methodName].expenses += amount;
+          totalExpenses += amount;
+        }
+      });
+      
+      // Gerar linhas da tabela de transações
+      const transactionRows = transactions.map(t => {
+        const amount = parseFloat(t.amount) || 0;
+        const formattedAmount = amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        const transactionDate = t.payment_date ? 
+          format(new Date(t.payment_date), "dd/MM/yyyy HH:mm") : "N/A";
+        
+        return `
+          <tr>
+            <td>${t.description}</td>
+            <td>${t.type === 'receita' ? 'Receita' : 'Despesa'}</td>
+            <td>${t.payment_method_name || 'Não especificado'}</td>
+            <td>${t.client_name || 'Não especificado'}</td>
+            <td>${transactionDate}</td>
+            <td class="${t.type === 'receita' ? 'text-green-600' : 'text-red-600'}">
+              ${formattedAmount}
+            </td>
+          </tr>
+        `;
+      }).join('');
+      
+      // Gerar linhas da tabela de totais por método de pagamento
+      const paymentMethodRows = Object.entries(paymentMethodTotals).map(([method, totals]) => {
+        const receiptsFormatted = totals.receipts.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        const expensesFormatted = totals.expenses.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        const balanceFormatted = (totals.receipts - totals.expenses).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        
+        return `
+          <tr>
+            <td>${method}</td>
+            <td class="text-green-600">${receiptsFormatted}</td>
+            <td class="text-red-600">${expensesFormatted}</td>
+            <td class="${totals.receipts - totals.expenses >= 0 ? 'text-green-600' : 'text-red-600'}">
+              ${balanceFormatted}
+            </td>
+          </tr>
+        `;
+      }).join('');
+      
+      // Formatar valores monetários
+      const initialAmountFormatted = cashData.initial_amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      const finalAmountFormatted = cashData.final_amount ? 
+        cashData.final_amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : "N/A";
+      const differenceFormatted = cashData.difference ? 
+        cashData.difference.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : "N/A";
+      const totalReceiptsFormatted = totalReceipts.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      const totalExpensesFormatted = totalExpenses.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      const balanceFormatted = (totalReceipts - totalExpenses).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      
+      // Gerar HTML completo do relatório
+      return `
+        <div class="p-4">
+          <div class="text-center mb-6">
+            <h1 class="text-2xl font-bold">Relatório de Caixa</h1>
+            <p class="text-gray-600">Data: ${format(new Date(cashData.opened_at || new Date()), "dd/MM/yyyy")}</p>
+          </div>
+          
+          <div class="grid grid-cols-2 gap-4 mb-6">
+            <div class="border rounded p-4">
+              <h2 class="text-lg font-semibold mb-2">Informações de Abertura</h2>
+              <p><strong>Aberto por:</strong> ${cashData.opened_by}</p>
+              <p><strong>Data/Hora:</strong> ${openedAtFormatted}</p>
+              <p><strong>Valor Inicial:</strong> ${initialAmountFormatted}</p>
+            </div>
+            
+            <div class="border rounded p-4">
+              <h2 class="text-lg font-semibold mb-2">Informações de Fechamento</h2>
+              <p><strong>Data/Hora:</strong> ${closedAtFormatted}</p>
+              <p><strong>Valor Final:</strong> ${finalAmountFormatted}</p>
+              <p><strong>Diferença:</strong> <span class="${cashData.difference >= 0 ? 'text-green-600' : 'text-red-600'}">${differenceFormatted}</span></p>
+            </div>
+          </div>
+          
+          <div class="mb-6">
+            <h2 class="text-lg font-semibold mb-2">Resumo do Dia</h2>
+            <div class="border rounded p-4">
+              <div class="grid grid-cols-3 gap-4">
+                <div>
+                  <p class="text-gray-600">Total de Receitas</p>
+                  <p class="text-xl text-green-600 font-semibold">${totalReceiptsFormatted}</p>
+                </div>
+                <div>
+                  <p class="text-gray-600">Total de Despesas</p>
+                  <p class="text-xl text-red-600 font-semibold">${totalExpensesFormatted}</p>
+                </div>
+                <div>
+                  <p class="text-gray-600">Balanço</p>
+                  <p class="text-xl font-semibold ${totalReceipts - totalExpenses >= 0 ? 'text-green-600' : 'text-red-600'}">${balanceFormatted}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="mb-6">
+            <h2 class="text-lg font-semibold mb-2">Totais por Método de Pagamento</h2>
+            <table class="w-full border-collapse">
+              <thead>
+                <tr class="bg-gray-100">
+                  <th class="border p-2 text-left">Método</th>
+                  <th class="border p-2 text-left">Receitas</th>
+                  <th class="border p-2 text-left">Despesas</th>
+                  <th class="border p-2 text-left">Balanço</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${paymentMethodRows || '<tr><td colspan="4" class="border p-2 text-center">Nenhum dado disponível</td></tr>'}
+              </tbody>
+            </table>
+          </div>
+          
+          <div>
+            <h2 class="text-lg font-semibold mb-2">Transações do Dia</h2>
+            <table class="w-full border-collapse">
+              <thead>
+                <tr class="bg-gray-100">
+                  <th class="border p-2 text-left">Descrição</th>
+                  <th class="border p-2 text-left">Tipo</th>
+                  <th class="border p-2 text-left">Método</th>
+                  <th class="border p-2 text-left">Cliente</th>
+                  <th class="border p-2 text-left">Data/Hora</th>
+                  <th class="border p-2 text-left">Valor</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${transactionRows || '<tr><td colspan="6" class="border p-2 text-center">Nenhuma transação encontrada</td></tr>'}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    } catch (error) {
+      console.error("[CashRegister] Erro ao gerar relatório:", error);
+      return `<div class="p-4 text-center text-red-600">Erro ao gerar relatório: ${error.message}</div>`;
+    }
+  };
+
+  const viewHistoricCash = async (date) => {
+    if (!date) return;
+    
+    try {
+      // Formatar a data para exibição e consulta
+      const displayDate = format(date, "dd/MM/yyyy");
+      const queryDate = format(date, "yyyy-MM-dd");
+      console.log("[CashRegister] Visualizando caixa da data:", displayDate);
+      
+      // Buscar todas as transações
+      const allTransactions = await FinancialTransaction.list();
+      console.log(`[CashRegister] Total de ${allTransactions.length} transações carregadas`);
+      
+      // Filtrar transações para a data selecionada
+      const transactionsForDate = allTransactions.filter(transaction => {
+        // Ignorar transações de fechamento de caixa
+        if (transaction.category === 'fechamento_caixa') {
+          return false;
+        }
+        
+        if (!transaction.payment_date) return false;
+        
+        // Normalizar a data da transação para comparação
+        let transactionDate;
+        if (transaction.payment_date.length === 10) {
+          transactionDate = transaction.payment_date;
+        } else {
+          transactionDate = transaction.payment_date.split('T')[0];
+        }
+        
+        return transactionDate === queryDate;
+      });
+      
+      console.log(`[CashRegister] ${transactionsForDate.length} transações encontradas para a data ${queryDate}`);
+      
+      // Processar transações com métodos de pagamento e clientes
+      const processedTransactions = transactionsForDate.map(t => {
+        const paymentMethod = paymentMethods.find(pm => pm.id === t.payment_method);
+        const client = clients.find(c => c.id === t.client_id);
+        
+        return {
+          ...t,
+          payment_method_name: paymentMethod ? paymentMethod.name : 'Método não identificado',
+          client_name: client ? client.name : 'Cliente não identificado'
+        };
+      });
+      
+      // Filtrar registros de abertura para a data selecionada
+      const openingTransactions = allTransactions.filter(transaction => {
+        if (transaction.category !== 'abertura_caixa') return false;
+        
+        if (transaction.payment_date) {
+          // Lidar com diferentes formatos de data
+          let transactionDate;
+          
+          // Verificar se a data já está no formato yyyy-MM-dd
+          if (transaction.payment_date.length === 10) {
+            transactionDate = transaction.payment_date;
+          } else {
+            // Extrair apenas a parte da data (yyyy-MM-dd) de formatos com timestamp
+            transactionDate = transaction.payment_date.split('T')[0];
+          }
+          
+          const match = transactionDate === queryDate;
+          if (match) {
+            console.log("[CashRegister] Registro de abertura encontrado para a data", queryDate, ":", transaction.id);
+          }
+          return match;
+        }
+        return false;
+      });
+      
+      // Filtrar registros de fechamento para a data selecionada
+      const closingTransactions = allTransactions.filter(transaction => {
+        if (transaction.category !== 'fechamento_caixa') return false;
+        
+        if (transaction.payment_date) {
+          // Lidar com diferentes formatos de data
+          let transactionDate;
+          
+          // Verificar se a data já está no formato yyyy-MM-dd
+          if (transaction.payment_date.length === 10) {
+            transactionDate = transaction.payment_date;
+          } else {
+            // Extrair apenas a parte da data (yyyy-MM-dd) de formatos com timestamp
+            transactionDate = transaction.payment_date.split('T')[0];
+          }
+          
+          const match = transactionDate === queryDate;
+          if (match) {
+            console.log("[CashRegister] Registro de fechamento encontrado para a data", queryDate, ":", transaction.id);
+          }
+          return match;
+        }
+        return false;
+      });
+      
+      console.log(`[CashRegister] Encontrados ${openingTransactions.length} registros de abertura e ${closingTransactions.length} registros de fechamento`);
+      
+      const opening = openingTransactions.length > 0 ? openingTransactions[0] : null;
+      const closing = closingTransactions.length > 0 ? closingTransactions[0] : null;
+      
+      // Verificar se há registros de abertura ou fechamento
+      if (!opening && !closing && processedTransactions.length === 0) {
+        toast.error(`Nenhum registro de caixa encontrado para a data ${displayDate}.`);
+        return;
+      }
+      
+      // Preparar dados do caixa
+      const cashData = {
+        opened_by: opening ? opening.opened_by : "N/A",
+        opened_at: opening ? opening.payment_date : null,
+        closed_at: closing ? closing.payment_date : null,
+        initial_amount: opening ? opening.amount : 0,
+        final_amount: closing ? closing.amount : null,
+        difference: (closing && opening) ? (closing.amount - opening.amount) : 0
+      };
+      
+      // Gerar HTML do relatório
+      const html = await generateCashReport(cashData, processedTransactions);
+      setReportHtml(html);
+      setShowReportDialog(true);
+      setShowHistoricCashDialog(false);
+      
+    } catch (error) {
+      console.error("[CashRegister] Erro ao visualizar caixa histórico:", error);
+      toast.error("Ocorreu um erro ao gerar o relatório de caixa para a data selecionada.");
+    }
   };
 
   const getCashRegisterByDate = (date) => {
@@ -1828,8 +2191,16 @@ export default function CashRegister() {
               <Calendar
                 mode="single"
                 selected={selectedHistoricDate}
-                onSelect={(date) => setSelectedHistoricDate(date || new Date())}
+                onSelect={(date) => {
+                  if (date && date > new Date()) {
+                    toast.error("Não é possível selecionar datas futuras");
+                    return;
+                  }
+                  setSelectedHistoricDate(date || new Date());
+                }}
+                disabled={(date) => date > new Date()}
                 className="rounded-md border w-full"
+                locale={ptBR}
               />
             </div>
           </div>
