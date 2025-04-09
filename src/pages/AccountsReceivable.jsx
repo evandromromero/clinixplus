@@ -16,11 +16,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
+import { normalizeDate } from "@/utils/dateUtils";
 import { ptBR } from "date-fns/locale";
-import { Search, Filter, ChevronDown, ChevronUp, RefreshCw, FileText, Download, Printer, Plus } from "lucide-react";
+import { Search, Filter, ChevronDown, ChevronUp, RefreshCw, FileText, Download, Printer, Plus, CalendarIcon, XCircle, Trash2 } from "lucide-react";
 import { FinancialTransaction, Client, PaymentMethod, Sale } from "@/firebase/entities";
 import RateLimitHandler from '@/components/RateLimitHandler';
 import { toast } from "@/components/ui/use-toast";
@@ -53,6 +54,116 @@ export default function AccountsReceivable() {
 
   // Estado para o diálogo de nova conta a receber
   const [showNewReceivableDialog, setShowNewReceivableDialog] = useState(false);
+  const [showReceiveDialog, setShowReceiveDialog] = useState(false);
+  const [paymentData, setPaymentData] = useState({
+    date: new Date(),
+    payments: [{ method: '', amount: 0 }]
+  });
+
+  const handleDelete = async (transaction) => {
+    try {
+      if (!transaction) return;
+
+      // Confirmar com o usuário
+      if (!window.confirm('Tem certeza que deseja excluir esta transação? Esta ação não pode ser desfeita.')) {
+        return;
+      }
+
+      // Se tiver sale_id, excluir a venda primeiro
+      if (transaction.sale_id) {
+        await Sale.delete(transaction.sale_id);
+      }
+
+      // Excluir a transação
+      await FinancialTransaction.delete(transaction.id);
+
+      loadData();
+
+      toast({
+        title: "Sucesso",
+        description: "Transação excluída com sucesso",
+      });
+    } catch (error) {
+      console.error("Erro ao excluir transação:", error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível excluir a transação",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleShowReceiveDialog = (transaction) => {
+    setSelectedTransaction(transaction);
+    setPaymentData({
+      date: new Date(),
+      payments: [{ method: '', amount: transaction.amount }]
+    });
+    setShowReceiveDialog(true);
+  };
+
+  const handleAddPaymentMethod = () => {
+    setPaymentData(prev => ({
+      ...prev,
+      payments: [...prev.payments, { method: '', amount: 0 }]
+    }));
+  };
+
+  const handleRemovePaymentMethod = (index) => {
+    setPaymentData(prev => ({
+      ...prev,
+      payments: prev.payments.filter((_, i) => i !== index)
+    }));
+  };
+
+  const handlePaymentMethodChange = (index, field, value) => {
+    setPaymentData(prev => {
+      const newPayments = [...prev.payments];
+      newPayments[index] = { ...newPayments[index], [field]: value };
+      return { ...prev, payments: newPayments };
+    });
+  };
+
+  const handleReceivePayment = async () => {
+    try {
+      if (!selectedTransaction) return;
+
+      // Validar se o total dos pagamentos é igual ao valor da transação
+      const totalPayments = paymentData.payments.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0);
+      if (Math.abs(totalPayments - selectedTransaction.amount) > 0.01) {
+        toast({
+          title: "Erro",
+          description: "O total dos pagamentos deve ser igual ao valor da transação",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Atualizar a transação
+      await FinancialTransaction.update(selectedTransaction.id, {
+        ...selectedTransaction,
+        status: 'pago',
+        payment_date: normalizeDate(paymentData.date),
+        payment_methods: paymentData.payments
+      });
+
+      setShowReceiveDialog(false);
+      loadData();
+
+      toast({
+        title: "Sucesso",
+        description: "Pagamento registrado com sucesso",
+      });
+    } catch (error) {
+      console.error("Erro ao registrar pagamento:", error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível registrar o pagamento",
+        variant: "destructive"
+      });
+    }
+  };
+
   const [newReceivable, setNewReceivable] = useState({
     description: '',
     client_id: 'sem_cliente',
@@ -915,10 +1026,19 @@ export default function AccountsReceivable() {
                             variant="outline" 
                             size="sm"
                             className="text-green-600 border-green-200 hover:bg-green-50"
+                            onClick={() => handleShowReceiveDialog(transaction)}
                           >
                             Receber
                           </Button>
                         )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-red-600 border-red-200 hover:bg-red-50"
+                          onClick={() => handleDelete(transaction)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -1052,7 +1172,7 @@ export default function AccountsReceivable() {
       <Dialog open={showNewReceivableDialog} onOpenChange={setShowNewReceivableDialog}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>
-            <DialogTitle>Nova Conta a Receber</DialogTitle>
+            <DialogTitle>Nova Conta a Receberr</DialogTitle>
             <DialogDescription>
               Cadastre uma nova conta a receber de cliente, fornecedor, funcionário ou outros.
             </DialogDescription>
@@ -1222,6 +1342,111 @@ export default function AccountsReceivable() {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+      {/* Modal de Recebimento */}
+      <Dialog open={showReceiveDialog} onOpenChange={setShowReceiveDialog}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Receber Pagamento</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label>Data do Pagamento</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start text-left font-normal"
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {format(paymentData.date, 'dd/MM/yyyy', { locale: ptBR })}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={paymentData.date}
+                    onSelect={(date) => setPaymentData(prev => ({ ...prev, date: date || new Date() }))}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Label>Formas de Pagamento</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAddPaymentMethod}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Adicionar
+                </Button>
+              </div>
+
+              {paymentData.payments.map((payment, index) => (
+                <div key={index} className="grid grid-cols-[1fr,120px,40px] gap-2 items-start">
+                  <Select
+                    value={payment.method}
+                    onValueChange={(value) => handlePaymentMethodChange(index, 'method', value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {paymentMethods.map(method => (
+                        <SelectItem key={method.id} value={method.id}>
+                          {method.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    type="number"
+                    value={payment.amount}
+                    onChange={(e) => handlePaymentMethodChange(index, 'amount', parseFloat(e.target.value))}
+                    className="w-[120px]"
+                  />
+                  {index > 0 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleRemovePaymentMethod(index)}
+                    >
+                      <XCircle className="h-4 w-4 text-red-600" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+
+              {selectedTransaction && (
+                <div className="flex justify-between text-sm font-medium">
+                  <span>Total da Transação:</span>
+                  <span>{formatCurrency(selectedTransaction.amount)}</span>
+                </div>
+              )}
+
+              <div className="flex justify-between text-sm font-medium">
+                <span>Total Informado:</span>
+                <span className={`${Math.abs(paymentData.payments.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0) - (selectedTransaction?.amount || 0)) > 0.01 ? 'text-red-600' : 'text-green-600'}`}>
+                  {formatCurrency(paymentData.payments.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0))}
+                </span>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowReceiveDialog(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleReceivePayment}>
+              Confirmar Recebimento
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

@@ -173,7 +173,7 @@ export default function AccountsReceivable() {
       <div className="grid gap-4 md:grid-cols-3">
         <Card className="bg-gradient-to-r from-[#F1F6CE]/50 to-white">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-[#0D0F36]">Total a Receber</CardTitle>
+            <CardTitle className="text-sm font-medium text-[#0D0F36]">Total a Receberr</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-[#0D0F36]">
