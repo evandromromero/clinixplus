@@ -12,6 +12,7 @@ import {
   Settings,
   Menu,
   ChevronDown,
+  ChevronLeft,
   DollarSign,
   LogOut,
   PieChart,
@@ -41,6 +42,7 @@ export default function Layout() {
   }
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarVisible, setSidebarVisible] = useState(true);
   const [peopleMenuOpen, setPeopleMenuOpen] = useState(false);
   const [financialMenuOpen, setFinancialMenuOpen] = useState(false);
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
@@ -166,6 +168,21 @@ export default function Layout() {
     }
   }, [darkMode]);
 
+  // Carregar a preferência de visibilidade do menu lateral do localStorage
+  useEffect(() => {
+    const savedSidebarVisibility = localStorage.getItem('sidebarVisible');
+    if (savedSidebarVisibility !== null) {
+      setSidebarVisible(savedSidebarVisibility === 'true');
+    }
+  }, []);
+
+  // Salvar a preferência de visibilidade do menu lateral no localStorage
+  const toggleSidebar = () => {
+    const newValue = !sidebarVisible;
+    setSidebarVisible(newValue);
+    localStorage.setItem('sidebarVisible', newValue.toString());
+  };
+
   const menuItems = [
     { name: "Dashboard", icon: <Home className="w-5 h-5" />, url: "Dashboard", permission: "view_dashboard" },
     {
@@ -283,7 +300,7 @@ export default function Layout() {
   return (
     <div className="flex h-screen bg-gray-100">
       {/* Sidebar para desktop */}
-      <aside className="hidden md:flex flex-col w-64 bg-[#294380] text-white">
+      <aside className={`hidden md:flex flex-col ${sidebarVisible ? 'w-64' : 'w-0'} bg-[#294380] text-white transition-all duration-300 ease-in-out overflow-hidden`}>
         <div className="p-4 border-b border-[#2D2F59]">
           <div className="flex flex-shrink-0 items-center justify-center">
             {companySettings.logo_url ? (
@@ -489,12 +506,24 @@ export default function Layout() {
         {/* Header */}
         <header className="bg-white dark:bg-gray-800 shadow-sm">
           <div className="flex items-center justify-between p-4">
-            <button
-              onClick={() => setSidebarOpen(true)}
-              className="md:hidden text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
-            >
-              <Menu className="w-6 h-6" />
-            </button>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="md:hidden text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
+              >
+                <Menu className="w-6 h-6" />
+              </button>
+              <button
+                onClick={toggleSidebar}
+                className="hidden md:block text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
+              >
+                {sidebarVisible ? (
+                  <ChevronLeft className="w-6 h-6" />
+                ) : (
+                  <Menu className="w-6 h-6" />
+                )}
+              </button>
+            </div>
             <div className="flex items-center space-x-4">
               <button 
                 onClick={() => setDarkMode(!darkMode)} 
