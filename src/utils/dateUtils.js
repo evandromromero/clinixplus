@@ -1,5 +1,6 @@
 // Utilitários para manipulação de datas no sistema
 import { format, parse, isValid } from 'date-fns';
+import { formatInTimeZone } from 'date-fns-tz';
 import { ptBR } from 'date-fns/locale';
 
 /**
@@ -33,24 +34,53 @@ export const normalizeDate = (date) => {
   if (!date) return format(new Date(), 'yyyy-MM-dd');
   
   try {
-    // Se já for string no formato YYYY-MM-DD, retorna diretamente
-    if (typeof date === 'string' && date.match(/^\d{4}-\d{2}-\d{2}$/)) {
-      return date;
-    }
-    
-    // Se for string ISO ou objeto Date
-    const dateObj = typeof date === 'string' ? new Date(date) : date;
-    
-    if (!isValid(dateObj)) {
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    let dateObj;
+
+    if (typeof date === 'string') {
+      // Se for apenas YYYY-MM-DD, considerar como data local
+      if (date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        const [year, month, day] = date.split('-').map(Number);
+        // Criar data no fuso horário local
+        dateObj = new Date(year, month - 1, day);
+      } else {
+        // Para datas com timezone (ISO), converter para local
+        const utcDate = new Date(date);
+        dateObj = new Date(
+          utcDate.getUTCFullYear(),
+          utcDate.getUTCMonth(),
+          utcDate.getUTCDate()
+        );
+      }
+    } else if (date instanceof Date) {
+      // Converter para data local
+      dateObj = new Date(
+        date.getFullYear(),
+        date.getMonth(),
+        date.getDate()
+      );
+    } else {
+      console.error('[dateUtils] Tipo de data inválido:', typeof date);
       return format(new Date(), 'yyyy-MM-dd');
     }
-    
-    // Extrai ano, mês e dia sem conversão de fuso horário
-    const year = dateObj.getFullYear();
-    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-    const day = String(dateObj.getDate()).padStart(2, '0');
-    
-    return `${year}-${month}-${day}`;
+
+    if (!isValid(dateObj)) {
+      console.error('[dateUtils] Data inválida:', date);
+      return format(new Date(), 'yyyy-MM-dd');
+    }
+
+    // Formatar a data local
+    const normalizedDate = format(dateObj, 'yyyy-MM-dd');
+
+    // Log para debug
+    console.log('[dateUtils] Normalização:', {
+      input: date,
+      timeZone,
+      dateObj: dateObj.toLocaleString(),
+      normalizedDate
+    });
+
+    return normalizedDate;
   } catch (error) {
     console.error('Erro ao normalizar data:', error);
     return format(new Date(), 'yyyy-MM-dd');

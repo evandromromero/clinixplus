@@ -247,7 +247,88 @@ export default function CashRegister() {
 
       // Buscar todas as transações
       const allTransactions = await FinancialTransaction.list();
-      console.log("[CashRegister] Todas as transações:", allTransactions);
+      
+      // Obter a data atual no formato yyyy-MM-dd
+      const today = format(new Date(), "yyyy-MM-dd");
+      console.log("[CashRegister] Filtrando transações para:", today);
+      
+      // Filtrar transações do dia atual
+      console.log("[CashRegister] Hora atual:", new Date().toISOString());
+      console.log("[CashRegister] Data de hoje:", today);
+      
+      // Primeiro encontrar a última transação de fechamento
+      const lastCloseTransaction = allTransactions
+        .filter(t => t.category === "fechamento_caixa")
+        .sort((a, b) => new Date(b.created_date) - new Date(a.created_date))[0];
+      
+      console.log("[CashRegister] Última transação de fechamento:", lastCloseTransaction);
+      
+      // Se tiver uma transação de fechamento hoje, o caixa está fechado
+      if (lastCloseTransaction && format(new Date(lastCloseTransaction.created_date), "yyyy-MM-dd") === today) {
+        console.log("[CashRegister] Encontrada transação de fechamento para hoje");
+        setCashIsOpen(false);
+        setHasPreviousDayOpenCash(false);
+        setPreviousOpenDate(null);
+        setDailyBalance(0);
+        setInitialAmount(0);
+        return;
+      }
+      
+      // Filtrar transações do dia atual
+      const todayTransactions = allTransactions.filter(t => {
+        const transDate = format(new Date(t.created_date), "yyyy-MM-dd");
+        const isToday = transDate === today;
+        
+        console.log("[CashRegister] Verificando transação:", {
+          id: t.id,
+          category: t.category,
+          created_date: t.created_date,
+          transDate,
+          isToday,
+          today
+        });
+        
+        return isToday;
+      });
+      
+      // Procurar por transações de abertura e fechamento em ordem cronológica reversa
+      const cashTransactions = allTransactions
+        .filter(t => t.category === "abertura_caixa" || t.category === "fechamento_caixa")
+        .sort((a, b) => new Date(b.created_date) - new Date(a.created_date));
+      
+      console.log("[CashRegister] Transações de caixa ordenadas:", 
+        cashTransactions.map(t => ({
+          id: t.id,
+          category: t.category,
+          created_date: t.created_date
+        })));
+      
+      // Pegar a última transação de caixa
+      const lastCashTransaction = cashTransactions[0];
+      
+      console.log("[CashRegister] Última transação de caixa:", lastCashTransaction);
+      
+      // Se a última transação for de fechamento, o caixa está fechado
+      const isOpen = lastCashTransaction && lastCashTransaction.category === "abertura_caixa";
+      
+      console.log("[CashRegister] Status do caixa:", {
+        isOpen,
+        lastTransactionCategory: lastCashTransaction?.category,
+        lastTransactionDate: lastCashTransaction?.created_date
+      });
+      
+      setCashIsOpen(isOpen);
+      setHasPreviousDayOpenCash(false);
+      setPreviousOpenDate(null);
+      
+      if (!isOpen) {
+        setDailyBalance(0);
+        setInitialAmount(0);
+      }
+      
+      console.log("[CashRegister] Status do caixa alterado:", isOpen ? "Aberto" : "Fechado");
+      console.log("[CashRegister] Valor inicial:", isOpen ? todayOpen?.initial_amount || 0 : 0);
+      console.log("[CashRegister] Saldo do dia:", isOpen ? (todayOpen?.amount || 0) : 0);
 
       // Filtrar transações de abertura não fechadas
       const openCashTransactions = allTransactions.filter(t => 
@@ -270,7 +351,7 @@ export default function CashRegister() {
         console.log("[CashRegister] Última transação de caixa aberta:", lastOpenTransaction);
 
         // Normalizar as datas para comparação
-        const transactionDate = formatDate(lastOpenTransaction.payment_date);
+        const transactionDate = formatDate(lastOpenTransaction.payment_date) || formatDate(lastOpenTransaction.created_date);
         const today = getCurrentDate();
         
         console.log("[CashRegister] Comparando datas:", {
@@ -278,31 +359,41 @@ export default function CashRegister() {
           today,
           isBeforeToday: transactionDate < today,
           rawTransactionDate: lastOpenTransaction.payment_date,
+          rawCreatedDate: lastOpenTransaction.created_date,
           closed_at: lastOpenTransaction.closed_at
         });
 
+        // Verificar primeiro se o caixa foi fechado
         if (lastOpenTransaction.closed_at) {
-          // Se o caixa foi fechado, não mostrar como aberto
           console.log("[CashRegister] Caixa já foi fechado em:", lastOpenTransaction.closed_at);
           setHasPreviousDayOpenCash(false);
           setPreviousOpenDate(null);
           setCashIsOpen(false);
           setDailyBalance(0);
           console.log("[CashRegister] Saldo do dia zerado por caixa fechado");
-        } else if (transactionDate < today) {
-          // Se a transação for de um dia anterior, mostrar alerta
+          return; // Sair da função se o caixa estiver fechado
+        }
+
+        // Se não estiver fechado, verificar as datas
+        if (transactionDate < today) {
           console.log("[CashRegister] Caixa aberto em dia anterior");
           setHasPreviousDayOpenCash(true);
           setPreviousOpenDate(transactionDate);
-          setCashIsOpen(false);
+          setCashIsOpen(false); // Caixa não está aberto para o dia atual
           setDailyBalance(0);
           console.log("[CashRegister] Saldo do dia zerado por caixa anterior");
-        } else {
-          // Se for do dia atual, marcar como caixa aberto
+        } else if (transactionDate === today) {
           console.log("[CashRegister] Caixa aberto hoje");
           setHasPreviousDayOpenCash(false);
           setPreviousOpenDate(null);
           setCashIsOpen(true);
+        } else {
+          // Se a data da transação for futura (não deveria acontecer)
+          console.log("[CashRegister] Data de transação inválida");
+          setHasPreviousDayOpenCash(false);
+          setPreviousOpenDate(null);
+          setCashIsOpen(false);
+          setDailyBalance(0);
         }
         
         // Atualizar valor inicial
@@ -578,22 +669,7 @@ export default function CashRegister() {
     }
   };
 
-  const loadClients = async () => {
-    try {
-      console.log("[CashRegister] Carregando clientes do Firebase...");
-      const clientsData = await Client.list();
-      console.log(`[CashRegister] ${clientsData.length} clientes carregados do Firebase`);
-      setClients(clientsData);
-    } catch (error) {
-      console.error("[CashRegister] Erro ao carregar clientes:", error);
-      
-      if (clients.length === 0) {
-        console.log("[CashRegister] Usando dados simulados de clientes");
-        const simData = generateSimulatedData();
-        setClients(simData.clients);
-      }
-    }
-  };
+  
 
   const loadAuthorizedEmployees = async () => {
     try {
@@ -632,19 +708,23 @@ export default function CashRegister() {
   }, [showOpenCashDialog]);
 
   const getTodayTransactions = () => {
-    const today = format(new Date(), "yyyy-MM-dd");
+    const today = normalizeDate(new Date());
     console.log("[CashRegister] Filtrando transações para:", today);
     
     return transactions.filter(t => {
       // Tentar pegar a data de várias propriedades possíveis
       let transactionDate = null;
+      let dateSource = '';
       
       if (t.payment_date) {
-        transactionDate = format(new Date(t.payment_date), "yyyy-MM-dd");
+        transactionDate = normalizeDate(t.payment_date);
+        dateSource = 'payment_date';
       } else if (t.created_date) {
-        transactionDate = format(new Date(t.created_date), "yyyy-MM-dd");
+        transactionDate = normalizeDate(t.created_date);
+        dateSource = 'created_date';
       } else if (t.date) {
-        transactionDate = format(new Date(t.date), "yyyy-MM-dd");
+        transactionDate = normalizeDate(t.date);
+        dateSource = 'date';
       }
       
       console.log("[CashRegister] Transação:", {
@@ -653,6 +733,7 @@ export default function CashRegister() {
         created_date: t.created_date,
         date: t.date,
         normalized_date: transactionDate,
+        dateSource,
         today: today,
         matches: transactionDate === today
       });
@@ -664,15 +745,62 @@ export default function CashRegister() {
   };
 
   const getTransactionsByDate = (date) => {
-    return transactions.filter(t => 
-      t.payment_date === date &&
-      t.category !== "abertura_caixa" &&
-      t.category !== "fechamento_caixa"
-    );
+    console.log("[CashRegister] Filtrando transações para data:", {
+      input: date,
+      inputType: typeof date,
+      normalizedInput: normalizeDate(date),
+      currentTime: new Date().toISOString(),
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+    });
+    
+    return transactions.filter(t => {
+      // Normalizar as datas usando a função normalizeDate
+      const targetDate = normalizeDate(date);
+      
+      // Priorizar payment_date, mas usar created_date como fallback
+      let transactionDate;
+      let dateSource = '';
+      
+      if (t.payment_date) {
+        transactionDate = normalizeDate(t.payment_date);
+        dateSource = 'payment_date';
+      } else if (t.created_date) {
+        transactionDate = normalizeDate(t.created_date);
+        dateSource = 'created_date';
+      } else {
+        console.log("[CashRegister] Transação sem data:", t);
+        return false;
+      }
+      
+      // Extrair componentes das datas para debug
+      const targetComponents = {
+        raw: date,
+        normalized: targetDate,
+        date: new Date(date)
+      };
+      
+      const transactionComponents = {
+        payment: t.payment_date ? new Date(t.payment_date) : null,
+        created: t.created_date ? new Date(t.created_date) : null,
+        normalized: transactionDate,
+        source: dateSource
+      };
+      
+      console.log("[CashRegister] Comparando datas:", {
+        id: t.id,
+        targetComponents,
+        transactionComponents,
+        matches: transactionDate === targetDate
+      });
+      
+      return transactionDate === targetDate &&
+             t.category !== "abertura_caixa" &&
+             t.category !== "fechamento_caixa";
+    });
   };
 
   const getIncomeByDate = (date) => {
-    const today = format(new Date(), "yyyy-MM-dd");
+    const today = normalizeDate(new Date());
     if (date === today) {
       return dailyReceipts;
     }
@@ -682,7 +810,7 @@ export default function CashRegister() {
   };
 
   const getExpensesByDate = (date) => {
-    const today = format(new Date(), "yyyy-MM-dd");
+    const today = normalizeDate(new Date());
     if (date === today) {
       return dailyExpenses;
     }
@@ -691,13 +819,13 @@ export default function CashRegister() {
       .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
   };
 
-  const getPaymentMethodTotal = (method, type, date = format(new Date(), "yyyy-MM-dd")) => {
+  const getPaymentMethodTotal = (method, type, date = normalizeDate(new Date())) => {
     return getTransactionsByDate(date)
       .filter(t => t.payment_method === method && t.type === type)
       .reduce((sum, t) => sum + t.amount, 0);
   };
   
-  const getCategoryTotal = (category, type, date = format(new Date(), "yyyy-MM-dd")) => {
+  const getCategoryTotal = (category, type, date = normalizeDate(new Date())) => {
     return getTransactionsByDate(date)
       .filter(t => t.category === category && t.type === type)
       .reduce((sum, t) => sum + t.amount, 0);
@@ -717,7 +845,7 @@ export default function CashRegister() {
     const [selectedEmployee, setSelectedEmployee] = useState("");
     const [initialAmount, setInitialAmount] = useState(0);
     const [notes, setNotes] = useState("");
-    const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
+    const [date, setDate] = useState(normalizeDate(new Date()));
 
     const handleSubmit = async () => {
       if (!selectedEmployee) {
@@ -807,7 +935,7 @@ export default function CashRegister() {
     );
   };
 
-  const handleOpenCash = async (employeeName, initialAmount, notes = "", cashDate = format(new Date(), "yyyy-MM-dd")) => {
+  const handleOpenCash = async (employeeName, initialAmount, notes = "", cashDate = normalizeDate(new Date())) => {
     try {
       console.log("[CashRegister] Abrindo caixa para a data:", cashDate);
       
@@ -963,8 +1091,10 @@ export default function CashRegister() {
     const formatDate = (dateStr) => {
       if (!dateStr) return '-';
       try {
-        return format(parseISO(dateStr), "dd/MM/yyyy");
+        const normalizedDate = normalizeDate(dateStr);
+        return format(parseISO(normalizedDate), "dd/MM/yyyy");
       } catch (e) {
+        console.error("Erro ao formatar data:", e, dateStr);
         return '-';
       }
     };
@@ -972,8 +1102,10 @@ export default function CashRegister() {
     const formatTime = (dateStr) => {
       if (!dateStr) return '-';
       try {
-        return format(parseISO(dateStr), "HH:mm");
+        const normalizedDate = normalizeDate(dateStr);
+        return format(parseISO(normalizedDate), "HH:mm");
       } catch (e) {
+        console.error("Erro ao formatar hora:", e, dateStr);
         return '-';
       }
     };
@@ -1138,8 +1270,10 @@ export default function CashRegister() {
     const formatDate = (dateStr) => {
       if (!dateStr) return '-';
       try {
-        return format(parseISO(dateStr), "dd/MM/yyyy");
+        const normalizedDate = normalizeDate(dateStr);
+        return format(parseISO(normalizedDate), "dd/MM/yyyy");
       } catch (e) {
+        console.error("Erro ao formatar data:", e, dateStr);
         return '-';
       }
     };
@@ -1147,8 +1281,10 @@ export default function CashRegister() {
     const formatTime = (dateStr) => {
       if (!dateStr) return '-';
       try {
-        return format(parseISO(dateStr), "HH:mm");
+        const normalizedDate = normalizeDate(dateStr);
+        return format(parseISO(normalizedDate), "HH:mm");
       } catch (e) {
+        console.error("Erro ao formatar hora:", e, dateStr);
         return '-';
       }
     };
@@ -1255,7 +1391,7 @@ export default function CashRegister() {
 
     const options = {
       margin: 10,
-      filename: `caixa_${format(new Date(), 'dd-MM-yyyy')}.pdf`,
+      filename: `caixa_${format(parseISO(normalizeDate(new Date())), 'dd-MM-yyyy')}.pdf`,
       image: { type: 'jpeg', quality: 0.98 },
       html2canvas: { scale: 2 },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
@@ -1388,9 +1524,9 @@ export default function CashRegister() {
     try {
       // Formatar datas para exibição
       const openedAtFormatted = cashData.opened_at ? 
-        format(new Date(cashData.opened_at), "dd/MM/yyyy HH:mm") : "N/A";
+        format(parseISO(normalizeDate(cashData.opened_at)), "dd/MM/yyyy HH:mm") : "N/A";
       const closedAtFormatted = cashData.closed_at ? 
-        format(new Date(cashData.closed_at), "dd/MM/yyyy HH:mm") : "N/A";
+        format(parseISO(normalizeDate(cashData.closed_at)), "dd/MM/yyyy HH:mm") : "N/A";
       
       // Calcular totais por método de pagamento
       const paymentMethodTotals = {};
@@ -1419,7 +1555,7 @@ export default function CashRegister() {
         const amount = parseFloat(t.amount) || 0;
         const formattedAmount = amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
         const transactionDate = t.payment_date ? 
-          format(new Date(t.payment_date), "dd/MM/yyyy HH:mm") : "N/A";
+          format(parseISO(normalizeDate(t.payment_date)), "dd/MM/yyyy HH:mm") : "N/A";
         
         return `
           <tr>
@@ -1555,8 +1691,8 @@ export default function CashRegister() {
     
     try {
       // Formatar a data para exibição e consulta
-      const displayDate = format(date, "dd/MM/yyyy");
-      const queryDate = format(date, "yyyy-MM-dd");
+      const queryDate = normalizeDate(date);
+      const displayDate = format(parseISO(queryDate), "dd/MM/yyyy");
       console.log("[CashRegister] Visualizando caixa da data:", displayDate);
       
       // Buscar todas as transações
@@ -1573,12 +1709,7 @@ export default function CashRegister() {
         if (!transaction.payment_date) return false;
         
         // Normalizar a data da transação para comparação
-        let transactionDate;
-        if (transaction.payment_date.length === 10) {
-          transactionDate = transaction.payment_date;
-        } else {
-          transactionDate = transaction.payment_date.split('T')[0];
-        }
+        const transactionDate = normalizeDate(transaction.payment_date);
         
         return transactionDate === queryDate;
       });
@@ -1602,16 +1733,8 @@ export default function CashRegister() {
         if (transaction.category !== 'abertura_caixa') return false;
         
         if (transaction.payment_date) {
-          // Lidar com diferentes formatos de data
-          let transactionDate;
-          
-          // Verificar se a data já está no formato yyyy-MM-dd
-          if (transaction.payment_date.length === 10) {
-            transactionDate = transaction.payment_date;
-          } else {
-            // Extrair apenas a parte da data (yyyy-MM-dd) de formatos com timestamp
-            transactionDate = transaction.payment_date.split('T')[0];
-          }
+          // Normalizar a data da transação
+          const transactionDate = normalizeDate(transaction.payment_date);
           
           const match = transactionDate === queryDate;
           if (match) {
@@ -1627,16 +1750,8 @@ export default function CashRegister() {
         if (transaction.category !== 'fechamento_caixa') return false;
         
         if (transaction.payment_date) {
-          // Lidar com diferentes formatos de data
-          let transactionDate;
-          
-          // Verificar se a data já está no formato yyyy-MM-dd
-          if (transaction.payment_date.length === 10) {
-            transactionDate = transaction.payment_date;
-          } else {
-            // Extrair apenas a parte da data (yyyy-MM-dd) de formatos com timestamp
-            transactionDate = transaction.payment_date.split('T')[0];
-          }
+          // Normalizar a data da transação
+          const transactionDate = normalizeDate(transaction.payment_date);
           
           const match = transactionDate === queryDate;
           if (match) {
@@ -1681,13 +1796,14 @@ export default function CashRegister() {
   };
 
   const getCashRegisterByDate = (date) => {
+    const normalizedDate = normalizeDate(date);
     const opening = cashRegisters.find(r => 
       r.category === "abertura_caixa" && 
-      r.payment_date === date
+      normalizeDate(r.payment_date) === normalizedDate
     );
     const closing = cashRegisters.find(r => 
       r.category === "fechamento_caixa" && 
-      r.payment_date === date
+      normalizeDate(r.payment_date) === normalizedDate
     );
     return { opening, closing };
   };
@@ -1700,7 +1816,7 @@ export default function CashRegister() {
       }
       
       // Definir a data de hoje
-      const today = format(new Date(), "yyyy-MM-dd");
+      const today = normalizeDate(new Date());
       
       // Filtrar transações excluídas
       const activeTransactions = transactions.filter(transaction => 
@@ -1730,11 +1846,11 @@ export default function CashRegister() {
         console.log(`Valor inicial do caixa: R$ ${initialAmountValue.toFixed(2)}`);
         
         // Data de abertura do caixa
-        const openingDate = lastOpeningTransaction.payment_date ? lastOpeningTransaction.payment_date.split('T')[0] : format(new Date(), "yyyy-MM-dd");
+        const openingDate = lastOpeningTransaction.payment_date ? normalizeDate(lastOpeningTransaction.payment_date) : normalizeDate(new Date());
         
         // Filtrar transações após a abertura do caixa
         const transactionsAfterOpening = activeTransactions.filter(t => {
-          const transactionDate = t.payment_date ? t.payment_date.split('T')[0] : null;
+          const transactionDate = t.payment_date ? normalizeDate(t.payment_date) : null;
           return transactionDate >= openingDate;
         });
         
@@ -1896,12 +2012,96 @@ export default function CashRegister() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col gap-4">
         <h2 className="text-3xl font-bold text-[#0D0F36]">
           Caixa
-          <span className="text-base font-normal text-gray-500 ml-2">Controle de entradas e saídas do caixa</span>
+          <span className="text-base font-normal text-gray-500 ml-2 hidden sm:inline">Controle de entradas e saídas do caixa</span>
         </h2>
-        <div className="flex gap-2">
+        
+        {/* Botões principais - visíveis em dispositivos móveis */}
+        <div className="grid grid-cols-2 sm:hidden gap-2 mb-2">
+          <Button 
+            onClick={() => setShowNewTransactionDialog(true)}
+            className="bg-[#294380] hover:bg-[#0D0F36] w-full"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Nova Transação
+          </Button>
+          {cashIsOpen ? (
+            <Button 
+              onClick={() => setShowCloseCashDialog(true)}
+              variant="outline" 
+              className="text-[#294380] border-[#294380] w-full"
+            >
+              <Lock className="w-4 h-4 mr-2" />
+              Fechar Caixa
+            </Button>
+          ) : (
+            <Button 
+              onClick={() => setShowOpenCashDialog(true)}
+              variant="outline" 
+              className="text-[#294380] border-[#294380] w-full"
+              disabled={cashIsOpen}
+            >
+              <Unlock className="w-4 h-4 mr-2" />
+              Abrir Caixa
+            </Button>
+          )}
+        </div>
+        
+        {/* Menu de opções adicionais para mobile */}
+        <div className="sm:hidden">
+          <Select
+            onValueChange={(value) => {
+              if (value === "report") handleOpenReport();
+              if (value === "historic") setShowHistoricCashDialog(true);
+              if (value === "refresh") {
+                loadTransactionsWithRetry();
+                loadClients();
+                loadAuthorizedEmployees();
+              }
+              if (value === "clear") {
+                console.log("[CashRegister] Limpando cache local...");
+                loadTransactionsWithRetry();
+                loadClients();
+                loadAuthorizedEmployees();
+              }
+            }}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Mais opções..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="report">
+                <div className="flex items-center">
+                  <FileText className="w-4 h-4 mr-2" />
+                  <span>Relatório</span>
+                </div>
+              </SelectItem>
+              <SelectItem value="historic">
+                <div className="flex items-center">
+                  <CalendarIcon className="w-4 h-4 mr-2" />
+                  <span>Caixas Anteriores</span>
+                </div>
+              </SelectItem>
+              <SelectItem value="refresh">
+                <div className="flex items-center">
+                  <RefreshCcw className="w-4 h-4 mr-2" />
+                  <span>Atualizar</span>
+                </div>
+              </SelectItem>
+              <SelectItem value="clear">
+                <div className="flex items-center">
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  <span>Limpar Cache</span>
+                </div>
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        
+        {/* Botões para desktop - escondidos em mobile */}
+        <div className="hidden sm:flex gap-2">
           <Button 
             variant="outline" 
             onClick={() => {
@@ -2026,15 +2226,16 @@ export default function CashRegister() {
         </Card>
       )}
       
-      <div className="grid gap-6 md:grid-cols-4">
+      {/* Cards de resumo - layout responsivo */}
+      <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
         <Card className="bg-gradient-to-br from-[#F1F6CE] to-white">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-[#0D0F36]">Saldo em Dinheiro</CardTitle>
+          <CardHeader className="pb-1 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm text-[#0D0F36]">Saldo em Dinheiro</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-2">
-              <DollarSign className={`h-5 w-5 ${expectedCashAmount >= 0 ? 'text-green-500' : 'text-red-500'}`} />
-              <span className="text-2xl font-bold">
+          <CardContent className="p-3 sm:p-6">
+            <div className="flex items-center gap-1 sm:gap-2">
+              <DollarSign className={`h-4 w-4 sm:h-5 sm:w-5 ${expectedCashAmount >= 0 ? 'text-green-500' : 'text-red-500'}`} />
+              <span className="text-lg sm:text-2xl font-bold">
                 {formatCurrency(expectedCashAmount)}
               </span>
             </div>
@@ -2042,13 +2243,13 @@ export default function CashRegister() {
         </Card>
 
         <Card className="bg-gradient-to-br from-[#B9F1D6] to-white">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-[#0D0F36]">Receitas de Hoje</CardTitle>
+          <CardHeader className="pb-1 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm text-[#0D0F36]">Receitas de Hoje</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-2">
-              <ArrowUpRight className="h-5 w-5 text-green-500" />
-              <span className="text-2xl font-bold text-green-600">
+          <CardContent className="p-3 sm:p-6">
+            <div className="flex items-center gap-1 sm:gap-2">
+              <ArrowUpRight className="h-4 w-4 sm:h-5 sm:w-5 text-green-500" />
+              <span className="text-lg sm:text-2xl font-bold text-green-600">
                 {formatCurrency(dailyReceipts)}
               </span>
             </div>
@@ -2056,13 +2257,13 @@ export default function CashRegister() {
         </Card>
 
         <Card className="bg-gradient-to-br from-[#69D2CD]/30 to-white">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-[#0D0F36]">Despesas de Hoje</CardTitle>
+          <CardHeader className="pb-1 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm text-[#0D0F36]">Despesas de Hoje</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-2">
-              <ArrowDownRight className="h-5 w-5 text-red-500" />
-              <span className="text-2xl font-bold text-red-600">
+          <CardContent className="p-3 sm:p-6">
+            <div className="flex items-center gap-1 sm:gap-2">
+              <ArrowDownRight className="h-4 w-4 sm:h-5 sm:w-5 text-red-500" />
+              <span className="text-lg sm:text-2xl font-bold text-red-600">
                 {formatCurrency(dailyExpenses)}
               </span>
             </div>
@@ -2070,13 +2271,13 @@ export default function CashRegister() {
         </Card>
 
         <Card className="bg-gradient-to-br from-[#0D0F36] to-[#294380]">
-          <CardHeader>
-            <CardTitle className="text-sm text-white">Saldo do Dia</CardTitle>
+          <CardHeader className="pb-1 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm text-white">Saldo do Dia</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-2">
-              <CircleDollarSign className="h-5 w-5 text-[#F1F6CE]" />
-              <span className="text-2xl font-bold text-[#F1F6CE]">
+          <CardContent className="p-3 sm:p-6">
+            <div className="flex items-center gap-1 sm:gap-2">
+              <CircleDollarSign className="h-4 w-4 sm:h-5 sm:w-5 text-[#F1F6CE]" />
+              <span className="text-lg sm:text-2xl font-bold text-[#F1F6CE]">
                 {formatCurrency(dailyBalance)}
               </span>
             </div>
@@ -2089,7 +2290,8 @@ export default function CashRegister() {
           <CardTitle>Transações de Hoje</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="rounded-md border">
+          {/* Tabela para desktop */}
+          <div className="rounded-md border hidden sm:block">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -2106,7 +2308,7 @@ export default function CashRegister() {
                   getTodayTransactions().map((transaction, index) => (
                     <TableRow key={index}>
                       <TableCell>
-                        {format(new Date(transaction.payment_date || transaction.created_date), "dd/MM/yyyy HH:mm")}
+                        {format(parseISO(normalizeDate(transaction.payment_date || transaction.created_date)), "dd/MM/yyyy HH:mm")}
                       </TableCell>
                       <TableCell>{transaction.client_name}</TableCell>
                       <TableCell>{transaction.description}</TableCell>
@@ -2132,6 +2334,58 @@ export default function CashRegister() {
                 )}
               </TableBody>
             </Table>
+          </div>
+          
+          {/* Cards para mobile */}
+          <div className="sm:hidden space-y-4">
+            {getTodayTransactions().length > 0 ? (
+              getTodayTransactions().map((transaction, index) => (
+                <Card key={index} className="overflow-hidden">
+                  <div className="p-4 bg-gray-50 border-b flex justify-between items-center">
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium">{transaction.description}</span>
+                      <span className="text-xs text-gray-500">
+                        {format(parseISO(normalizeDate(transaction.payment_date || transaction.created_date)), "dd/MM/yyyy HH:mm")}
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <span className={`text-lg font-bold ${transaction.type === 'receita' ? 'text-green-600' : 'text-red-600'}`}>
+                        {formatCurrency(transaction.amount)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="p-3 grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <span className="text-gray-500 block">Cliente</span>
+                      <span className="font-medium">{transaction.client_name || "N/A"}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 block">Método</span>
+                      <span className="font-medium">{transaction.payment_method_name}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 block">Status</span>
+                      <Badge 
+                        variant={transaction.status === "pago" ? "success" : "warning"}
+                        className="mt-1"
+                      >
+                        {transaction.status === "pago" ? "Pago" : "Pendente"}
+                      </Badge>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 block">Tipo</span>
+                      <span className="font-medium">
+                        {transaction.type === 'receita' ? 'Entrada' : 'Saída'}
+                      </span>
+                    </div>
+                  </div>
+                </Card>
+              ))
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                Nenhuma transação registrada hoje
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
