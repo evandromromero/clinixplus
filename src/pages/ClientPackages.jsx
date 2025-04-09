@@ -81,6 +81,21 @@ export default function ClientPackages() {
     total_sessions: 0,
     expiration_date: ""
   });
+  
+  // Estado para controlar o modo de venda (pacote existente, novo ou personalizado)
+  const [sellMode, setSellMode] = useState("existing"); // "existing", "new", "custom"
+  
+  // Estado para o pacote personalizado
+  const [customPackageForm, setCustomPackageForm] = useState({
+    name: "",
+    description: "",
+    validity_days: 90,
+    services: [],
+    total_price: 0,
+    discount: 0,
+    discount_type: "percentage",
+    desired_price: ""
+  });
   const [showNewPackageDialog, setShowNewPackageDialog] = useState(false);
   const [packageForm, setPackageForm] = useState({
     name: "",
@@ -288,6 +303,312 @@ export default function ClientPackages() {
       });
     }
   };
+  
+  // Função para vender pacote personalizado
+  // Função para adicionar serviço ao pacote personalizado
+  const handleAddServiceToCustomPackage = () => {
+    try {
+      if (!selectedServiceId) {
+        toast({
+          title: "Erro",
+          description: "Selecione um serviço para adicionar",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      const service = services.find(s => s.id === selectedServiceId);
+      if (!service) {
+        toast({
+          title: "Erro",
+          description: "Serviço não encontrado",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Verifica se o serviço já existe no pacote personalizado
+      const existingServiceIndex = customPackageForm.services.findIndex(
+        s => s.service_id === selectedServiceId
+      );
+
+      if (existingServiceIndex >= 0) {
+        // Atualiza a quantidade se o serviço já existe
+        const updatedServices = [...customPackageForm.services];
+        updatedServices[existingServiceIndex].quantity += selectedServiceQuantity;
+        
+        setCustomPackageForm({
+          ...customPackageForm,
+          services: updatedServices
+        });
+      } else {
+        // Adiciona o serviço se não existir
+        setCustomPackageForm({
+          ...customPackageForm,
+          services: [
+            ...customPackageForm.services,
+            {
+              service_id: selectedServiceId,
+              name: service.name,
+              quantity: selectedServiceQuantity,
+              price: parseFloat(service.price)
+            }
+          ]
+        });
+      }
+
+      // Limpa os campos
+      setSelectedServiceId("");
+      setSelectedServiceQuantity(1);
+      setServiceSearchTerm("");
+    } catch (error) {
+      console.error("Erro ao adicionar serviço ao pacote personalizado:", error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível adicionar o serviço",
+        variant: "destructive"
+      });
+    }
+  };
+  
+  // Função para remover serviço do pacote personalizado
+  const handleRemoveServiceFromCustomPackage = (index) => {
+    try {
+      const updatedServices = [...customPackageForm.services];
+      updatedServices.splice(index, 1);
+      
+      setCustomPackageForm({
+        ...customPackageForm,
+        services: updatedServices
+      });
+    } catch (error) {
+      console.error("Erro ao remover serviço do pacote personalizado:", error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível remover o serviço",
+        variant: "destructive"
+      });
+    }
+  };
+  
+  // Função para calcular o subtotal do pacote personalizado
+  const calculateCustomPackageSubtotal = () => {
+    return customPackageForm.services.reduce((total, service) => {
+      return total + (parseFloat(service.price) * parseInt(service.quantity));
+    }, 0);
+  };
+  
+  // Função para calcular o desconto do pacote personalizado
+  const calculateCustomPackageDiscount = () => {
+    const subtotal = calculateCustomPackageSubtotal();
+    let discount = 0;
+    
+    if (customPackageForm.discount_type === "percentage") {
+      discount = (subtotal * parseFloat(customPackageForm.discount)) / 100;
+    } else if (customPackageForm.discount_type === "fixed") {
+      discount = parseFloat(customPackageForm.discount);
+    } else if (customPackageForm.discount_type === "desired_price") {
+      if (customPackageForm.desired_price === "") {
+        discount = 0;
+      } else {
+        const desiredPrice = parseFloat(customPackageForm.desired_price);
+        if (desiredPrice < subtotal) {
+          discount = subtotal - desiredPrice;
+        } else {
+          discount = 0;
+        }
+      }
+    }
+    
+    return discount;
+  };
+  
+  // Função para calcular o total do pacote personalizado
+  const calculateCustomPackageTotal = () => {
+    const subtotal = calculateCustomPackageSubtotal();
+    const discount = calculateCustomPackageDiscount();
+    
+    if (customPackageForm.discount_type === "desired_price" && customPackageForm.desired_price !== "") {
+      return parseFloat(customPackageForm.desired_price);
+    }
+    
+    return subtotal - discount;
+  };
+  
+  // Função para alterar o tipo de desconto do pacote personalizado
+  const handleCustomDiscountTypeChange = (type) => {
+    setCustomPackageForm({
+      ...customPackageForm,
+      discount_type: type,
+      discount: 0,
+      desired_price: ""
+    });
+  };
+  
+  // Função para alterar o desconto do pacote personalizado
+  const handleCustomDiscountChange = (value, type) => {
+    setCustomPackageForm({
+      ...customPackageForm,
+      discount: value,
+      discount_type: type
+    });
+  };
+  
+  // Função para alterar o preço desejado do pacote personalizado
+  const handleCustomDesiredPriceChange = (value) => {
+    setCustomPackageForm({
+      ...customPackageForm,
+      desired_price: value,
+      discount_type: "desired_price"
+    });
+  };
+  
+  // Função para validar os campos do pacote personalizado
+  const validateCustomPackage = () => {
+    if (!sellForm.client_id) {
+      toast({
+        title: "Erro",
+        description: "É necessário selecionar um cliente",
+        variant: "destructive"
+      });
+      return false;
+    }
+
+    if (!customPackageForm.name || customPackageForm.name.trim() === "") {
+      toast({
+        title: "Erro",
+        description: "É necessário informar um nome para o pacote personalizado",
+        variant: "destructive"
+      });
+      return false;
+    }
+
+    if (customPackageForm.services.length === 0) {
+      toast({
+        title: "Erro",
+        description: "É necessário adicionar pelo menos um serviço ao pacote personalizado",
+        variant: "destructive"
+      });
+      return false;
+    }
+
+    return true;
+  };
+
+  const handleSellCustomPackage = async () => {
+    try {
+      // Validar os campos antes de prosseguir
+      if (!validateCustomPackage()) {
+        return;
+      }
+      
+      // Calcula o preço final
+      const finalPrice = calculateCustomPackageTotal();
+      
+      // Calcula o total de sessões
+      const totalSessions = customPackageForm.services.reduce((total, service) => {
+        return total + parseInt(service.quantity);
+      }, 0);
+      
+      // Define a data de compra como a data atual
+      const purchaseDate = new Date();
+      // Calcula a data de expiração
+      const expirationDate = addDays(purchaseDate, customPackageForm.validity_days);
+      
+      // Cria um snapshot do pacote personalizado
+      const packageSnapshot = {
+        id: `custom_${Date.now()}`,
+        name: customPackageForm.name,
+        description: customPackageForm.description || "Pacote personalizado",
+        validity_days: customPackageForm.validity_days,
+        services: customPackageForm.services,
+        total_price: finalPrice,
+        discount: calculateCustomPackageDiscount(),
+        discount_type: customPackageForm.discount_type,
+        color: "#294380",
+        is_custom: true
+      };
+      
+      // Cria o pacote do cliente
+      const newClientPackage = {
+        client_id: sellForm.client_id,
+        package_id: packageSnapshot.id,
+        purchase_date: format(purchaseDate, 'yyyy-MM-dd'),
+        expiration_date: format(expirationDate, 'yyyy-MM-dd'),
+        total_sessions: totalSessions,
+        sessions_used: 0,
+        status: 'ativo',
+        session_history: [],
+        package_snapshot: packageSnapshot,
+        is_custom_package: true
+      };
+      
+      const createdPackage = await ClientPackage.create(newClientPackage);
+      
+      // Cria uma venda não finalizada
+      await UnfinishedSale.create({
+        client_id: sellForm.client_id,
+        type: 'pacote',
+        items: [
+          {
+            item_id: packageSnapshot.id,
+            name: packageSnapshot.name,
+            quantity: 1,
+            price: finalPrice,
+            discount: calculateCustomPackageDiscount()
+          }
+        ],
+        total_amount: finalPrice,
+        client_package_id: createdPackage.id,
+        date_created: new Date().toISOString(),
+        status: 'pendente'
+      });
+      
+      // Redireciona para a página de registro de venda
+      const saleParams = new URLSearchParams({
+        type: 'pacote',
+        client_id: sellForm.client_id,
+        client_package_id: createdPackage.id,
+        amount: finalPrice
+      }).toString();
+      
+      navigate(createPageUrl('SalesRegister', saleParams));
+      
+      // Limpa o formulário e fecha a modal
+      setShowSellDialog(false);
+      setSellForm({
+        client_id: "",
+        package_id: "",
+        purchase_date: format(new Date(), 'yyyy-MM-dd'),
+        total_sessions: 0,
+        expiration_date: ""
+      });
+      
+      setCustomPackageForm({
+        name: "",
+        description: "",
+        validity_days: 90,
+        services: [],
+        total_price: 0,
+        discount: 0,
+        discount_type: "percentage",
+        desired_price: ""
+      });
+      
+      toast({
+        title: "Sucesso",
+        description: "Pacote personalizado criado com sucesso! Redirecionando para lançar a venda...",
+        variant: "success"
+      });
+    } catch (error) {
+      console.error("Erro ao vender pacote personalizado:", error);
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao criar pacote personalizado. Tente novamente.",
+        variant: "destructive"
+      });
+    }
+  };
 
   useEffect(() => {
     // Carregar o usuário atual do localStorage
@@ -309,10 +630,10 @@ export default function ClientPackages() {
     loadData();
     checkUnfinishedSales();
     
-    // Verificar a cada 5 segundos se há atualizações nas vendas
+    // Verificar a cada 30 segundos se há atualizações nas vendas
     const interval = setInterval(() => {
       checkUnfinishedSaleStatus();
-    }, 5000);
+    }, 30000);
 
     // Limpar o intervalo quando o componente for desmontado
     return () => clearInterval(interval);
@@ -419,24 +740,29 @@ export default function ClientPackages() {
       const sales = await Sale.list();
       const unfinishedSalesList = await UnfinishedSale.list();
       
+      let updatedAny = false;
+      
       for (const unfinishedSale of unfinishedSalesList) {
         // Procura uma venda paga correspondente pelo sale_id
         const paidSale = sales.find(sale => 
           sale.status === 'pago' && sale.sale_id === unfinishedSale.sale_id
         );
         
-        if (paidSale) {
+        if (paidSale && unfinishedSale.status !== 'concluida') {
           console.log('Encontrada venda paga:', paidSale.sale_id);
           // Atualiza o status da venda não finalizada
           await UnfinishedSale.update(unfinishedSale.id, {
             status: 'concluida',
             date_completed: new Date().toISOString()
           });
+          updatedAny = true;
         }
       }
       
-      // Recarrega a lista de vendas não finalizadas
-      await checkUnfinishedSales();
+      // Só recarrega a lista se alguma venda foi atualizada
+      if (updatedAny) {
+        await checkUnfinishedSales();
+      }
     } catch (error) {
       console.error("Erro ao verificar status de vendas não finalizadas:", error);
     }
@@ -1727,15 +2053,35 @@ export default function ClientPackages() {
       )}
 
       <Dialog open={showSellDialog} onOpenChange={setShowSellDialog}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[650px]">
           <DialogHeader>
             <DialogTitle>Vender Pacote</DialogTitle>
           </DialogHeader>
 
           <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-1 gap-3">
+            {/* Opções de modo de venda */}
+            <div className="flex justify-center space-x-4 mb-2">
+              <Button 
+                variant={sellMode === "existing" ? "default" : "outline"}
+                className={sellMode === "existing" ? "bg-purple-600 hover:bg-purple-700 px-6" : "px-6"}
+                onClick={() => setSellMode("existing")}
+              >
+                Pacote Existente
+              </Button>
+              <Button 
+                variant={sellMode === "custom" ? "default" : "outline"}
+                className={sellMode === "custom" ? "bg-purple-600 hover:bg-purple-700 px-6" : "px-6"}
+                onClick={() => setSellMode("custom")}
+              >
+                Pacote Personalizado
+              </Button>
+            </div>
+            
+            <div className="grid grid-cols-1 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="client">Cliente</Label>
+                <Label htmlFor="client" className="flex items-center">
+                  Cliente <span className="text-red-500 ml-1">*</span>
+                </Label>
                 <div className="relative">
                   <div className="flex items-center space-x-2">
                     <div className="relative flex-1">
@@ -1783,88 +2129,299 @@ export default function ClientPackages() {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="package">Pacote</Label>
-                <div className="flex space-x-2">
-                  <div className="relative flex-1">
-                    <Input
-                      placeholder="Buscar pacote por nome ou descrição..."
-                      value={packageSearchTerm}
-                      onChange={(e) => {
-                        setPackageSearchTerm(e.target.value);
-                        handleSearchPackages(e.target.value);
-                        setShowPackageSearch(true);
+              {sellMode === "existing" && (
+                <div className="space-y-2">
+                  <Label htmlFor="package">Pacote</Label>
+                  <div className="flex space-x-2">
+                    <div className="relative flex-1">
+                      <Input
+                        placeholder="Buscar pacote por nome ou descrição..."
+                        value={packageSearchTerm}
+                        onChange={(e) => {
+                          setPackageSearchTerm(e.target.value);
+                          handleSearchPackages(e.target.value);
+                          setShowPackageSearch(true);
+                        }}
+                        onFocus={() => setShowPackageSearch(true)}
+                        className="pr-8"
+                      />
+                      <Search className="absolute right-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+
+                      {showPackageSearch && packageSearchResults.length > 0 && (
+                        <div className="absolute z-10 w-full mt-1 bg-white rounded-md shadow-lg border max-h-60 overflow-auto">
+                          {packageSearchResults.map((pkg) => (
+                            <button
+                              key={pkg.id}
+                              className="w-full text-left px-4 py-2 hover:bg-gray-100"
+                              onClick={() => {
+                                handlePackageChange(pkg.id);
+                                setPackageSearchTerm(pkg.name);
+                                setShowPackageSearch(false);
+                              }}
+                            >
+                              <div className="font-medium">{pkg.name}</div>
+                              <div className="text-sm text-gray-500">
+                                R$ {pkg.total_price.toFixed(2)} • {pkg.validity_days} dias
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => {
+                        setShowSellDialog(false);
+                        setShowNewPackageDialog(true);
                       }}
-                      onFocus={() => setShowPackageSearch(true)}
-                      className="pr-8"
-                    />
-                    <Search className="absolute right-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-
-                    {showPackageSearch && packageSearchResults.length > 0 && (
-                      <div className="absolute z-10 w-full mt-1 bg-white rounded-md shadow-lg border max-h-60 overflow-auto">
-                        {packageSearchResults.map((pkg) => (
-                          <button
-                            key={pkg.id}
-                            className="w-full text-left px-4 py-2 hover:bg-gray-100"
-                            onClick={() => {
-                              handlePackageChange(pkg.id);
-                              setPackageSearchTerm(pkg.name);
-                              setShowPackageSearch(false);
-                            }}
-                          >
-                            <div className="font-medium">{pkg.name}</div>
-                            <div className="text-sm text-gray-500">
-                              R$ {pkg.total_price.toFixed(2)} • {pkg.validity_days} dias
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    )}
+                    >
+                      <PlusCircle className="h-4 w-4 mr-2" />
+                      Criar Novo
+                    </Button>
                   </div>
-                  <Button 
-                    variant="outline" 
-                    onClick={() => {
-                      setShowSellDialog(false);
-                      setShowNewPackageDialog(true);
-                    }}
-                  >
-                    <PlusCircle className="h-4 w-4 mr-2" />
-                    Criar Novo
-                  </Button>
                 </div>
-              </div>
+              )}
+              
+              {sellMode === "custom" && (
+                <div className="max-h-[50vh] overflow-y-auto pr-2 space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="custom_package_name" className="flex items-center">
+                      Nome do Pacote Personalizado <span className="text-red-500 ml-1">*</span>
+                    </Label>
+                    <Input
+                      id="custom_package_name"
+                      placeholder="Ex: Pacote Facial Personalizado"
+                      value={customPackageForm.name}
+                      onChange={(e) => setCustomPackageForm({...customPackageForm, name: e.target.value})}
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="custom_validity_days">Validade (dias)</Label>
+                    <Input
+                      id="custom_validity_days"
+                      type="number"
+                      value={customPackageForm.validity_days}
+                      onChange={(e) => setCustomPackageForm({...customPackageForm, validity_days: parseInt(e.target.value)})}
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label className="flex items-center">
+                      Adicionar Serviços <span className="text-red-500 ml-1">*</span>
+                    </Label>
+                    <div className="flex space-x-2">
+                      <div className="relative flex-1">
+                        <Input
+                          placeholder="Buscar serviço..."
+                          value={serviceSearchTerm}
+                          onChange={(e) => {
+                            setServiceSearchTerm(e.target.value);
+                            handleSearchServices(e.target.value);
+                            setShowServiceSearch(true);
+                          }}
+                          onFocus={() => setShowServiceSearch(true)}
+                          className="pr-8"
+                        />
+                        <Search className="absolute right-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <Label htmlFor="purchase_date">Data da Compra</Label>
-                  <Input
-                    id="purchase_date"
-                    type="date"
-                    value={sellForm.purchase_date}
-                    onChange={(e) => handlePurchaseDateChange(e.target.value)}
-                  />
+                        {showServiceSearch && serviceSearchResults.length > 0 && (
+                          <div className="absolute z-10 w-full mt-1 bg-white rounded-md shadow-lg border max-h-60 overflow-auto">
+                            {serviceSearchResults.map((service) => (
+                              <button
+                                key={service.id}
+                                className="w-full text-left px-4 py-2 hover:bg-gray-100"
+                                onClick={() => {
+                                  setSelectedServiceId(service.id);
+                                  setServiceSearchTerm(service.name);
+                                  setShowServiceSearch(false);
+                                }}
+                              >
+                                <div className="font-medium">{service.name}</div>
+                                <div className="text-sm text-gray-500">
+                                  R$ {parseFloat(service.price).toFixed(2)}
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <Input
+                        type="number"
+                        min="1"
+                        value={selectedServiceQuantity}
+                        onChange={(e) => setSelectedServiceQuantity(parseInt(e.target.value))}
+                        className="w-20"
+                      />
+                      <Button 
+                        variant="outline" 
+                        onClick={() => handleAddServiceToCustomPackage()}
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  {customPackageForm.services.length > 0 && (
+                    <div className="space-y-2">
+                      <Label>Serviços Adicionados</Label>
+                      <div className="border rounded-md overflow-hidden">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Serviço</TableHead>
+                              <TableHead>Qtd</TableHead>
+                              <TableHead>Preço</TableHead>
+                              <TableHead></TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {customPackageForm.services.map((service, index) => (
+                              <TableRow key={index}>
+                                <TableCell>{service.name}</TableCell>
+                                <TableCell>{service.quantity}</TableCell>
+                                <TableCell>R$ {(service.price * service.quantity).toFixed(2)}</TableCell>
+                                <TableCell>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    onClick={() => handleRemoveServiceFromCustomPackage(index)}
+                                  >
+                                    <Trash2 className="h-4 w-4 text-red-500" />
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="space-y-2 mt-4">
+                    <Label>Preço e Desconto</Label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      <div>
+                        <div className="flex items-center space-x-2 mb-2">
+                          <input 
+                            type="radio" 
+                            id="percentage_discount" 
+                            checked={customPackageForm.discount_type === "percentage"}
+                            onChange={() => handleCustomDiscountTypeChange("percentage")}
+                          />
+                          <label htmlFor="percentage_discount">Desconto %</label>
+                          
+                          <input 
+                            type="radio" 
+                            id="fixed_discount" 
+                            checked={customPackageForm.discount_type === "fixed"}
+                            onChange={() => handleCustomDiscountTypeChange("fixed")}
+                          />
+                          <label htmlFor="fixed_discount">Desconto R$</label>
+                          
+                          <input 
+                            type="radio" 
+                            id="desired_price" 
+                            checked={customPackageForm.discount_type === "desired_price"}
+                            onChange={() => handleCustomDiscountTypeChange("desired_price")}
+                          />
+                          <label htmlFor="desired_price">Preço Final</label>
+                        </div>
+                        
+                        {customPackageForm.discount_type === "percentage" && (
+                          <div className="flex items-center">
+                            <Input
+                              type="number"
+                              min="0"
+                              max="100"
+                              value={customPackageForm.discount}
+                              onChange={(e) => handleCustomDiscountChange(e.target.value, "percentage")}
+                              className="w-full"
+                            />
+                            <span className="ml-2">%</span>
+                          </div>
+                        )}
+                        
+                        {customPackageForm.discount_type === "fixed" && (
+                          <div className="flex items-center">
+                            <span className="mr-2">R$</span>
+                            <Input
+                              type="number"
+                              min="0"
+                              value={customPackageForm.discount}
+                              onChange={(e) => handleCustomDiscountChange(e.target.value, "fixed")}
+                              className="w-full"
+                            />
+                          </div>
+                        )}
+                        
+                        {customPackageForm.discount_type === "desired_price" && (
+                          <div className="flex items-center">
+                            <span className="mr-2">R$</span>
+                            <Input
+                              type="number"
+                              min="0"
+                              value={customPackageForm.desired_price}
+                              onChange={(e) => handleCustomDesiredPriceChange(e.target.value)}
+                              className="w-full"
+                              placeholder="Preço final desejado"
+                            />
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div className="bg-gray-50 p-3 rounded-md">
+                        <div className="flex justify-between">
+                          <span>Subtotal:</span>
+                          <span>R$ {calculateCustomPackageSubtotal().toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Desconto:</span>
+                          <span>R$ {calculateCustomPackageDiscount().toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between font-semibold">
+                          <span>Total:</span>
+                          <span>R$ {calculateCustomPackageTotal().toFixed(2)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
+              )}
 
-                <div className="space-y-2">
-                  <Label htmlFor="expiration_date">Data de Validade</Label>
-                  <Input
-                    id="expiration_date"
-                    type="date"
-                    value={sellForm.expiration_date}
-                    disabled
-                  />
+              {sellMode === "existing" && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="purchase_date">Data da Compra</Label>
+                    <Input
+                      id="purchase_date"
+                      type="date"
+                      value={sellForm.purchase_date}
+                      onChange={(e) => handlePurchaseDateChange(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="expiration_date">Data de Validade</Label>
+                    <Input
+                      id="expiration_date"
+                      type="date"
+                      value={sellForm.expiration_date}
+                      disabled
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="sessions">Total de Sessões</Label>
+                    <Input
+                      id="sessions"
+                      type="number"
+                      value={sellForm.total_sessions}
+                      onChange={(e) => setSellForm({...sellForm, total_sessions: parseInt(e.target.value)})}
+                    />
+                  </div>
                 </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="sessions">Total de Sessões</Label>
-                <Input
-                  id="sessions"
-                  type="number"
-                  value={sellForm.total_sessions}
-                  onChange={(e) => setSellForm({...sellForm, total_sessions: parseInt(e.target.value)})}
-                />
-              </div>
+              )}
             </div>
           </div>
 
@@ -1874,7 +2431,22 @@ export default function ClientPackages() {
             </Button>
             <Button 
               className="bg-purple-600 hover:bg-purple-700" 
-              onClick={handleSellPackage}
+              onClick={() => {
+                if (sellMode === "custom") {
+                  // Validar campos antes de finalizar a venda de pacote personalizado
+                  if (validateCustomPackage()) {
+                    handleSellCustomPackage();
+                  }
+                } else {
+                  // Para pacotes existentes, usar a função original
+                  handleSellPackage();
+                }
+              }}
+              disabled={sellMode === "custom" && (
+                !sellForm.client_id || 
+                !customPackageForm.name || 
+                customPackageForm.services.length === 0
+              )}
             >
               <ShoppingBag className="w-4 h-4 mr-2" />
               Finalizar Venda
