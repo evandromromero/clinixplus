@@ -1221,19 +1221,6 @@ export default function Appointments() {
 
         <Card>
           <CardContent className="p-6">
-            {!showFilters && (
-              <div className="flex justify-start mb-4">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={toggleFilters}
-                  className="flex items-center"
-                >
-                  <Filter className="h-4 w-4 mr-2" />
-                  Mostrar Filtros
-                </Button>
-              </div>
-            )}
             <div className="relative overflow-x-auto">
               <table className="w-full border-collapse">
                 <thead>
