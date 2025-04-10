@@ -108,16 +108,24 @@ export default function ClientPackages() {
     services: []
   });
   const [clientSearchTerm, setClientSearchTerm] = useState("");
+  const [debouncedClientSearch, setDebouncedClientSearch] = useState("");
   const [clientSearchResults, setClientSearchResults] = useState([]);
   const [showClientSearch, setShowClientSearch] = useState(false);
+  const [isSearchingClients, setIsSearchingClients] = useState(false);
+  const [lastClientDoc, setLastClientDoc] = useState(null);
+  const [hasMoreClients, setHasMoreClients] = useState(true);
   const [selectedServiceId, setSelectedServiceId] = useState("");
   const [selectedServiceQuantity, setSelectedServiceQuantity] = useState(1);
   const [serviceSearchTerm, setServiceSearchTerm] = useState("");
   const [serviceSearchResults, setServiceSearchResults] = useState([]);
   const [showServiceSearch, setShowServiceSearch] = useState(false);
   const [packageSearchTerm, setPackageSearchTerm] = useState("");
+  const [debouncedPackageSearch, setDebouncedPackageSearch] = useState("");
   const [packageSearchResults, setPackageSearchResults] = useState([]);
   const [showPackageSearch, setShowPackageSearch] = useState(false);
+  const [isSearchingPackages, setIsSearchingPackages] = useState(false);
+  const [lastPackageDoc, setLastPackageDoc] = useState(null);
+  const [hasMorePackages, setHasMorePackages] = useState(true);
   const [hasUnfinishedSales, setHasUnfinishedSales] = useState(false);
   const [unfinishedSales, setUnfinishedSales] = useState([]);
   const [newPackage, setNewPackage] = useState({
@@ -374,6 +382,167 @@ export default function ClientPackages() {
   };
   
   // Função para remover serviço do pacote personalizado
+  // Hooks de debounce para buscas
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (debouncedClientSearch) {
+        handleClientSearch(debouncedClientSearch);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [debouncedClientSearch]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (debouncedPackageSearch) {
+        handlePackageSearch(debouncedPackageSearch);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [debouncedPackageSearch]);
+
+  // Cache de resultados de busca
+  const clientSearchCache = React.useMemo(() => {
+    if (!clientSearchTerm) return [];
+    return clients
+      .filter(client => 
+        client.name.toLowerCase().includes(clientSearchTerm.toLowerCase()) ||
+        client.phone?.includes(clientSearchTerm)
+      )
+      .slice(0, 10);
+  }, [clients, clientSearchTerm]);
+
+  const packageSearchCache = React.useMemo(() => {
+    if (!packageSearchTerm) return [];
+    return packages
+      .filter(pkg => 
+        pkg.name.toLowerCase().includes(packageSearchTerm.toLowerCase())
+      )
+      .slice(0, 10);
+  }, [packages, packageSearchTerm]);
+
+  // Função otimizada de busca de clientes
+  const handleClientSearch = async (term) => {
+    if (!term || term.length < 3) {
+      setClientSearchResults([]);
+      return;
+    }
+
+    setIsSearchingClients(true);
+    try {
+      // Primeiro tenta usar o cache
+      const cachedResults = clientSearchCache;
+      if (cachedResults.length > 0) {
+        setClientSearchResults(cachedResults);
+        return;
+      }
+
+      // Se não encontrou no cache, busca no Firebase
+      const query = Client.query()
+        .where('name', '>=', term.toLowerCase())
+        .where('name', '<=', term.toLowerCase() + '\uf8ff')
+        .limit(10);
+
+      const results = await Client.list(query);
+      setClientSearchResults(results);
+      setLastClientDoc(results[results.length - 1]);
+      setHasMoreClients(results.length === 10);
+    } catch (error) {
+      console.error('Erro na busca de clientes:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao buscar clientes. Tente novamente.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSearchingClients(false);
+    }
+  };
+
+  // Função otimizada de busca de pacotes
+  const handlePackageSearch = async (term) => {
+    if (!term || term.length < 3) {
+      setPackageSearchResults([]);
+      return;
+    }
+
+    setIsSearchingPackages(true);
+    try {
+      // Primeiro tenta usar o cache
+      const cachedResults = packageSearchCache;
+      if (cachedResults.length > 0) {
+        setPackageSearchResults(cachedResults);
+        return;
+      }
+
+      // Se não encontrou no cache, busca no Firebase
+      const query = Package.query()
+        .where('name', '>=', term.toLowerCase())
+        .where('name', '<=', term.toLowerCase() + '\uf8ff')
+        .limit(10);
+
+      const results = await Package.list(query);
+      setPackageSearchResults(results);
+      setLastPackageDoc(results[results.length - 1]);
+      setHasMorePackages(results.length === 10);
+    } catch (error) {
+      console.error('Erro na busca de pacotes:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao buscar pacotes. Tente novamente.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSearchingPackages(false);
+    }
+  };
+
+  // Função para carregar mais resultados de clientes
+  const loadMoreClients = async () => {
+    if (!lastClientDoc || !hasMoreClients || isSearchingClients) return;
+
+    setIsSearchingClients(true);
+    try {
+      const query = Client.query()
+        .where('name', '>=', debouncedClientSearch.toLowerCase())
+        .where('name', '<=', debouncedClientSearch.toLowerCase() + '\uf8ff')
+        .startAfter(lastClientDoc)
+        .limit(10);
+
+      const results = await Client.list(query);
+      setClientSearchResults(prev => [...prev, ...results]);
+      setLastClientDoc(results[results.length - 1]);
+      setHasMoreClients(results.length === 10);
+    } catch (error) {
+      console.error('Erro ao carregar mais clientes:', error);
+    } finally {
+      setIsSearchingClients(false);
+    }
+  };
+
+  // Função para carregar mais resultados de pacotes
+  const loadMorePackages = async () => {
+    if (!lastPackageDoc || !hasMorePackages || isSearchingPackages) return;
+
+    setIsSearchingPackages(true);
+    try {
+      const query = Package.query()
+        .where('name', '>=', debouncedPackageSearch.toLowerCase())
+        .where('name', '<=', debouncedPackageSearch.toLowerCase() + '\uf8ff')
+        .startAfter(lastPackageDoc)
+        .limit(10);
+
+      const results = await Package.list(query);
+      setPackageSearchResults(prev => [...prev, ...results]);
+      setLastPackageDoc(results[results.length - 1]);
+      setHasMorePackages(results.length === 10);
+    } catch (error) {
+      console.error('Erro ao carregar mais pacotes:', error);
+    } finally {
+      setIsSearchingPackages(false);
+    }
+  };
+
   const handleRemoveServiceFromCustomPackage = (index) => {
     try {
       const updatedServices = [...customPackageForm.services];
@@ -681,13 +850,32 @@ export default function ClientPackages() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [clientPackagesData, packagesData, clientsData, servicesData, employeesData] = await Promise.all([
+      const [clientPackagesData, packagesData, servicesData, employeesData] = await Promise.all([
         ClientPackage.list(),
         Package.list(),
-        Client.list(),
         Service.list(),
         Employee.list()
       ]);
+
+      // Carregar apenas os clientes que têm pacotes
+      const uniqueClientIds = new Set(clientPackagesData.map(pkg => pkg.client_id));
+      const clientsData = [];
+      
+      // Buscar clientes em lotes de 10 para evitar limites do Firestore
+      const clientIdBatches = Array.from(uniqueClientIds).reduce((acc, curr, i) => {
+        const batchIndex = Math.floor(i / 10);
+        if (!acc[batchIndex]) acc[batchIndex] = [];
+        acc[batchIndex].push(curr);
+        return acc;
+      }, []);
+
+      // Buscar cada lote de clientes
+      for (const batch of clientIdBatches) {
+        const batchClients = await Promise.all(
+          batch.map(id => Client.get(id))
+        );
+        clientsData.push(...batchClients.filter(Boolean));
+      }
 
       setClientPackages(clientPackagesData);
       setPackages(packagesData);
