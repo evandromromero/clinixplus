@@ -39,6 +39,239 @@ import RateLimitHandler from '@/components/RateLimitHandler';
 import html2pdf from 'html2pdf.js';
 
 export default function SalesRegister() {
+  // Layout específico para mobile
+  const MobileLayout = ({
+    selectedClient,
+    setSelectedClient,
+    setShowClientSearch,
+    saleType,
+    setSaleType,
+    searchTerm,
+    handleSearch,
+    searchResults,
+    handleAddToCart,
+    cartItems,
+    handleQuantityChange,
+    handleDiscountChange,
+    handleRemoveFromCart,
+    getSubtotal,
+    formatCurrency,
+    calculateCartTotal,
+    handleFinishSale
+  }) => (
+    <div className="space-y-4 p-4">
+      {/* Seletor de Cliente Mobile */}
+      <div className="bg-white rounded-lg p-4 shadow-sm">
+        {selectedClient ? (
+          <div className="flex justify-between items-center">
+            <div>
+              <p className="font-medium">{selectedClient.name}</p>
+              <p className="text-sm text-gray-500">{selectedClient.cpf || 'CPF não informado'}</p>
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => setSelectedClient(null)}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        ) : (
+          <Button
+            className="w-full justify-between"
+            variant="outline"
+            onClick={() => setShowClientSearch(true)}
+          >
+            <span>Selecionar Cliente</span>
+            <Search className="h-4 w-4" />
+          </Button>
+        )}
+      </div>
+
+      {/* Tabs de Tipo de Venda Mobile */}
+      <Tabs value={saleType} className="w-full" onValueChange={setSaleType}>
+        <TabsList className="grid w-full grid-cols-3 h-auto">
+          <TabsTrigger value="produto" className="text-xs py-2">
+            <ShoppingBag className="h-4 w-4 mr-1" />
+            Produtos
+          </TabsTrigger>
+          <TabsTrigger value="serviço" className="text-xs py-2">
+            <Scissors className="h-4 w-4 mr-1" />
+            Serviços
+          </TabsTrigger>
+          <TabsTrigger value="pacote" className="text-xs py-2">
+            <PackageIcon className="h-4 w-4 mr-1" />
+            Pacotes
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Barra de Pesquisa Mobile */}
+        <div className="mt-4 relative">
+          <Input
+            type="text"
+            placeholder="Pesquisar..."
+            value={searchTerm}
+            onChange={(e) => handleSearch(e.target.value)}
+            className="w-full"
+          />
+          {searchResults.length > 0 && (
+            <div className="absolute z-10 w-full mt-1 bg-white rounded-md shadow-lg max-h-60 overflow-auto">
+              {searchResults.map((item) => (
+                <button
+                  key={item.id}
+                  className="w-full text-left px-4 py-2 hover:bg-gray-100"
+                  onClick={() => handleAddToCart(item)}
+                >
+                  <div className="font-medium">{item.name}</div>
+                  <div className="text-sm text-gray-500">{formatCurrency(item.price || item.total_price || item.value || 0)}</div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </Tabs>
+
+      {/* Carrinho Mobile */}
+      <div className="bg-white rounded-lg shadow-sm">
+        <div className="p-4 border-b">
+          <h3 className="font-medium">Carrinho ({cartItems.length} itens)</h3>
+        </div>
+        <div className="divide-y">
+          {cartItems.map((item, index) => (
+            <div key={index} className="p-4">
+              <div className="flex justify-between items-start mb-2">
+                <div>
+                  <p className="font-medium">{item.name}</p>
+                  <p className="text-sm text-gray-500">{formatCurrency(item.price)}</p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleRemoveFromCart(index)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label>Quantidade</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={item.quantity}
+                    onChange={(e) => handleQuantityChange(index, parseInt(e.target.value))}
+                  />
+                </div>
+                <div>
+                  <Label>Desconto %</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={item.discount}
+                    onChange={(e) => handleDiscountChange(index, parseFloat(e.target.value))}
+                  />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Métodos de Pagamento Mobile */}
+      <div className="bg-white rounded-lg p-4 shadow-sm space-y-4">
+        <div className="flex justify-between items-center">
+          <h3 className="font-medium">Formas de Pagamento</h3>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={addPaymentMethod}
+            disabled={paymentMethods.length >= availablePaymentMethods.length}
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
+        </div>
+        <div className="space-y-4">
+          {paymentMethods.map((payment, index) => (
+            <div key={index} className="space-y-2">
+              <Select
+                value={payment.methodId}
+                onValueChange={(value) => handlePaymentMethodChange(index, 'methodId', value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availablePaymentMethods
+                    .filter(m => !paymentMethods.some((pm, i) => i !== index && pm.methodId === m.id))
+                    .map(method => (
+                      <SelectItem key={method.id} value={method.id}>
+                        {method.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label>Valor</Label>
+                  <Input
+                    type="number"
+                    value={payment.amount}
+                    onChange={(e) => handlePaymentMethodChange(index, 'amount', parseFloat(e.target.value))}
+                  />
+                </div>
+                <div>
+                  <Label>Parcelas</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={payment.installments}
+                    onChange={(e) => handlePaymentMethodChange(index, 'installments', parseInt(e.target.value))}
+                  />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Resumo e Finalização Mobile */}
+      <div className="bg-white rounded-lg p-4 shadow-sm space-y-4">
+        <div className="flex justify-between items-center">
+          <span>Subtotal:</span>
+          <span className="font-medium">{formatCurrency(calculateCartTotal())}</span>
+        </div>
+        <div className="flex justify-between items-center">
+          <span>Desconto Final:</span>
+          <div className="flex items-center gap-2">
+            <Input
+              type="number"
+              className="w-24"
+              value={finalDiscount}
+              onChange={(e) => setFinalDiscount(parseFloat(e.target.value) || 0)}
+            />
+            <Select value={finalDiscountType} onValueChange={setFinalDiscountType}>
+              <SelectTrigger className="w-24">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="percentage">%</SelectItem>
+                <SelectItem value="fixed">R$</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div className="flex justify-between items-center font-medium text-lg">
+          <span>Total:</span>
+          <span>{formatCurrency(calculateFinalTotal())}</span>
+        </div>
+        <Button
+          className="w-full"
+          disabled={!selectedClient || cartItems.length === 0 || !salesEmployee}
+          onClick={() => setShowConfirmDialog(true)}
+        >
+          Finalizar Venda
+        </Button>
+      </div>
+    </div>
+  );
+
   const { toast } = useToast();
   const navigate = useNavigate();
   const [cashIsOpen, setCashIsOpen] = useState(false);
