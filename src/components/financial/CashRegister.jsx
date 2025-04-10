@@ -1080,12 +1080,42 @@ export default function CashRegister() {
 
     // Processar transações
     transactions.forEach(t => {
-      if (t.type === 'receita' && t.payment_method && totals[t.payment_method] !== undefined) {
-        totals[t.payment_method] += Number(t.amount);
+      // Verificar se está usando o novo formato (array de payment_methods)
+      if (t.type === 'receita') {
+        if (t.payment_methods && Array.isArray(t.payment_methods) && t.payment_methods.length > 0) {
+          // Novo formato: array de payment_methods
+          t.payment_methods.forEach(pm => {
+            if (pm.method_id && totals[pm.method_id] !== undefined) {
+              totals[pm.method_id] += Number(pm.amount || 0);
+            }
+          });
+        } else if (t.payment_method && totals[t.payment_method] !== undefined) {
+          // Formato antigo: payment_method string
+          totals[t.payment_method] += Number(t.amount || 0);
+        }
       }
     });
 
     return totals;
+  };
+
+  const formatPaymentMethodsForReport = (transaction) => {
+    // Se estiver usando o novo formato (array de payment_methods)
+    if (transaction.payment_methods && Array.isArray(transaction.payment_methods) && transaction.payment_methods.length > 0) {
+      return transaction.payment_methods.map(pm => {
+        const method = paymentMethods.find(m => m.id === pm.method_id);
+        const methodName = method ? method.name.toUpperCase() : pm.method_id;
+        return `${methodName} (R$ ${Number(pm.amount).toFixed(2)})`;
+      }).join(' + ');
+    }
+    
+    // Formato antigo: payment_method string
+    if (transaction.payment_method) {
+      const method = paymentMethods.find(m => m.id === transaction.payment_method);
+      return method ? method.name.toUpperCase() : transaction.payment_method.toUpperCase();
+    }
+    
+    return '-';
   };
 
   const generateReportHtml = (cashData, transactions) => {
@@ -1218,7 +1248,7 @@ export default function CashRegister() {
                 <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${formatDate(t.payment_date)}</td>
                 <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${formatTime(t.created_at)}</td>
                 <td style="padding: 8px; border: 1px solid #ddd;">${t.client_name || '-'}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${getPaymentMethodName(t.payment_method)}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${formatPaymentMethodsForReport(t)}</td>
               </tr>
             `;
           }).join('')}
@@ -1370,7 +1400,7 @@ export default function CashRegister() {
                 <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${formatDate(t.payment_date)}</td>
                 <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${formatTime(t.created_at)}</td>
                 <td style="padding: 8px; border: 1px solid #ddd;">${t.client_name || '-'}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${getPaymentMethodName(t.payment_method)}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${formatPaymentMethodsForReport(t)}</td>
               </tr>
             `;
           }).join('')}
@@ -2387,7 +2417,7 @@ export default function CashRegister() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableCell>Data/Hora</TableCell>
+                  <TableCell>Data</TableCell>
                   <TableCell>Cliente</TableCell>
                   <TableCell>Descrição</TableCell>
                   <TableCell>Método</TableCell>
@@ -2400,7 +2430,7 @@ export default function CashRegister() {
                   getTodayTransactions().map((transaction, index) => (
                     <TableRow key={index}>
                       <TableCell>
-                        {format(parseISO(normalizeDate(transaction.payment_date || transaction.created_date)), "dd/MM/yyyy HH:mm")}
+                        {format(parseISO(normalizeDate(transaction.payment_date || transaction.created_date)), "dd/MM/yyyy")}
                       </TableCell>
                       <TableCell>{transaction.client_name}</TableCell>
                       <TableCell>{transaction.description}</TableCell>
@@ -2437,7 +2467,7 @@ export default function CashRegister() {
                     <div className="flex flex-col">
                       <span className="text-sm font-medium">{transaction.description}</span>
                       <span className="text-xs text-gray-500">
-                        {format(parseISO(normalizeDate(transaction.payment_date || transaction.created_date)), "dd/MM/yyyy HH:mm")}
+                        {format(parseISO(normalizeDate(transaction.payment_date || transaction.created_date)), "dd/MM/yyyy")}
                       </span>
                     </div>
                     <div className="text-right">
