@@ -41,6 +41,9 @@ import {
   Search, 
   PackageCheck 
 } from "lucide-react";
+import { collection, query, where, limit, getDocs } from 'firebase/firestore';
+import { db } from '@/firebase/config';
+import { Loader2 } from 'lucide-react';
 
 export default function ClientPackages() {
   const { toast } = useToast();
@@ -141,6 +144,11 @@ export default function ClientPackages() {
     birth_date: format(new Date(), 'yyyy-MM-dd'),
     relationship: ""
   });
+
+  // Cache de resultados e debounce timeout
+  const [searchTimeout, setSearchTimeout] = useState(null);
+  const [searchResultsCache, setSearchResultsCache] = useState(new Map());
+  const [isSearching, setIsSearching] = useState(false);
 
   const resetNewPackageForm = () => {
     setNewPackage({
@@ -422,41 +430,95 @@ export default function ClientPackages() {
   }, [packages, packageSearchTerm]);
 
   // Função otimizada de busca de clientes
-  const handleClientSearch = async (term) => {
-    if (!term || term.length < 3) {
+  const handleClientSearch = async (searchTerm) => {
+    console.log("[DEBUG] Buscando cliente:", searchTerm);
+    
+    if (!searchTerm || searchTerm.length < 2) {
       setClientSearchResults([]);
       return;
     }
 
-    setIsSearchingClients(true);
-    try {
-      // Primeiro tenta usar o cache
-      const cachedResults = clientSearchCache;
-      if (cachedResults.length > 0) {
-        setClientSearchResults(cachedResults);
-        return;
-      }
-
-      // Se não encontrou no cache, busca no Firebase
-      const query = Client.query()
-        .where('name', '>=', term.toLowerCase())
-        .where('name', '<=', term.toLowerCase() + '\uf8ff')
-        .limit(10);
-
-      const results = await Client.list(query);
-      setClientSearchResults(results);
-      setLastClientDoc(results[results.length - 1]);
-      setHasMoreClients(results.length === 10);
-    } catch (error) {
-      console.error('Erro na busca de clientes:', error);
-      toast({
-        title: "Erro",
-        description: "Erro ao buscar clientes. Tente novamente.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsSearchingClients(false);
+    // Limpar timeout anterior
+    if (searchTimeout) {
+      clearTimeout(searchTimeout);
     }
+
+    // Criar novo timeout (debounce)
+    const newTimeout = setTimeout(async () => {
+      try {
+        setIsSearching(true);
+        const startTime = performance.now();
+
+        // Normalizar o termo de busca
+        const normalizedTerm = searchTerm.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        console.log("[DEBUG] Termo normalizado:", normalizedTerm);
+        
+        // Verificar cache
+        if (searchResultsCache.has(normalizedTerm)) {
+          console.log("[DEBUG] Usando cache para:", normalizedTerm);
+          setClientSearchResults(searchResultsCache.get(normalizedTerm));
+          setIsSearching(false);
+          return;
+        }
+
+        // Buscar clientes do Firebase
+        const clientsRef = collection(db, 'clients');
+        const nameQuery = query(
+          clientsRef,
+          where('name', '>=', normalizedTerm),
+          where('name', '<=', normalizedTerm + '\uf8ff'),
+          limit(20)
+        );
+
+        const emailQuery = query(
+          clientsRef,
+          where('email', '>=', normalizedTerm),
+          where('email', '<=', normalizedTerm + '\uf8ff'),
+          limit(20)
+        );
+
+        const cpfQuery = query(
+          clientsRef,
+          where('cpf', '>=', normalizedTerm),
+          where('cpf', '<=', normalizedTerm + '\uf8ff'),
+          limit(20)
+        );
+
+        console.log("[DEBUG] Executando queries de busca");
+        const [nameSnapshot, emailSnapshot, cpfSnapshot] = await Promise.all([
+          getDocs(nameQuery),
+          getDocs(emailQuery),
+          getDocs(cpfQuery)
+        ]);
+
+        // Combinar resultados removendo duplicatas
+        const resultsMap = new Map();
+        [...nameSnapshot.docs, ...emailSnapshot.docs, ...cpfSnapshot.docs].forEach(doc => {
+          if (!resultsMap.has(doc.id)) {
+            resultsMap.set(doc.id, { id: doc.id, ...doc.data() });
+          }
+        });
+
+        const results = Array.from(resultsMap.values());
+        console.log("[DEBUG] Resultados encontrados:", results.length);
+        console.log("[DEBUG] Tempo de busca:", Math.round(performance.now() - startTime), "ms");
+
+        // Atualizar cache
+        setSearchResultsCache(prev => new Map(prev).set(normalizedTerm, results));
+        setClientSearchResults(results);
+      } catch (error) {
+        console.error("Erro na busca:", error);
+        toast({
+          title: "Erro",
+          description: "Erro ao buscar clientes",
+          variant: "destructive"
+        });
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300); // 300ms de debounce
+
+    setSearchTimeout(newTimeout);
   };
 
   // Função otimizada de busca de pacotes
@@ -1775,12 +1837,13 @@ export default function ClientPackages() {
                 <Input
                   type="text"
                   placeholder="Buscar cliente..."
-                  value={clientSearchTerm || ''}
+                  value={clientSearchTerm}
                   onChange={(e) => {
                     setClientSearchTerm(e.target.value);
-                    handleSearchClients(e.target.value);
+                    handleClientSearch(e.target.value);
                     setShowClientSearch(true);
                   }}
+                  onFocus={() => setShowClientSearch(true)}
                   className="pl-9"
                 />
                 <Search className="w-4 h-4 absolute left-3 top-3 text-gray-400" />
@@ -1799,7 +1862,7 @@ export default function ClientPackages() {
               {/* Status */}
               <div className="flex-1">
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="h-9">
+                  <SelectTrigger>
                     <SelectValue placeholder="Status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1815,7 +1878,7 @@ export default function ClientPackages() {
               {/* Período */}
               <div className="flex-1">
                 <Select value={dateFilter} onValueChange={setDateFilter}>
-                  <SelectTrigger className="h-9">
+                  <SelectTrigger>
                     <SelectValue placeholder="Período" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1857,7 +1920,7 @@ export default function ClientPackages() {
                 {clientSearchResults.map(client => (
                   <button
                     key={client.id}
-                    className="w-full px-4 py-2 text-left hover:bg-gray-50 focus:bg-gray-50 focus:outline-none"
+                    className="w-full px-4 py-2 text-left hover:bg-gray-100 focus:bg-gray-100 focus:outline-none"
                     onClick={() => {
                       setSelectedClient(client.id);
                       setClientSearchTerm('');
@@ -2410,7 +2473,7 @@ export default function ClientPackages() {
                         value={clientSearchTerm}
                         onChange={(e) => {
                           setClientSearchTerm(e.target.value);
-                          handleSearchClients(e.target.value);
+                          handleClientSearch(e.target.value);
                           setShowClientSearch(true);
                         }}
                         onFocus={() => setShowClientSearch(true)}
@@ -2533,7 +2596,7 @@ export default function ClientPackages() {
                     <div className="flex space-x-2">
                       <div className="relative flex-1">
                         <Input
-                          placeholder="Buscar serviço..."
+                          placeholder="Cadastrar serviço..."
                           value={serviceSearchTerm}
                           onChange={(e) => {
                             setServiceSearchTerm(e.target.value);

@@ -349,7 +349,7 @@ export default function SalesRegister() {
 
   // Função otimizada de busca de clientes
   const handleClientSearch = async (term) => {
-    console.log("[SalesRegister] handleClientSearch chamado com termo:", term);
+    console.log("[DEBUG] Iniciando busca com termo:", term);
     if (!term || term.length < 3) {
       console.log("[SalesRegister] Termo muito curto, ignorando busca");
       setClientSearchResults([]);
@@ -362,7 +362,7 @@ export default function SalesRegister() {
       let allClients;
       
       if (allClientsCache) {
-        console.log("[SalesRegister] Usando cache de clientes");
+        console.log("[DEBUG] Cache encontrado com", allClientsCache.length, "clientes");
         allClients = allClientsCache;
       } else {
         // Busca direta por nome, CPF, email ou telefone
@@ -381,7 +381,14 @@ export default function SalesRegister() {
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, ""); // Remove acentos
 
-      console.log("[SalesRegister] Total de clientes carregados:", allClients.length);
+      console.log("[DEBUG] Termo normalizado:", normalizedTerm);
+      console.log("[DEBUG] Total de clientes carregados:", allClients.length);
+      
+      // Amostra de alguns clientes para verificar
+      console.log("[DEBUG] Amostra de 5 clientes:", allClients.slice(0, 5).map(c => ({
+        original: c.name,
+        normalizado: (c.name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      })));
       
       // Filtra os clientes no lado do cliente para maior flexibilidade
       const resultsMap = new Map();
@@ -422,9 +429,9 @@ export default function SalesRegister() {
       const results = Array.from(resultsMap.values())
         .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
       
-      console.log("[SalesRegister] Resultados encontrados:", results.length);
+      console.log("[DEBUG] Resultados encontrados:", results.length);
       if (results.length > 0) {
-        console.log("[SalesRegister] Primeiros 5 resultados:", results.slice(0, 5).map(c => c.name));
+        console.log("[DEBUG] Primeiros 5 resultados:", results.slice(0, 5).map(c => c.name));
       }
       
       // Limita a 20 resultados para não sobrecarregar a interface
@@ -434,7 +441,7 @@ export default function SalesRegister() {
       setLastClientDoc(limitedResults[limitedResults.length - 1]);
       setHasMoreClients(results.length > limitedResults.length);
       
-      console.log("[SalesRegister] clientSearchResults atualizado com", limitedResults.length, "itens");
+      console.log("[DEBUG] clientSearchResults atualizado com", limitedResults.length, "itens");
     } catch (error) {
       console.error('Erro na busca de clientes:', error);
       toast({
@@ -2073,18 +2080,15 @@ export default function SalesRegister() {
             <div className="pt-2 space-y-2">
               <p className="font-medium">Formas de pagamento:</p>
               <ul className="space-y-1">
-                {paymentMethods.map((payment, index) => {
-                  const method = availablePaymentMethods.find(m => m.id === payment.methodId);
-                  return (
-                    <li key={index} className="flex justify-between text-sm">
-                      <span>
-                        {method ? method.name : 'Método não selecionado'}
-                        {payment.installments > 1 ? ` (${payment.installments}x)` : ''}
-                      </span>
-                      <span>{formatCurrency(payment.amount)}</span>
-                    </li>
-                  );
-                })}
+                {paymentMethods.map((payment, index) => (
+                  <li key={index} className="flex justify-between text-sm">
+                    <span>
+                      {payment.methodId ? availablePaymentMethods.find(m => m.id === payment.methodId)?.name : 'Método não selecionado'}
+                      {payment.installments > 1 ? ` (${payment.installments}x)` : ''}
+                    </span>
+                    <span>{formatCurrency(payment.amount)}</span>
+                  </li>
+                ))}
               </ul>
             </div>
           </div>
