@@ -868,14 +868,30 @@ export default function ClientPackages() {
     }
   }, [clientPackages]);
 
+  // Cache para nomes de clientes para evitar buscas repetidas
+  const clientNamesCache = React.useMemo(() => {
+    const cache = {};
+    clients.forEach(client => {
+      cache[client.id] = client.name;
+    });
+    return cache;
+  }, [clients]);
+
   const getClientName = (clientId) => {
-    const client = clients.find(c => c.id === clientId);
-    return client ? client.name : "Cliente não encontrado";
+    return clientNamesCache[clientId] || "Cliente não encontrado";
   };
 
+  // Cache para nomes de serviços para evitar buscas repetidas
+  const serviceNamesCache = React.useMemo(() => {
+    const cache = {};
+    services.forEach(service => {
+      cache[service.id] = service.name;
+    });
+    return cache;
+  }, [services]);
+
   const getServiceName = (serviceId) => {
-    const service = services.find(s => s.id === serviceId);
-    return service ? service.name : "Serviço não encontrado";
+    return serviceNamesCache[serviceId] || "Serviço não encontrado";
   };
 
   const getEmployeeName = (employeeId) => {
@@ -971,32 +987,44 @@ export default function ClientPackages() {
     } : null;
   };
 
+  // Cache para serviços de pacotes para evitar recálculos repetidos
+  const packageServicesCache = React.useMemo(() => {
+    const cache = {};
+    clientPackages.forEach(clientPkg => {
+      // Primeiro tenta pegar do snapshot
+      if (clientPkg.package_snapshot?.services) {
+        cache[clientPkg.id] = clientPkg.package_snapshot.services;
+      } else {
+        // Se não tem no snapshot, busca do pacote original
+        const pkg = packages.find(p => p.id === clientPkg.package_id);
+        cache[clientPkg.id] = pkg?.services || [];
+      }
+    });
+    return cache;
+  }, [clientPackages, packages]);
+
   const getPackageServices = (clientPkgId) => {
-    const clientPkg = clientPackages.find(cp => cp.id === clientPkgId);
-    if (!clientPkg) return [];
-
-    // Primeiro tenta pegar do snapshot
-    if (clientPkg.package_snapshot?.services) {
-      return clientPkg.package_snapshot.services;
-    }
-
-    // Se não tem no snapshot, busca do pacote original
-    const pkg = packages.find(p => p.id === clientPkg.package_id);
-    return pkg?.services || [];
+    return packageServicesCache[clientPkgId] || [];
   };
 
+  // Cache para nomes de pacotes para evitar recálculos repetidos
+  const packageNamesCache = React.useMemo(() => {
+    const cache = {};
+    clientPackages.forEach(clientPkg => {
+      // Primeiro tenta pegar do snapshot
+      if (clientPkg.package_snapshot?.name) {
+        cache[clientPkg.id] = clientPkg.package_snapshot.name;
+      } else {
+        // Se não tem no snapshot, busca do pacote original
+        const pkg = packages.find(p => p.id === clientPkg.package_id);
+        cache[clientPkg.id] = pkg?.name || "Pacote não encontrado";
+      }
+    });
+    return cache;
+  }, [clientPackages, packages]);
+
   const getPackageName = (clientPkgId) => {
-    const clientPkg = clientPackages.find(cp => cp.id === clientPkgId);
-    if (!clientPkg) return "Pacote não encontrado";
-
-    // Primeiro tenta pegar do snapshot
-    if (clientPkg.package_snapshot?.name) {
-      return clientPkg.package_snapshot.name;
-    }
-
-    // Se não tem no snapshot, busca do pacote original
-    const pkg = packages.find(p => p.id === clientPkg.package_id);
-    return pkg?.name || "Pacote não encontrado";
+    return packageNamesCache[clientPkgId] || "Pacote não encontrado";
   };
 
   const confirmDeletePackage = (packageId) => {
@@ -1796,19 +1824,15 @@ export default function ClientPackages() {
                       <div className="mt-4">
                         <h4 className="text-sm font-medium mb-2">Serviços Incluídos:</h4>
                         <div className="space-y-2">
-                          {console.log('Renderizando serviços para o pacote:', clientPkg)}
                           {getPackageServices(clientPkg.id).map((service, index) => {
-                            console.log('Service encontrado:', service);
                             const serviceName = getServiceName(service.service_id);
-                            console.log('Nome do serviço:', serviceName);
                             const usedSessions = clientPkg.session_history?.filter(
                               s => s.service_id === service.service_id && s.status === 'concluido'
                             ).length || 0;
-                            console.log('Sessões usadas:', usedSessions);
                             
                             return (
                               <div 
-                                key={index}
+                                key={`${clientPkg.id}-${service.service_id}-${index}`}
                                 className="p-3 bg-gray-50 rounded-lg border border-gray-200"
                               >
                                 <div className="flex items-center justify-between">

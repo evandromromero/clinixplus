@@ -30,7 +30,8 @@ import {
   Lock,
   Unlock,
   RefreshCcw,
-  Trash2
+  Trash2,
+  X
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { FinancialTransaction, User, Client, Employee, Package, ClientPackage, Service, PaymentMethod, Sale } from "@/firebase/entities";
@@ -80,13 +81,18 @@ export default function CashRegister() {
     category: "outros",
     description: "",
     amount: 0,
-    payment_method: "dinheiro",
+    payment_methods: [{ method_id: "", amount: 0, installments: 1 }],
     status: "pago",
     payment_date: format(new Date(), "yyyy-MM-dd"),
     due_date: format(new Date(), "yyyy-MM-dd"),
     client_id: "",
     client_name: ""
   });
+  
+  const [clientSearchTerm, setClientSearchTerm] = useState("");
+  const [clientSearchResults, setClientSearchResults] = useState([]);
+  const [showClientSearch, setShowClientSearch] = useState(false);
+  const [selectedClient, setSelectedClient] = useState(null);
 
   const [expectedCashAmount, setExpectedCashAmount] = useState(0);
   
@@ -490,13 +496,27 @@ export default function CashRegister() {
       
       // Processar transações
       const processedTransactions = transactionsData.map(t => {
-        // Encontrar o método de pagamento e cliente relacionados
-        const paymentMethod = paymentMethodsMap[t.payment_method];
+        // Encontrar o cliente relacionado
         const client = clientsMap[t.client_id];
+        
+        // Processar métodos de pagamento no novo formato (array de payment_methods)
+        let payment_method_name = 'Método não identificado';
+        
+        if (t.payment_methods && Array.isArray(t.payment_methods) && t.payment_methods.length > 0) {
+          // Novo formato: array de payment_methods
+          payment_method_name = t.payment_methods.map(pm => {
+            const method = paymentMethodsMap[pm.method_id];
+            return method ? method.name : 'Método não identificado';
+          }).join(', ');
+        } else if (t.payment_method) {
+          // Formato antigo: payment_method string
+          const paymentMethod = paymentMethodsMap[t.payment_method];
+          payment_method_name = paymentMethod ? paymentMethod.name : 'Método não identificado';
+        }
         
         return {
           ...t,
-          payment_method_name: paymentMethod ? paymentMethod.name : 'Método não identificado',
+          payment_method_name,
           client_name: client ? client.name : 'Cliente não identificado'
         };
       });
@@ -708,6 +728,26 @@ export default function CashRegister() {
              t.category !== "abertura_caixa" && 
              t.category !== "fechamento_caixa";
     });
+  };
+  
+  // Função para formatar os métodos de pagamento para exibição
+  const formatPaymentMethods = (transaction) => {
+    // Se estiver usando o novo formato (array de payment_methods)
+    if (transaction.payment_methods && Array.isArray(transaction.payment_methods) && transaction.payment_methods.length > 0) {
+      // Mapear os métodos de pagamento para seus nomes
+      return transaction.payment_methods.map(pm => {
+        const method = paymentMethods.find(m => m.id === pm.method_id);
+        return method ? method.name : "Método não identificado";
+      }).join(", ");
+    }
+    
+    // Fallback para o formato antigo (payment_method string)
+    if (transaction.payment_method) {
+      const method = paymentMethods.find(m => m.id === transaction.payment_method);
+      return method ? method.name : transaction.payment_method_name || "Método não identificado";
+    }
+    
+    return "Método não identificado";
   };
 
   const getTransactionsByDate = (date) => {
@@ -1409,6 +1449,78 @@ export default function CashRegister() {
   };
 
   // Função para gerar o HTML do relatório de caixa
+  // Função para buscar clientes
+  const searchClients = (term) => {
+    if (!term) return [];
+    term = term.toLowerCase();
+    return clients.filter(client => 
+      client.name?.toLowerCase().includes(term) || 
+      client.cpf?.toLowerCase().includes(term) ||
+      client.email?.toLowerCase().includes(term)
+    );
+  };
+
+  // Função para adicionar um método de pagamento
+  const addPaymentMethod = () => {
+    // Verifica se ainda existem métodos disponíveis para adicionar
+    if (newTransaction.payment_methods.length >= paymentMethods.length) {
+      return;
+    }
+    
+    // Encontra um método de pagamento ainda não utilizado
+    const usedMethodIds = newTransaction.payment_methods.map(pm => pm.method_id);
+    const availableMethod = paymentMethods.find(m => !usedMethodIds.includes(m.id));
+    
+    if (availableMethod) {
+      // Se for distribuir valores, calcula o valor restante
+      const totalAmount = parseFloat(newTransaction.amount) || 0;
+      const totalPaid = newTransaction.payment_methods.reduce((sum, pm) => sum + (parseFloat(pm.amount) || 0), 0);
+      const remaining = Math.max(0, totalAmount - totalPaid);
+      
+      setNewTransaction({
+        ...newTransaction,
+        payment_methods: [...newTransaction.payment_methods, {
+          method_id: availableMethod.id,
+          amount: remaining,
+          installments: 1
+        }]
+      });
+    }
+  };
+
+  // Função para remover um método de pagamento
+  const removePaymentMethod = (index) => {
+    if (newTransaction.payment_methods.length <= 1) return;
+    
+    const removedAmount = parseFloat(newTransaction.payment_methods[index].amount) || 0;
+    const updatedPaymentMethods = [...newTransaction.payment_methods];
+    updatedPaymentMethods.splice(index, 1);
+    
+    // Redistribui o valor removido para o primeiro método
+    if (removedAmount > 0 && updatedPaymentMethods.length > 0) {
+      updatedPaymentMethods[0].amount = (parseFloat(updatedPaymentMethods[0].amount) || 0) + removedAmount;
+    }
+    
+    setNewTransaction({
+      ...newTransaction,
+      payment_methods: updatedPaymentMethods
+    });
+  };
+
+  // Função para atualizar um método de pagamento
+  const updatePaymentMethod = (index, field, value) => {
+    const updatedPaymentMethods = [...newTransaction.payment_methods];
+    updatedPaymentMethods[index] = {
+      ...updatedPaymentMethods[index],
+      [field]: value
+    };
+    
+    setNewTransaction({
+      ...newTransaction,
+      payment_methods: updatedPaymentMethods
+    });
+  };
+
   // Função para criar uma nova transação no caixa
   const handleCreateTransaction = async (transaction) => {
     try {
@@ -1432,6 +1544,15 @@ export default function CashRegister() {
       
       if (transactionDate === today && !cashIsOpen) {
         toast.error("O caixa precisa estar aberto para registrar transações do dia atual.");
+        return;
+      }
+
+      // Verificar se os métodos de pagamento somam o valor total
+      const totalAmount = parseFloat(transaction.amount) || 0;
+      const totalPayments = transaction.payment_methods.reduce((sum, pm) => sum + (parseFloat(pm.amount) || 0), 0);
+      
+      if (Math.abs(totalAmount - totalPayments) > 0.01) { // Pequena margem para erros de arredondamento
+        toast.error("O valor total dos métodos de pagamento deve ser igual ao valor da transação.");
         return;
       }
       
@@ -1465,13 +1586,18 @@ export default function CashRegister() {
           category: "outros",
           description: "",
           amount: 0,
-          payment_method: "dinheiro",
+          payment_methods: [{ method_id: "", amount: 0, installments: 1 }],
           status: "pago",
           payment_date: format(new Date(), "yyyy-MM-dd"),
           due_date: format(new Date(), "yyyy-MM-dd"),
           client_id: "",
           client_name: ""
         });
+        
+        // Resetar cliente selecionado
+        setSelectedClient(null);
+        setClientSearchTerm("");
+        setClientSearchResults([]);
         
         // Fechar diálogo
         setShowNewTransactionDialog(false);
@@ -2278,7 +2404,7 @@ export default function CashRegister() {
                       </TableCell>
                       <TableCell>{transaction.client_name}</TableCell>
                       <TableCell>{transaction.description}</TableCell>
-                      <TableCell>{transaction.payment_method_name}</TableCell>
+                      <TableCell>{formatPaymentMethods(transaction)}</TableCell>
                       <TableCell align="right">
                         {formatCurrency(transaction.amount)}
                       </TableCell>
@@ -2327,7 +2453,7 @@ export default function CashRegister() {
                     </div>
                     <div>
                       <span className="text-gray-500 block">Método</span>
-                      <span className="font-medium">{transaction.payment_method_name}</span>
+                      <span className="font-medium">{formatPaymentMethods(transaction)}</span>
                     </div>
                     <div>
                       <span className="text-gray-500 block">Status</span>
@@ -2452,11 +2578,11 @@ export default function CashRegister() {
       </Dialog>
 
       <Dialog open={showNewTransactionDialog} onOpenChange={setShowNewTransactionDialog}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
             <DialogTitle>Nova Movimentação de Caixa</DialogTitle>
           </DialogHeader>
-          <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto pr-2">
+          <div className="grid gap-4 py-4 max-h-[70vh] overflow-y-auto pr-2">
             <div className="space-y-2">
               <Label>Tipo</Label>
               <Select
@@ -2473,21 +2599,26 @@ export default function CashRegister() {
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label>Descrição</Label>
-              <Input
-                value={newTransaction.description}
-                onChange={(e) => setNewTransaction({...newTransaction, description: e.target.value})}
-                placeholder="Descreva a movimentação"
-              />
-            </div>
+            {/* Removido campo de descrição manual, será preenchido automaticamente com base na categoria */}
 
             <div className="space-y-2">
               <Label>Valor (R$)</Label>
               <Input
                 type="number"
                 value={newTransaction.amount}
-                onChange={(e) => setNewTransaction({...newTransaction, amount: parseFloat(e.target.value)})}
+                onChange={(e) => {
+                  const newAmount = parseFloat(e.target.value);
+                  // Atualizar o valor do primeiro método de pagamento também
+                  const updatedMethods = [...newTransaction.payment_methods];
+                  if (updatedMethods.length > 0) {
+                    updatedMethods[0].amount = newAmount;
+                  }
+                  setNewTransaction({
+                    ...newTransaction, 
+                    amount: newAmount,
+                    payment_methods: updatedMethods
+                  });
+                }}
               />
             </div>
 
@@ -2502,29 +2633,24 @@ export default function CashRegister() {
             </div>
 
             <div className="space-y-2">
-              <Label>Forma de Pagamento</Label>
-              <Select
-                value={newTransaction.payment_method}
-                onValueChange={(value) => setNewTransaction({...newTransaction, payment_method: value})}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="dinheiro">Dinheiro</SelectItem>
-                  <SelectItem value="cartao_debito">Cartão de Débito</SelectItem>
-                  <SelectItem value="cartao_credito">Cartão de Crédito</SelectItem>
-                  <SelectItem value="pix">PIX</SelectItem>
-                  <SelectItem value="transferencia">Transferência</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
               <Label>Categoria</Label>
               <Select
                 value={newTransaction.category}
-                onValueChange={(value) => setNewTransaction({...newTransaction, category: value})}
+                onValueChange={(value) => {
+                  // Preencher a descrição automaticamente com base na categoria
+                  let description = "";
+                  if (value === "venda_produto") description = "Venda de Produto";
+                  else if (value === "venda_servico") description = "Venda de Serviço";
+                  else if (value === "venda_pacote") description = "Venda de Pacote";
+                  else if (value === "compra_produto") description = "Compra de Produto";
+                  else if (value === "salario") description = "Pagamento de Salário/Comissão";
+                  else if (value === "aluguel") description = "Pagamento de Aluguel";
+                  else if (value === "utilities") description = "Pagamento de Água/Luz/Internet";
+                  else if (value === "marketing") description = "Despesa com Marketing";
+                  else description = "Outros";
+                  
+                  setNewTransaction({...newTransaction, category: value, description: description});
+                }}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -2557,19 +2683,193 @@ export default function CashRegister() {
               newTransaction.category === "venda_pacote")) && (
               <div className="space-y-2">
                 <Label>Cliente</Label>
-                <Input
-                  value={newTransaction.client_name || ""}
-                  onChange={(e) => setNewTransaction({
-                    ...newTransaction, 
-                    client_name: e.target.value
-                  })}
-                  placeholder="Nome do cliente"
-                />
+                <div className="relative">
+                  <Input
+                    value={selectedClient ? selectedClient.name : clientSearchTerm}
+                    onChange={(e) => {
+                      setClientSearchTerm(e.target.value);
+                      setShowClientSearch(true);
+                      if (!selectedClient) {
+                        const results = searchClients(e.target.value);
+                        setClientSearchResults(results);
+                      }
+                    }}
+                    onClick={() => {
+                      if (selectedClient) {
+                        setSelectedClient(null);
+                        setClientSearchTerm("");
+                      } else {
+                        setShowClientSearch(true);
+                      }
+                    }}
+                    placeholder="Buscar cliente por nome ou CPF"
+                  />
+                  {selectedClient && (
+                    <button
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      onClick={() => {
+                        setSelectedClient(null);
+                        setClientSearchTerm("");
+                        setNewTransaction({
+                          ...newTransaction,
+                          client_id: "",
+                          client_name: ""
+                        });
+                      }}
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+                
+                {showClientSearch && clientSearchTerm && !selectedClient && (
+                  <div className="absolute z-10 w-full mt-1 bg-white rounded-md shadow-lg border max-h-60 overflow-auto">
+                    {clientSearchResults.length > 0 ? (
+                      clientSearchResults.map(client => (
+                        <div
+                          key={client.id}
+                          className="p-3 border-b hover:bg-gray-50 cursor-pointer"
+                          onClick={() => {
+                            setSelectedClient(client);
+                            setClientSearchTerm(client.name);
+                            setShowClientSearch(false);
+                            setClientSearchResults([]);
+                            setNewTransaction({
+                              ...newTransaction,
+                              client_id: client.id,
+                              client_name: client.name
+                            });
+                          }}
+                        >
+                          <div className="font-medium">{client.name}</div>
+                          {client.cpf && (
+                            <div className="text-sm text-gray-500">CPF: {client.cpf}</div>
+                          )}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="p-3 text-center text-gray-500">
+                        Nenhum cliente encontrado
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
+
+            <div className="space-y-4 pt-4 border-t">
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="font-medium">Formas de Pagamento</h3>
+                <Button 
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    // Distribuir o valor total entre os métodos de pagamento existentes
+                    const totalAmount = parseFloat(newTransaction.amount) || 0;
+                    const methodCount = newTransaction.payment_methods.length;
+                    if (methodCount > 0 && totalAmount > 0) {
+                      const valuePerMethod = totalAmount / methodCount;
+                      const updatedMethods = newTransaction.payment_methods.map(method => ({
+                        ...method,
+                        amount: valuePerMethod
+                      }));
+                      setNewTransaction({
+                        ...newTransaction,
+                        payment_methods: updatedMethods
+                      });
+                    }
+                  }}
+                  disabled={!newTransaction.amount || newTransaction.amount <= 0}
+                >
+                  Distribuir Valores
+                </Button>
+              </div>
+              
+              {newTransaction.payment_methods.map((payment, index) => (
+                <div key={index} className="space-y-3 p-3 border rounded-md bg-gray-50">
+                  <div className="flex justify-between items-center">
+                    <Select
+                      value={payment.method_id}
+                      onValueChange={(value) => updatePaymentMethod(index, 'method_id', value)}
+                    >
+                      <SelectTrigger className="w-[200px]">
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {paymentMethods.map(method => (
+                          <SelectItem key={method.id} value={method.id}>
+                            {method.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    
+                    {newTransaction.payment_methods.length > 1 && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-red-500"
+                        onClick={() => removePaymentMethod(index)}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Label className="w-20">Valor:</Label>
+                      <Input
+                        type="number"
+                        value={payment.amount}
+                        onChange={(e) => updatePaymentMethod(index, 'amount', parseFloat(e.target.value) || 0)}
+                        className="flex-1"
+                        placeholder="0,00"
+                      />
+                    </div>
+                    
+                    {payment.method_id && paymentMethods.find(m => m.id === payment.method_id)?.allowsInstallments && (
+                      <div className="flex items-center gap-2">
+                        <Label className="w-20">Parcelas:</Label>
+                        <Select
+                          value={String(payment.installments)}
+                          onValueChange={(value) => updatePaymentMethod(index, 'installments', parseInt(value))}
+                        >
+                          <SelectTrigger className="flex-1">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Array.from({ length: 12 }, (_, i) => i + 1).map(num => (
+                              <SelectItem key={num} value={String(num)}>
+                                {num}x
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+              
+              <Button 
+                variant="outline" 
+                className="w-full" 
+                onClick={addPaymentMethod}
+                disabled={newTransaction.payment_methods.length >= paymentMethods.length}
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Adicionar Forma de Pagamento
+              </Button>
+            </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowNewTransactionDialog(false)}>
+            <Button variant="outline" onClick={() => {
+              setShowNewTransactionDialog(false);
+              setSelectedClient(null);
+              setClientSearchTerm("");
+              setClientSearchResults([]);
+            }}>
               Cancelar
             </Button>
             <Button onClick={() => handleCreateTransaction(newTransaction)} className="bg-[#294380] hover:bg-[#0D0F36]">
