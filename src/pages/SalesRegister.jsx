@@ -335,6 +335,7 @@ export default function SalesRegister() {
   const [clientSearchResults, setClientSearchResults] = useState([]);
   const [hasMoreClients, setHasMoreClients] = useState(false);
   const [lastClientDoc, setLastClientDoc] = useState(null);
+  const [allClientsCache, setAllClientsCache] = useState(null);
 
   // Efeito para debounce na busca de clientes
   useEffect(() => {
@@ -348,68 +349,92 @@ export default function SalesRegister() {
 
   // Função otimizada de busca de clientes
   const handleClientSearch = async (term) => {
+    console.log("[SalesRegister] handleClientSearch chamado com termo:", term);
     if (!term || term.length < 3) {
+      console.log("[SalesRegister] Termo muito curto, ignorando busca");
       setClientSearchResults([]);
       return;
     }
 
     setIsSearchingClients(true);
     try {
-      // Busca por nome
-      const nameQuery = query(
-        collection(db, 'clients'),
-        where('name', '>=', term.toLowerCase()),
-        where('name', '<=', term.toLowerCase() + '\uf8ff'),
-        limit(10)
-      );
+      // Usar cache de clientes se disponível para evitar carregar todos os clientes repetidamente
+      let allClients;
+      
+      if (allClientsCache) {
+        console.log("[SalesRegister] Usando cache de clientes");
+        allClients = allClientsCache;
+      } else {
+        // Busca direta por nome, CPF, email ou telefone
+        // Vamos usar a API do Client.list() que busca todos os clientes
+        console.log("[SalesRegister] Buscando todos os clientes com Client.list()");
+        
+        // Usar Client.list() para buscar TODOS os clientes sem limite
+        allClients = await Client.list();
+        
+        // Armazenar no cache para futuras buscas
+        setAllClientsCache(allClients);
+      }
+      
+      // Normaliza o termo de busca (remove acentos e converte para lowercase)
+      const normalizedTerm = term.toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, ""); // Remove acentos
 
-      // Busca por CPF
-      const cpfQuery = query(
-        collection(db, 'clients'),
-        where('cpf', '>=', term),
-        where('cpf', '<=', term + '\uf8ff'),
-        limit(10)
-      );
-
-      // Busca por email
-      const emailQuery = query(
-        collection(db, 'clients'),
-        where('email', '>=', term.toLowerCase()),
-        where('email', '<=', term.toLowerCase() + '\uf8ff'),
-        limit(10)
-      );
-
-      // Executa todas as buscas em paralelo
-      const [nameSnapshot, cpfSnapshot, emailSnapshot] = await Promise.all([
-        getDocs(nameQuery),
-        getDocs(cpfQuery),
-        getDocs(emailQuery)
-      ]);
-
-      // Combina os resultados removendo duplicatas por ID
+      console.log("[SalesRegister] Total de clientes carregados:", allClients.length);
+      
+      // Filtra os clientes no lado do cliente para maior flexibilidade
       const resultsMap = new Map();
       
-      // Adiciona resultados da busca por nome
-      nameSnapshot.docs.forEach(doc => {
-        resultsMap.set(doc.id, { id: doc.id, ...doc.data() });
+      // Adiciona resultados filtrados manualmente
+      allClients.forEach(client => {
+        // Normaliza os campos do cliente para comparação
+        const normalizedName = (client.name || '').toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "");
+          
+        const normalizedCpf = (client.cpf || '');
+        const normalizedEmail = (client.email || '').toLowerCase();
+        const normalizedPhone = (client.phone || '');
+        
+        // Debug: mostrar alguns clientes para verificar normalização
+        if (client.name && client.name.toLowerCase().includes('raquel')) {
+          console.log("[SalesRegister] Cliente com 'raquel' no nome:", {
+            original: client.name,
+            normalizado: normalizedName,
+            termo: normalizedTerm,
+            match: normalizedName.includes(normalizedTerm)
+          });
+        }
+        
+        // Verifica se algum campo contém o termo de busca
+        if (
+          normalizedName.includes(normalizedTerm) ||
+          normalizedCpf.includes(term) ||
+          normalizedEmail.includes(term.toLowerCase()) ||
+          normalizedPhone.includes(term)
+        ) {
+          resultsMap.set(client.id, client);
+        }
       });
       
-      // Adiciona resultados da busca por CPF
-      cpfSnapshot.docs.forEach(doc => {
-        resultsMap.set(doc.id, { id: doc.id, ...doc.data() });
-      });
+      // Converte o Map para array e ordena por nome
+      const results = Array.from(resultsMap.values())
+        .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
       
-      // Adiciona resultados da busca por email
-      emailSnapshot.docs.forEach(doc => {
-        resultsMap.set(doc.id, { id: doc.id, ...doc.data() });
-      });
-
-      // Converte o Map para array
-      const results = Array.from(resultsMap.values());
+      console.log("[SalesRegister] Resultados encontrados:", results.length);
+      if (results.length > 0) {
+        console.log("[SalesRegister] Primeiros 5 resultados:", results.slice(0, 5).map(c => c.name));
+      }
       
-      setClientSearchResults(results);
-      setLastClientDoc(results[results.length - 1]);
-      setHasMoreClients(results.length === 10);
+      // Limita a 20 resultados para não sobrecarregar a interface
+      const limitedResults = results.slice(0, 20);
+      
+      setClientSearchResults(limitedResults);
+      setLastClientDoc(limitedResults[limitedResults.length - 1]);
+      setHasMoreClients(results.length > limitedResults.length);
+      
+      console.log("[SalesRegister] clientSearchResults atualizado com", limitedResults.length, "itens");
     } catch (error) {
       console.error('Erro na busca de clientes:', error);
       toast({
@@ -580,10 +605,16 @@ export default function SalesRegister() {
 
   // Função para buscar clientes
   const searchClients = (term) => {
+    console.log("[SalesRegister] Buscando cliente:", term);
     setClientSearchTerm(term);
     if (!term) {
       setClientSearchResults([]);
       return;
+    }
+    
+    // Forçar busca imediata se tiver 3 ou mais caracteres
+    if (term.length >= 3) {
+      handleClientSearch(term);
     }
   };
 
@@ -1428,6 +1459,49 @@ export default function SalesRegister() {
                         <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
                       </div>
                     )}
+                    
+                    {/* Resultados da busca de clientes */}
+                    {!selectedClient && (
+                      <div className="absolute z-10 mt-1 w-full bg-white rounded-md shadow-lg border">
+                        {isSearchingClients && clientSearchResults.length === 0 && (
+                          <div className="p-3 text-center text-gray-500">
+                            <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2" />
+                            Buscando clientes...
+                          </div>
+                        )}
+                        
+                        {!isSearchingClients && clientSearchTerm.length >= 3 && clientSearchResults.length === 0 && (
+                          <div className="p-3 text-center text-gray-500">
+                            Nenhum cliente encontrado
+                          </div>
+                        )}
+                        
+                        {clientSearchResults.length > 0 && (
+                          <div className="max-h-60 overflow-y-auto">
+                            {clientSearchResults.map((client) => (
+                              <div
+                                key={client.id}
+                                className="p-3 hover:bg-gray-50 cursor-pointer border-b flex justify-between items-center"
+                                onClick={() => {
+                                  setSelectedClient(client);
+                                  setClientSearchTerm("");
+                                  setClientSearchResults([]);
+                                }}
+                              >
+                                <div>
+                                  <div className="font-medium">{client.name}</div>
+                                  <div className="text-sm text-gray-500 flex flex-col">
+                                    {client.cpf && <span>CPF: {client.cpf}</span>}
+                                    {client.phone && <span>Tel: {client.phone}</span>}
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    
                     {selectedClient && (
                       <button
                         className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
