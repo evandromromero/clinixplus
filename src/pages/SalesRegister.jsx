@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { normalizeDate, createISODateWithoutTimezone } from "@/utils/dateUtils";
+import { db } from '@/firebase/config';
+import { collection, query, where, getDocs, limit, startAfter } from 'firebase/firestore';
 import { 
   Client, Sale, FinancialTransaction, Product, Service, 
   Employee, PaymentMethod, Package, ClientPackage, 
@@ -27,7 +29,8 @@ import {
   Clock,
   RefreshCw,
   Printer,
-  CalendarIcon
+  CalendarIcon,
+  Loader2
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -325,6 +328,176 @@ export default function SalesRegister() {
     }
   };
   
+  // Estado para controle de busca de clientes
+  const [clientSearchTerm, setClientSearchTerm] = useState('');
+  const [debouncedClientSearch, setDebouncedClientSearch] = useState('');
+  const [isSearchingClients, setIsSearchingClients] = useState(false);
+  const [clientSearchResults, setClientSearchResults] = useState([]);
+  const [hasMoreClients, setHasMoreClients] = useState(false);
+  const [lastClientDoc, setLastClientDoc] = useState(null);
+
+  // Efeito para debounce na busca de clientes
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (clientSearchTerm) {
+        setDebouncedClientSearch(clientSearchTerm);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [clientSearchTerm]);
+
+  // Função otimizada de busca de clientes
+  const handleClientSearch = async (term) => {
+    if (!term || term.length < 3) {
+      setClientSearchResults([]);
+      return;
+    }
+
+    setIsSearchingClients(true);
+    try {
+      // Busca por nome
+      const nameQuery = query(
+        collection(db, 'clients'),
+        where('name', '>=', term.toLowerCase()),
+        where('name', '<=', term.toLowerCase() + '\uf8ff'),
+        limit(10)
+      );
+
+      // Busca por CPF
+      const cpfQuery = query(
+        collection(db, 'clients'),
+        where('cpf', '>=', term),
+        where('cpf', '<=', term + '\uf8ff'),
+        limit(10)
+      );
+
+      // Busca por email
+      const emailQuery = query(
+        collection(db, 'clients'),
+        where('email', '>=', term.toLowerCase()),
+        where('email', '<=', term.toLowerCase() + '\uf8ff'),
+        limit(10)
+      );
+
+      // Executa todas as buscas em paralelo
+      const [nameSnapshot, cpfSnapshot, emailSnapshot] = await Promise.all([
+        getDocs(nameQuery),
+        getDocs(cpfQuery),
+        getDocs(emailQuery)
+      ]);
+
+      // Combina os resultados removendo duplicatas por ID
+      const resultsMap = new Map();
+      
+      // Adiciona resultados da busca por nome
+      nameSnapshot.docs.forEach(doc => {
+        resultsMap.set(doc.id, { id: doc.id, ...doc.data() });
+      });
+      
+      // Adiciona resultados da busca por CPF
+      cpfSnapshot.docs.forEach(doc => {
+        resultsMap.set(doc.id, { id: doc.id, ...doc.data() });
+      });
+      
+      // Adiciona resultados da busca por email
+      emailSnapshot.docs.forEach(doc => {
+        resultsMap.set(doc.id, { id: doc.id, ...doc.data() });
+      });
+
+      // Converte o Map para array
+      const results = Array.from(resultsMap.values());
+      
+      setClientSearchResults(results);
+      setLastClientDoc(results[results.length - 1]);
+      setHasMoreClients(results.length === 10);
+    } catch (error) {
+      console.error('Erro na busca de clientes:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao buscar clientes. Tente novamente.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSearchingClients(false);
+    }
+  };
+
+  // Função para carregar mais resultados de clientes
+  const loadMoreClients = async () => {
+    if (!lastClientDoc || !hasMoreClients || isSearchingClients) return;
+
+    setIsSearchingClients(true);
+    try {
+      // Busca por nome
+      const nameQuery = query(
+        collection(db, 'clients'),
+        where('name', '>=', debouncedClientSearch.toLowerCase()),
+        where('name', '<=', debouncedClientSearch.toLowerCase() + '\uf8ff'),
+        startAfter(lastClientDoc),
+        limit(10)
+      );
+
+      // Busca por CPF
+      const cpfQuery = query(
+        collection(db, 'clients'),
+        where('cpf', '>=', debouncedClientSearch),
+        where('cpf', '<=', debouncedClientSearch + '\uf8ff'),
+        startAfter(lastClientDoc),
+        limit(10)
+      );
+
+      // Busca por email
+      const emailQuery = query(
+        collection(db, 'clients'),
+        where('email', '>=', debouncedClientSearch.toLowerCase()),
+        where('email', '<=', debouncedClientSearch.toLowerCase() + '\uf8ff'),
+        startAfter(lastClientDoc),
+        limit(10)
+      );
+
+      // Executa todas as buscas em paralelo
+      const [nameSnapshot, cpfSnapshot, emailSnapshot] = await Promise.all([
+        getDocs(nameQuery),
+        getDocs(cpfQuery),
+        getDocs(emailQuery)
+      ]);
+
+      // Combina os resultados removendo duplicatas por ID
+      const resultsMap = new Map();
+      
+      // Adiciona resultados da busca por nome
+      nameSnapshot.docs.forEach(doc => {
+        resultsMap.set(doc.id, { id: doc.id, ...doc.data() });
+      });
+      
+      // Adiciona resultados da busca por CPF
+      cpfSnapshot.docs.forEach(doc => {
+        resultsMap.set(doc.id, { id: doc.id, ...doc.data() });
+      });
+      
+      // Adiciona resultados da busca por email
+      emailSnapshot.docs.forEach(doc => {
+        resultsMap.set(doc.id, { id: doc.id, ...doc.data() });
+      });
+
+      // Converte o Map para array
+      const results = Array.from(resultsMap.values());
+      
+      setClientSearchResults(prev => [...prev, ...results]);
+      setLastClientDoc(results[results.length - 1]);
+      setHasMoreClients(results.length === 10);
+    } catch (error) {
+      console.error('Erro ao carregar mais clientes:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao carregar mais clientes. Tente novamente.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSearchingClients(false);
+    }
+  };
+
   const loadDataWithRetry = async (maxRetries = 3) => {
     try {
       setIsLoading(true);
@@ -332,7 +505,6 @@ export default function SalesRegister() {
       // Usa Promise.allSettled para permitir que as chamadas sejam feitas em paralelo
       // e não falhar completamente se apenas algumas APIs falharem
       const results = await Promise.allSettled([
-        fetchWithRetry(() => Client.list(), maxRetries),
         fetchWithRetry(() => Product.list(), maxRetries),
         fetchWithRetry(() => Service.list(), maxRetries),
         fetchWithRetry(() => Package.list(), maxRetries),
@@ -344,7 +516,6 @@ export default function SalesRegister() {
       
       // Processa os resultados
       const [
-        clientsResult,
         productsResult,
         servicesResult,
         packagesResult,
@@ -355,7 +526,6 @@ export default function SalesRegister() {
       ] = results;
       
       // Atualiza os estados com os dados obtidos, usando arrays vazios para falhas
-      setClients(clientsResult.status === 'fulfilled' ? clientsResult.value : []);
       setProducts(productsResult.status === 'fulfilled' ? productsResult.value : []);
       setServices(servicesResult.status === 'fulfilled' ? servicesResult.value : []);
       setPackages(packagesResult.status === 'fulfilled' ? packagesResult.value : []);
@@ -401,15 +571,20 @@ export default function SalesRegister() {
   
   // Usamos a função normalizeDate importada de utils/dateUtils.js
 
+  // Efeito para executar a busca quando o termo debounced mudar
+  useEffect(() => {
+    if (debouncedClientSearch) {
+      handleClientSearch(debouncedClientSearch);
+    }
+  }, [debouncedClientSearch]);
+
   // Função para buscar clientes
   const searchClients = (term) => {
-    if (!term) return [];
-    term = term.toLowerCase();
-    return clients.filter(client => 
-      client.name?.toLowerCase().includes(term) || 
-      client.cpf?.toLowerCase().includes(term) ||
-      client.email?.toLowerCase().includes(term)
-    );
+    setClientSearchTerm(term);
+    if (!term) {
+      setClientSearchResults([]);
+      return;
+    }
   };
 
   // Função para pesquisar itens baseado no tipo de venda
@@ -464,6 +639,10 @@ export default function SalesRegister() {
       itemPrice = parseFloat(item.value || 0);
     } else if (saleType === "assinatura") {
       itemPrice = parseFloat(item.monthly_price || 0);
+    } else if (saleType === "serviço") {
+      // Para serviços, verificar se tem preço base ou preço total
+      itemPrice = parseFloat(item.base_price || item.total_price || item.price || 0);
+      console.log("[SalesRegister] Preço do serviço:", itemPrice);
     } else {
       itemPrice = parseFloat(item.price || 0);
     }
@@ -1230,31 +1409,31 @@ export default function SalesRegister() {
                   <Label className="mb-2 block">Cliente</Label>
                   <div className="relative">
                     <Input
-                      placeholder="Buscar cliente por nome ou CPF"
-                      value={selectedClient ? selectedClient.name : searchTerm}
+                      placeholder="Buscar cliente por nome, CPF ou email"
+                      value={selectedClient ? selectedClient.name : clientSearchTerm}
                       onChange={(e) => {
-                        setSearchTerm(e.target.value);
-                        setShowClientSearch(true);
                         if (!selectedClient) {
-                          const results = searchClients(e.target.value);
-                          setSearchResults(results);
+                          searchClients(e.target.value);
                         }
                       }}
                       onClick={() => {
                         if (selectedClient) {
                           setSelectedClient(null);
-                          setSearchTerm("");
-                        } else {
-                          setShowClientSearch(true);
+                          setClientSearchTerm("");
                         }
                       }}
                     />
+                    {isSearchingClients && (
+                      <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                        <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                      </div>
+                    )}
                     {selectedClient && (
                       <button
                         className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                         onClick={() => {
                           setSelectedClient(null);
-                          setSearchTerm("");
+                          setClientSearchTerm("");
                         }}
                       >
                         <X className="h-4 w-4" />
@@ -1262,30 +1441,33 @@ export default function SalesRegister() {
                     )}
                   </div>
                   
-                  {showClientSearch && searchTerm && !selectedClient && (
+                  {!selectedClient && clientSearchResults.length > 0 && (
                     <div className="absolute z-10 w-full mt-1 bg-white rounded-md shadow-lg border max-h-60 overflow-auto">
-                      {searchResults.length > 0 ? (
-                        searchResults.map(client => (
-                          <div
-                            key={client.id}
-                            className="p-3 border-b hover:bg-gray-50 cursor-pointer"
-                            onClick={() => {
-                              setSelectedClient(client);
-                              setSearchTerm(client.name);
-                              setShowClientSearch(false);
-                              setSearchResults([]);
-                            }}
-                          >
-                            <div className="font-medium">{client.name}</div>
-                            {client.cpf && (
-                              <div className="text-sm text-gray-500">CPF: {client.cpf}</div>
-                            )}
+                      {clientSearchResults.map(client => (
+                        <div
+                          key={client.id}
+                          className="p-3 border-b hover:bg-gray-50 cursor-pointer"
+                          onClick={() => {
+                            setSelectedClient(client);
+                            setClientSearchTerm(client.name);
+                            setClientSearchResults([]);
+                          }}
+                        >
+                          <div className="font-medium">{client.name}</div>
+                          <div className="text-sm text-gray-500 flex gap-2">
+                            {client.cpf && <span>CPF: {client.cpf}</span>}
+                            {client.email && <span>• {client.email}</span>}
                           </div>
-                        ))
-                      ) : (
-                        <div className="p-3 text-center text-gray-500">
-                          Nenhum cliente encontrado
                         </div>
+                      ))}
+                      {hasMoreClients && (
+                        <button
+                          className="w-full p-2 text-sm text-blue-600 hover:bg-blue-50 border-t"
+                          onClick={loadMoreClients}
+                          disabled={isSearchingClients}
+                        >
+                          {isSearchingClients ? "Carregando..." : "Carregar mais resultados"}
+                        </button>
                       )}
                     </div>
                   )}
