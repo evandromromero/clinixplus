@@ -225,12 +225,15 @@ export default function Appointments() {
       const providersWithColors = assignColorsToEmployees(providersData);
       
       // Carregar outros dados
+      console.log("[Agenda] Carregando pacotes e outros dados...");
       const [appointmentsData, clientsData, servicesData, packagesData] = await Promise.all([
         Appointment.list(),
         Client.list(),
         Service.list(),
         Package.list()
       ]);
+      
+      console.log("[Agenda] Pacotes carregados:", packagesData);
 
       // Atualizar estados
       setEmployees(providersWithColors);
@@ -252,8 +255,14 @@ export default function Appointments() {
         );
         setEmployees(providersData);
         setSelectedEmployees(providersData.map(emp => emp.id));
+        
+        // Tentar recarregar também os pacotes
+        console.log("[Agenda] Tentando recarregar pacotes...");
+        const packagesData = await Package.list();
+        console.log("[Agenda] Pacotes recarregados:", packagesData);
+        setPackages(packagesData);
       } catch (retryError) {
-        console.error("[Agenda] Erro ao recarregar funcionários:", retryError);
+        console.error("[Agenda] Erro ao recarregar dados:", retryError);
       }
     }
   };
@@ -590,6 +599,18 @@ export default function Appointments() {
         client_id: clientId, 
         status: 'ativo'
       });
+      console.log("[DEBUG] Pacotes do cliente carregados:", clientPackagesData);
+      
+      // Verificar se os package_id dos pacotes do cliente existem na lista de pacotes
+      if (clientPackagesData.length > 0) {
+        console.log("[DEBUG] Lista de packages disponíveis:", packages);
+        clientPackagesData.forEach(pkg => {
+          const packageFound = packages.find(p => p.id === pkg.package_id);
+          console.log(`[DEBUG] Pacote ${pkg.id} (package_id: ${pkg.package_id}) - Encontrado: ${!!packageFound}`, 
+            packageFound ? packageFound.name : "Nome não encontrado");
+        });
+      }
+      
       setClientPackages(clientPackagesData);
       setFilteredPackages(clientPackagesData);
       
@@ -625,8 +646,34 @@ export default function Appointments() {
       return;
     }
     
-    const packageInfo = packages.find(p => p.id === selectedPackage.package_id);
+    let packageInfo = packages.find(p => p.id === selectedPackage.package_id);
     console.log("[DEBUG] Informações do pacote selecionado:", packageInfo);
+    
+    // Se o pacote não for encontrado na lista atual, tente recarregar
+    if (!packageInfo) {
+      console.log("[DEBUG] Pacote não encontrado na lista atual, tentando recarregar...");
+      try {
+        // Recarregar todos os pacotes
+        const packagesData = await Package.list();
+        console.log("[DEBUG] Pacotes recarregados:", packagesData);
+        setPackages(packagesData);
+        
+        // Tentar encontrar o pacote novamente
+        packageInfo = packagesData.find(p => p.id === selectedPackage.package_id);
+        console.log("[DEBUG] Pacote encontrado após recarga:", packageInfo);
+        
+        if (!packageInfo) {
+          console.error("[ERROR] Pacote não encontrado mesmo após recarga:", selectedPackage.package_id);
+          toast({
+            title: "Aviso",
+            description: "Informações do pacote não encontradas. Alguns dados podem não ser exibidos corretamente.",
+            variant: "warning"
+          });
+        }
+      } catch (error) {
+        console.error("[ERROR] Erro ao recarregar pacotes:", error);
+      }
+    }
     
     // Atualiza os estados do pacote
     setSelectedPackageId(packageId);
@@ -859,99 +906,6 @@ export default function Appointments() {
     }
   };
 
-  const updatePackageSession = async (appointment, newStatus) => {
-    try {
-      const clientPackages = await ClientPackage.filter({ 
-        client_id: appointment.client_id,
-        status: 'ativo'
-      });
-      
-      const relevantPackage = clientPackages.find(pkg => {
-        const packageData = packages.find(p => p.id === pkg.package_id);
-        return packageData?.services.some(s => s.service_id === appointment.service_id);
-      });
-
-      if (relevantPackage) {
-        const serviceData = services.find(s => s.id === appointment.service_id);
-        const employeeData = employees.find(e => e.id === appointment.employee_id);
-        
-        // Atualiza o status da sessão no histórico
-        const currentSessionHistory = Array.isArray(relevantPackage.session_history) 
-          ? relevantPackage.session_history 
-          : [];
-
-        let updatedSessionHistory;
-        const sessionIndex = currentSessionHistory.findIndex(
-          s => s.appointment_id === appointment.id
-        );
-
-        if (sessionIndex >= 0) {
-          // Atualiza a sessão existente
-          updatedSessionHistory = currentSessionHistory.map((session, index) => 
-            index === sessionIndex 
-              ? { ...session, status: newStatus }
-              : session
-          );
-        } else {
-          // Cria uma nova entrada no histórico
-          const sessionHistoryEntry = {
-            service_id: appointment.service_id,
-            service_name: serviceData?.name || "Serviço não encontrado",
-            employee_id: appointment.employee_id,
-            employee_name: employeeData?.name || "Profissional não encontrado",
-            date: appointment.date,
-            appointment_id: appointment.id,
-            status: newStatus,
-            notes: appointment.notes || ""
-          };
-
-          updatedSessionHistory = [...currentSessionHistory, sessionHistoryEntry];
-        }
-        
-        // Só incrementa o contador se o status for 'concluido'
-        const sessionsToAdd = newStatus === 'concluido' ? 1 : 0;
-        const currentUsedSessions = relevantPackage.session_history?.filter(
-          s => s.status === 'concluido'
-        ).length || 0;
-        
-        await ClientPackage.update(relevantPackage.id, {
-          session_history: updatedSessionHistory,
-          sessions_used: currentUsedSessions + sessionsToAdd,
-          status: (currentUsedSessions + sessionsToAdd) >= relevantPackage.total_sessions ? 'finalizado' : 'ativo'
-        });
-      }
-    } catch (error) {
-      console.error("Erro ao atualizar sessão do pacote:", error);
-    }
-  };
-
-  const showConfirmDialog = (type, appointmentId) => {
-    const configs = {
-      cancel: {
-        title: 'Cancelar Agendamento',
-        description: 'Tem certeza que deseja cancelar este agendamento?',
-        confirmText: 'Sim, cancelar'
-      },
-      complete: {
-        title: 'Concluir Agendamento',
-        description: 'Confirmar que este agendamento foi realizado?',
-        confirmText: 'Sim, concluir'
-      },
-      delete: {
-        title: 'Excluir Agendamento',
-        description: 'Tem certeza que deseja excluir este agendamento? Esta ação não pode ser desfeita.',
-        confirmText: 'Sim, excluir'
-      }
-    };
-
-    setConfirmationDialog({
-      isOpen: true,
-      type,
-      appointmentId,
-      ...configs[type]
-    });
-  };
-
   // Função para validar se o horário escolhido respeita o intervalo do profissional
   const validateAppointmentInterval = (employeeId, selectedHour) => {
     if (!employeeId) return true;
@@ -1086,6 +1040,122 @@ export default function Appointments() {
     localStorage.setItem('showAgendaFilters', newValue.toString());
   };
 
+  const handleOpenNewAppointmentDialog = async () => {
+    // Verificar se os pacotes já foram carregados
+    if (packages.length === 0) {
+      console.log("[Agenda] Carregando pacotes antes de abrir o modal...");
+      try {
+        const packagesData = await Package.list();
+        console.log("[Agenda] Pacotes carregados:", packagesData);
+        setPackages(packagesData);
+      } catch (error) {
+        console.error("[Agenda] Erro ao carregar pacotes:", error);
+        toast({
+          title: "Erro",
+          description: "Erro ao carregar pacotes. Tente novamente.",
+          variant: "destructive"
+        });
+      }
+    }
+    
+    // Limpar o formulário e abrir o modal
+    clearNewAppointmentForm();
+    setShowNewAppointmentDialog(true);
+  };
+
+  const updatePackageSession = async (appointment, newStatus) => {
+    try {
+      const clientPackages = await ClientPackage.filter({ 
+        client_id: appointment.client_id,
+        status: 'ativo'
+      });
+      
+      const relevantPackage = clientPackages.find(pkg => {
+        const packageData = packages.find(p => p.id === pkg.package_id);
+        return packageData?.services.some(s => s.service_id === appointment.service_id);
+      });
+
+      if (relevantPackage) {
+        const serviceData = services.find(s => s.id === appointment.service_id);
+        const employeeData = employees.find(e => e.id === appointment.employee_id);
+        
+        // Atualiza o status da sessão no histórico
+        const currentSessionHistory = Array.isArray(relevantPackage.session_history) 
+          ? relevantPackage.session_history 
+          : [];
+
+        let updatedSessionHistory;
+        const sessionIndex = currentSessionHistory.findIndex(
+          s => s.appointment_id === appointment.id
+        );
+
+        if (sessionIndex >= 0) {
+          // Atualiza a sessão existente
+          updatedSessionHistory = currentSessionHistory.map((session, index) => 
+            index === sessionIndex 
+              ? { ...session, status: newStatus }
+              : session
+          );
+        } else {
+          // Cria uma nova entrada no histórico
+          const sessionHistoryEntry = {
+            service_id: appointment.service_id,
+            service_name: serviceData?.name || "Serviço não encontrado",
+            employee_id: appointment.employee_id,
+            employee_name: employeeData?.name || "Profissional não encontrado",
+            date: appointment.date,
+            appointment_id: appointment.id,
+            status: newStatus,
+            notes: appointment.notes || ""
+          };
+
+          updatedSessionHistory = [...currentSessionHistory, sessionHistoryEntry];
+        }
+        
+        // Só incrementa o contador se o status for 'concluido'
+        const sessionsToAdd = newStatus === 'concluido' ? 1 : 0;
+        const currentUsedSessions = relevantPackage.session_history?.filter(
+          s => s.status === 'concluido'
+        ).length || 0;
+        
+        await ClientPackage.update(relevantPackage.id, {
+          session_history: updatedSessionHistory,
+          sessions_used: currentUsedSessions + sessionsToAdd,
+          status: (currentUsedSessions + sessionsToAdd) >= relevantPackage.total_sessions ? 'finalizado' : 'ativo'
+        });
+      }
+    } catch (error) {
+      console.error("Erro ao atualizar sessão do pacote:", error);
+    }
+  };
+
+  const showConfirmDialog = (type, appointmentId) => {
+    const configs = {
+      cancel: {
+        title: 'Cancelar Agendamento',
+        description: 'Tem certeza que deseja cancelar este agendamento?',
+        confirmText: 'Sim, cancelar'
+      },
+      complete: {
+        title: 'Concluir Agendamento',
+        description: 'Confirmar que este agendamento foi realizado?',
+        confirmText: 'Sim, concluir'
+      },
+      delete: {
+        title: 'Excluir Agendamento',
+        description: 'Tem certeza que deseja excluir este agendamento? Esta ação não pode ser desfeita.',
+        confirmText: 'Sim, excluir'
+      }
+    };
+
+    setConfirmationDialog({
+      isOpen: true,
+      type,
+      appointmentId,
+      ...configs[type]
+    });
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -1111,7 +1181,7 @@ export default function Appointments() {
           </Button>
         </div>
         <Button 
-          onClick={() => setShowNewAppointmentDialog(true)}
+          onClick={() => handleOpenNewAppointmentDialog()}
           className="bg-purple-600 hover:bg-purple-700"
         >
           <Plus className="w-4 h-4 mr-2" />
@@ -1568,9 +1638,14 @@ export default function Appointments() {
                   <SelectContent>
                     {clientPackages.map((pkg) => {
                       const packageData = packages.find(p => p.id === pkg.package_id);
+                      console.log(`[DEBUG] Renderizando pacote ${pkg.id}:`, {
+                        packageId: pkg.package_id,
+                        packageData: packageData,
+                        packageName: packageData?.name || "Pacote sem nome"
+                      });
                       return (
                         <SelectItem key={pkg.id} value={pkg.id}>
-                          {packageData?.name} - {pkg.sessions_used}/{pkg.total_sessions} sessões
+                          {packageData?.name || "Pacote sem nome"} - {pkg.sessions_used}/{pkg.total_sessions} sessões
                         </SelectItem>
                       );
                     })}

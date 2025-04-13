@@ -347,4 +347,5 @@ src/
 - Seção de gift cards só aparece se a permissão "manage_gift_cards" estiver habilitada
 - Links de navegação também são ocultados quando as permissões estão desabilitadas
 
-Para mais informações e suporte, please contact Base44 support at app@base44.com.
+Para mais informações e suporte, please contact Base44 support at app@base44.com.#   c l i n i x p l u s  
+ 
