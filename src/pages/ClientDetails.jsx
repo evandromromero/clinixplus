@@ -33,7 +33,15 @@ import {
   Wallet,
   X,
   CreditCard,
-  CalendarPlus
+  CalendarPlus,
+  ChevronUp,
+  ChevronDown,
+  Trash2,
+  Send,
+  FileUp,
+  FileDown,
+  Printer,
+  Share
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -99,6 +107,7 @@ export default function ClientDetails() {
   const [showGiftCardImageDialog, setShowGiftCardImageDialog] = useState(false);
   const [selectedSubscription, setSelectedSubscription] = useState(null);
   const [showPaymentHistoryDialog, setShowPaymentHistoryDialog] = useState(false);
+  const [expandedPackages, setExpandedPackages] = useState({});
   const urlParams = new URLSearchParams(window.location.search);
   const clientId = urlParams.get('id');
 
@@ -692,6 +701,50 @@ export default function ClientDetails() {
     return client?.name || 'Cliente não encontrado';
   };
 
+  // Função para formatar o status da assinatura
+  const formatSubscriptionStatus = (status) => {
+    switch (status) {
+      case 'ativa':
+        return 'Ativa';
+      case 'pendente':
+        return 'Pendente';
+      case 'cancelada':
+        return 'Cancelada';
+      case 'suspensa':
+        return 'Suspensa';
+      case 'expirada':
+        return 'Expirada';
+      default:
+        return status;
+    }
+  };
+
+  // Função para obter a cor do badge de status
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'ativa':
+        return 'bg-green-100 text-green-800';
+      case 'pendente':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'cancelada':
+        return 'bg-red-100 text-red-800';
+      case 'suspensa':
+        return 'bg-orange-100 text-orange-800';
+      case 'expirada':
+        return 'bg-gray-100 text-gray-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  // Função para alternar a expansão de um pacote
+  const togglePackageExpansion = (packageId) => {
+    setExpandedPackages(prev => ({
+      ...prev,
+      [packageId]: !prev[packageId]
+    }));
+  };
+
   if (!client && !loadError) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -739,36 +792,6 @@ export default function ClientDetails() {
       transferencia: 'Transferência'
     };
     return methods[method] || method;
-  };
-  
-  // Função para formatar o status da assinatura
-  const formatSubscriptionStatus = (status) => {
-    const statuses = {
-      ativa: 'Ativa',
-      pendente: 'Pendente',
-      cancelada: 'Cancelada',
-      suspensa: 'Suspensa',
-      expirada: 'Expirada'
-    };
-    return statuses[status] || status;
-  };
-  
-  // Função para obter a cor do badge de status
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'ativa':
-        return 'bg-green-100 text-green-800';
-      case 'pendente':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'cancelada':
-        return 'bg-red-100 text-red-800';
-      case 'suspensa':
-        return 'bg-orange-100 text-orange-800';
-      case 'expirada':
-        return 'bg-gray-100 text-gray-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
   };
 
   return (
@@ -1229,59 +1252,98 @@ export default function ClientDetails() {
                         </div>
                       </div>
                       
-                      <div className="mt-4">
-                        <h5 className="text-sm font-medium mb-2 text-[#175EA0]">Serviços Incluídos:</h5>
-                        <div className="space-y-1">
-                          {(pkg.package_snapshot?.services || []).map((service, index) => {
-                            const serviceName = getServiceName(service.service_id);
-                            const usedSessions = pkg.session_history?.filter(
-                              s => s.service_id === service.service_id && s.status === 'concluido'
-                            ).length || 0;
-                            
-                            return (
-                              <div 
-                                key={index}
-                                className="p-3 bg-gray-50 rounded-lg border border-gray-200"
-                              >
-                                <div className="flex items-center justify-between">
-                                  <span className="font-medium">{serviceName}</span>
-                                  <span className="text-sm text-gray-600">{usedSessions}/{service.quantity} sessões</span>
-                                </div>
-                              </div>
-                            );
-                          })}
+                      {/* Barra de progresso */}
+                      <div className="mt-3">
+                        <div className="flex justify-between text-xs mb-1 text-[#3475B8]">
+                          <span>Progresso:</span>
+                          <span>{pkg.sessions_used} de {pkg.total_sessions} sessões</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div 
+                            className="bg-[#518CD0] h-2 rounded-full" 
+                            style={{ width: `${Math.min(100, (pkg.sessions_used / pkg.total_sessions) * 100)}%` }}
+                          ></div>
                         </div>
                       </div>
 
-                      <div className="mt-4 pt-4 border-t border-[#6EA3E7]">
-                        <h5 className="text-sm font-medium mb-2 text-[#175EA0]">Histórico de Uso:</h5>
-                        <div className="space-y-2">
-                          {pkg.session_history?.length > 0 ? (
-                            pkg.session_history.map((session, index) => (
-                              <div key={index} className="text-sm flex justify-between items-center bg-[#8BBAFF]/10 p-2 rounded border border-[#6EA3E7]">
-                                <div className="flex-1">
-                                  <div className="flex items-center text-[#175EA0]">
-                                    <Calendar className="w-4 h-4 mr-2 text-[#518CD0]" />
-                                    {format(new Date(session.date), "dd/MM/yyyy HH:mm")}
+                      {/* Botão para expandir/minimizar detalhes */}
+                      <button 
+                        onClick={() => togglePackageExpansion(pkg.id)}
+                        className="w-full flex items-center justify-center py-2 mt-3 text-sm text-[#3475B8] hover:bg-[#8BBAFF]/10 rounded transition-colors"
+                      >
+                        {expandedPackages[pkg.id] ? (
+                          <>
+                            <span>Menos detalhes</span>
+                            <ChevronUp className="h-4 w-4 ml-1" />
+                          </>
+                        ) : (
+                          <>
+                            <span>Mais detalhes</span>
+                            <ChevronDown className="h-4 w-4 ml-1" />
+                          </>
+                        )}
+                      </button>
+
+                      {/* Conteúdo expandido */}
+                      {expandedPackages[pkg.id] && (
+                        <div className="mt-3 pt-3 border-t border-[#6EA3E7]">
+                          {/* Serviços Incluídos */}
+                          <div className="mt-2">
+                            <h5 className="text-sm font-medium mb-2 text-[#175EA0]">Serviços Incluídos:</h5>
+                            <div className="space-y-1">
+                              {(pkg.package_snapshot?.services || []).map((service, index) => {
+                                const serviceName = getServiceName(service.service_id);
+                                const usedSessions = pkg.session_history?.filter(
+                                  s => s.service_id === service.service_id && s.status === 'concluido'
+                                ).length || 0;
+                                
+                                return (
+                                  <div 
+                                    key={index}
+                                    className="p-3 bg-gray-50 rounded-lg border border-gray-200"
+                                  >
+                                    <div className="flex items-center justify-between">
+                                      <span className="font-medium">{serviceName}</span>
+                                      <span className="text-sm text-gray-600">{usedSessions}/{service.quantity} sessões</span>
+                                    </div>
                                   </div>
-                                  <div className="text-[#3475B8] mt-1 flex items-center">
-                                    <User className="w-3 h-3 mr-1" />
-                                    {session.employee_name}
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          {/* Histórico de Uso */}
+                          <div className="mt-4 pt-4 border-t border-[#6EA3E7]">
+                            <h5 className="text-sm font-medium mb-2 text-[#175EA0]">Histórico de Uso:</h5>
+                            <div className="space-y-2">
+                              {pkg.session_history?.length > 0 ? (
+                                pkg.session_history.map((session, index) => (
+                                  <div key={index} className="text-sm flex justify-between items-center bg-[#8BBAFF]/10 p-2 rounded border border-[#6EA3E7]">
+                                    <div className="flex-1">
+                                      <div className="flex items-center text-[#175EA0]">
+                                        <Calendar className="w-4 h-4 mr-2 text-[#518CD0]" />
+                                        {format(new Date(session.date), "dd/MM/yyyy HH:mm")}
+                                      </div>
+                                      <div className="text-[#3475B8] mt-1 flex items-center">
+                                        <User className="w-3 h-3 mr-1" />
+                                        {session.employee_name}
+                                      </div>
+                                    </div>
+                                    <div className="text-right">
+                                      <div className="text-[#175EA0]">{session.service_name}</div>
+                                      {session.notes && (
+                                        <div className="text-xs text-[#518CD0] mt-1">{session.notes}</div>
+                                      )}
+                                    </div>
                                   </div>
-                                </div>
-                                <div className="text-right">
-                                  <div className="text-[#175EA0]">{session.service_name}</div>
-                                  {session.notes && (
-                                    <div className="text-xs text-[#518CD0] mt-1">{session.notes}</div>
-                                  )}
-                                </div>
-                              </div>
-                            ))
-                          ) : (
-                            <p className="text-sm text-[#518CD0]">Nenhum uso registrado</p>
-                          )}
+                                ))
+                              ) : (
+                                <p className="text-sm text-[#518CD0]">Nenhum uso registrado</p>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                      </div>
+                      )}
 
                       <div className="mt-4 pt-4 border-t border-[#6EA3E7] flex justify-between items-center">
                         <div className="text-sm">
@@ -1511,7 +1573,9 @@ export default function ClientDetails() {
                           <div className="space-y-2">
                             <div className="flex justify-between">
                               <span className="text-sm text-gray-500">Status:</span>
-                              <span className={`text-xs font-medium px-2 py-1 rounded-full ${getStatusColor(subscription.status)}`}>
+                              <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+                                getStatusColor(subscription.status)
+                              }`}>
                                 {formatSubscriptionStatus(subscription.status)}
                               </span>
                             </div>
@@ -1605,7 +1669,9 @@ export default function ClientDetails() {
                           <div className="space-y-2">
                             <div className="flex justify-between">
                               <span className="text-sm text-gray-500">Status:</span>
-                              <span className={`text-xs font-medium px-2 py-1 rounded-full ${getStatusColor(subscription.status)}`}>
+                              <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+                                getStatusColor(subscription.status)
+                              }`}>
                                 {formatSubscriptionStatus(subscription.status)}
                               </span>
                             </div>

@@ -203,24 +203,29 @@ src/
      * Valor fixo (R$)
    - Seleção do tipo de desconto no modal
    - Cálculo automático do preço final
+   - Cálculo automático de valores com base no tipo e valor do desconto
+   - Interface intuitiva para seleção do tipo de desconto
 
-2. **Identificação Visual por Cores**:
-   - Campo 'color' adicionado aos pacotes
-   - Paleta de cores predefinidas:
-     * Azul principal (#294380)
-     * Vermelho (#FF6B6B)
-     * Verde (#4CAF50)
-     * Salmão (#FFA07A)
-     * Roxo (#9370DB)
-     * Verde água (#20B2AA)
-     * Dourado (#FFD700)
-   - Interface com botões coloridos
-   - Barra lateral colorida nos cards
+2. **Correções no Portal do Cliente (Abril 2025)**:
+   - Corrigido o processamento de pacotes para incluir pacotes personalizados
+   - Implementado suporte para diferentes formatos de dados no package_snapshot (arrays e objetos)
+   - Adicionada flag isCustomPackage para identificar pacotes personalizados
+   - Corrigida a exibição dos serviços incluídos para lidar com diferentes formatos de dados
 
-3. **Layout dos Pacotes**:
-   - Cards informativos com:
-     * Nome do pacote
-     * Preço total com desconto
+3. **Interface Expansível para Pacotes (Abril 2025)**:
+   - **Portal do Cliente**: Implementada interface de detalhes expansíveis onde apenas informações básicas são mostradas inicialmente
+   - **Painel Administrativo de Pacotes**: Aplicada a mesma funcionalidade de minimizar/expandir
+   - **Detalhes do Cliente**: Adicionada funcionalidade na aba de pacotes
+   - Botões "Mais detalhes"/"Menos detalhes" com ícones intuitivos
+   - Barras de progresso para visualização clara das sessões utilizadas
+   - Organização das informações em seções lógicas (informações básicas, serviços incluídos, histórico)
+   - Consistência visual e de interação em todas as áreas onde os pacotes são exibidos
+
+4. **Histórico de Sessões**:
+   - Implementada exibição detalhada do histórico de sessões utilizadas
+   - Informações incluem: data, hora, serviço e profissional que realizou o atendimento
+   - Organização cronológica das sessões para fácil visualização
+   - Integração com o sistema de agendamentos para atualização automática do histórico
 
 #### Formulário de Contato e Gerenciamento de Mensagens
 1. **Formulário de Contato na Página Inicial**:
@@ -347,5 +352,4 @@ src/
 - Seção de gift cards só aparece se a permissão "manage_gift_cards" estiver habilitada
 - Links de navegação também são ocultados quando as permissões estão desabilitadas
 
-Para mais informações e suporte, please contact Base44 support at app@base44.com.#   c l i n i x p l u s  
- 
+Para mais informações e suporte, please contact Base44 support at app@base44.com.
