@@ -94,25 +94,45 @@ export default function ClientPortal() {
       const activePackages = clientPackagesData
         .filter(cp => cp.client_id === clientId)
         .map(cp => {
-          // Encontra o pacote base
-          const basePackage = packagesData.find(p => p.id === cp.package_id);
+          // Verifica se é um pacote personalizado
+          const isCustomPackage = cp.package_id?.startsWith('custom_');
+          
+          // Encontra o pacote base (apenas para pacotes regulares)
+          const basePackage = isCustomPackage ? null : packagesData.find(p => p.id === cp.package_id);
           
           // Encontra os serviços do package_snapshot
           let services = [];
           if (cp.package_snapshot?.services) {
-            services = Object.entries(cp.package_snapshot.services).map(([_, serviceData]) => {
-              const service = servicesData.find(s => s.id === serviceData.service_id);
-              return {
-                service_id: serviceData.service_id,
-                name: service?.name || 'Serviço não encontrado',
-                quantity: serviceData.quantity || 0
-              };
-            });
+            // Verifica se services é um array ou um objeto
+            if (Array.isArray(cp.package_snapshot.services)) {
+              // Se for um array, processa cada ID de serviço
+              services = cp.package_snapshot.services.map(serviceId => {
+                // serviceId pode ser uma string (ID) ou um objeto com service_id
+                const serviceIdValue = typeof serviceId === 'object' ? serviceId.service_id || serviceId.id : serviceId;
+                const service = servicesData.find(s => s.id === serviceIdValue);
+                return {
+                  service_id: serviceIdValue,
+                  name: service?.name || 'Serviço não encontrado',
+                  quantity: 1 // Valor padrão para quantidade
+                };
+              });
+            } else {
+              // Se for um objeto, usa o código original
+              services = Object.entries(cp.package_snapshot.services).map(([_, serviceData]) => {
+                const service = servicesData.find(s => s.id === serviceData.service_id);
+                return {
+                  service_id: serviceData.service_id,
+                  name: service?.name || 'Serviço não encontrado',
+                  quantity: serviceData.quantity || 0
+                };
+              });
+            }
           }
           
           return {
             ...cp,
-            packageData: basePackage,
+            packageData: basePackage, // Pode ser null para pacotes personalizados
+            isCustomPackage, // Adicionando flag para pacotes personalizados
             sessions_used: cp.sessions_used || 0,
             total_sessions: cp.total_sessions || 0,
             session_history: cp.session_history || [],
@@ -121,12 +141,13 @@ export default function ClientPortal() {
             purchase_date: cp.purchase_date || new Date().toISOString(),
             expiration_date: cp.expiration_date || new Date().toISOString(),
             package_snapshot: cp.package_snapshot || {
-              name: basePackage?.name || "Pacote de serviços",
+              name: isCustomPackage ? (cp.package_snapshot?.name || "Pacote personalizado") : (basePackage?.name || "Pacote de serviços"),
               services: services
             }
           };
         })
-        .filter(cp => cp.packageData) // Filtra apenas pacotes que têm dados base
+        // Remover o filtro que exclui pacotes personalizados
+        // .filter(cp => cp.packageData) // Filtra apenas pacotes que têm dados base
         .sort((a, b) => {
           // Primeiro os ativos, depois por data de validade
           if (a.status === 'ativo' && b.status !== 'ativo') return -1;

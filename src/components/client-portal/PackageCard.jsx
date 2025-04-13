@@ -81,13 +81,43 @@ export default function PackageCard({ packages = [], services = [] }) {
                   <Progress value={(packageData.sessions_used / packageData.total_sessions) * 100} className="h-2" />
                 </div>
 
+                {/* Histórico de sessões utilizadas */}
+                {packageData.session_history && packageData.session_history.length > 0 && (
+                  <div className="space-y-2 mt-4">
+                    <p className="text-sm font-medium text-gray-700">Histórico de sessões:</p>
+                    <div className="space-y-2">
+                      {packageData.session_history
+                        .filter(session => session.status === 'concluido')
+                        .sort((a, b) => new Date(b.date) - new Date(a.date))
+                        .map((session, index) => (
+                          <div key={index} className="p-2 bg-gray-50 rounded border border-gray-100 text-sm">
+                            <div className="flex justify-between items-center">
+                              <span className="font-medium">{session.service_name}</span>
+                              <span className="text-green-600 text-xs px-2 py-0.5 bg-green-50 rounded-full">Concluído</span>
+                            </div>
+                            <div className="mt-1 text-gray-600 flex items-center">
+                              <Calendar className="h-3 w-3 mr-1" />
+                              {session.date ? 
+                                format(new Date(session.date), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
+                                : "Data não disponível"}
+                            </div>
+                            <div className="text-gray-600">
+                              Profissional: {session.employee_name || "Não informado"}
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+
                 {packageData.package_snapshot?.services && (
                   <div className="space-y-2">
                     <p className="text-sm font-medium text-gray-700">Serviços incluídos:</p>
                     {packageData.package_snapshot.services.map((service, index) => (
                       <div key={index} className="flex items-center text-sm text-gray-600">
                         <CheckCircle className="h-4 w-4 mr-2 text-green-500" />
-                        {getServiceName(service.service_id)} ({service.quantity}x)
+                        {getServiceName(service.service_id || service)} 
+                        {service.quantity && service.quantity > 1 ? ` (${service.quantity}x)` : ''}
                       </div>
                     ))}
                   </div>
