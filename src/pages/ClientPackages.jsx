@@ -39,7 +39,9 @@ import {
   Trash2, 
   PlusCircle, 
   Search, 
-  PackageCheck 
+  PackageCheck, 
+  ChevronUp, 
+  ChevronDown 
 } from "lucide-react";
 import { collection, query, where, limit, getDocs } from 'firebase/firestore';
 import { db } from '@/firebase/config';
@@ -67,7 +69,8 @@ export default function ClientPackages() {
   const [selectedTemplate, setSelectedTemplate] = useState("");
   const [dateFilter, setDateFilter] = useState("todos");
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(10);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [searchQuery, setSearchQuery] = useState("");
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [packageToDelete, setPackageToDelete] = useState(null);
   const [anamnesisForm, setAnamnesisForm] = useState({
@@ -149,6 +152,8 @@ export default function ClientPackages() {
   const [searchTimeout, setSearchTimeout] = useState(null);
   const [searchResultsCache, setSearchResultsCache] = useState(new Map());
   const [isSearching, setIsSearching] = useState(false);
+
+  const [expandedPackages, setExpandedPackages] = useState({});
 
   const resetNewPackageForm = () => {
     setNewPackage({
@@ -1761,6 +1766,14 @@ export default function ClientPackages() {
     }
   };
 
+  const togglePackageExpansion = (packageId, event) => {
+    event.stopPropagation(); // Evita que o clique selecione o pacote
+    setExpandedPackages(prev => ({
+      ...prev,
+      [packageId]: !prev[packageId]
+    }));
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -2071,30 +2084,85 @@ export default function ClientPackages() {
                         ></div>
                       </div>
 
-                      {/* Lista de Serviços */}
-                      <div className="mt-4">
-                        <h4 className="text-sm font-medium mb-2">Serviços Incluídos:</h4>
-                        <div className="space-y-2">
-                          {getPackageServices(clientPkg.id).map((service, index) => {
-                            const serviceName = getServiceName(service.service_id);
-                            const usedSessions = clientPkg.session_history?.filter(
-                              s => s.service_id === service.service_id && s.status === 'concluido'
-                            ).length || 0;
-                            
-                            return (
-                              <div 
-                                key={`${clientPkg.id}-${service.service_id}-${index}`}
-                                className="p-3 bg-gray-50 rounded-lg border border-gray-200"
-                              >
-                                <div className="flex items-center justify-between">
-                                  <span className="font-medium">{serviceName}</span>
-                                  <span className="text-sm text-gray-600">{usedSessions}/{service.quantity} sessões</span>
-                                </div>
+                      {/* Botão para expandir/minimizar detalhes */}
+                      <button 
+                        onClick={(e) => togglePackageExpansion(clientPkg.id, e)}
+                        className="w-full flex items-center justify-center py-2 mt-3 text-sm text-gray-600 hover:bg-gray-50 rounded transition-colors"
+                      >
+                        {expandedPackages[clientPkg.id] ? (
+                          <>
+                            <span>Menos detalhes</span>
+                            <ChevronUp className="h-4 w-4 ml-1" />
+                          </>
+                        ) : (
+                          <>
+                            <span>Mais detalhes</span>
+                            <ChevronDown className="h-4 w-4 ml-1" />
+                          </>
+                        )}
+                      </button>
+
+                      {/* Conteúdo expandido */}
+                      {expandedPackages[clientPkg.id] && (
+                        <div className="mt-3 pt-3 border-t border-gray-100">
+                          {/* Lista de Serviços */}
+                          <div className="mt-2">
+                            <h4 className="text-sm font-medium mb-2">Serviços Incluídos:</h4>
+                            <div className="space-y-2">
+                              {getPackageServices(clientPkg.id).map((service, index) => {
+                                const serviceName = getServiceName(service.service_id);
+                                const usedSessions = clientPkg.session_history?.filter(
+                                  s => s.service_id === service.service_id && s.status === 'concluido'
+                                ).length || 0;
+                                
+                                return (
+                                  <div 
+                                    key={`${clientPkg.id}-${service.service_id}-${index}`}
+                                    className="p-3 bg-gray-50 rounded-lg border border-gray-200"
+                                  >
+                                    <div className="flex items-center justify-between">
+                                      <span className="font-medium">{serviceName}</span>
+                                      <span className="text-sm text-gray-600">{usedSessions}/{service.quantity} sessões</span>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          {/* Histórico de sessões */}
+                          {clientPkg.session_history && clientPkg.session_history.length > 0 && (
+                            <div className="mt-4">
+                              <h4 className="text-sm font-medium mb-2">Histórico de Sessões:</h4>
+                              <div className="space-y-2">
+                                {clientPkg.session_history
+                                  .filter(session => session.status === 'concluido')
+                                  .sort((a, b) => new Date(b.date) - new Date(a.date))
+                                  .map((session, index) => (
+                                    <div 
+                                      key={`${clientPkg.id}-session-${index}`}
+                                      className="p-3 bg-gray-50 rounded-lg border border-gray-200"
+                                    >
+                                      <div className="flex items-center justify-between">
+                                        <span className="font-medium">{session.service_name}</span>
+                                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                                          Concluído
+                                        </Badge>
+                                      </div>
+                                      <div className="mt-1 text-sm text-gray-600 flex items-center">
+                                        <Calendar className="h-3 w-3 mr-1" />
+                                        {formatDateSafe(session.date, true)}
+                                      </div>
+                                      <div className="text-sm text-gray-600">
+                                        Profissional: {session.employee_name || "Não informado"}
+                                      </div>
+                                    </div>
+                                  ))}
                               </div>
-                            );
-                          })}
+                            </div>
+                          )}
                         </div>
-                      </div>
+                      )}
                     </div>
                   </div>
                 ))}
