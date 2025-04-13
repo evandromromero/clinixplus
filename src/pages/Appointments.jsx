@@ -510,7 +510,7 @@ export default function Appointments() {
     return `${service.name} (${remainingSessions}/${packageService.quantity} sessões)`;
   };
 
-  const updateServicesForEmployee = (employeeId, currentPackageId = null) => {
+  const updateServicesForEmployee = async (employeeId, currentPackageId = null) => {
     const employee = employees.find(emp => emp.id === employeeId);
     console.log("[DEBUG] Atualizando serviços para profissional:", employeeId);
     console.log("[DEBUG] Pacote atual:", currentPackageId || selectedPackageId);
@@ -530,43 +530,119 @@ export default function Appointments() {
         });
         
         const selectedPackage = clientPackages.find(pkg => pkg.id === packageId);
-        if (selectedPackage) {
-          const packageInfo = packages.find(p => p.id === selectedPackage.package_id);
-          console.log("[DEBUG] Informações do pacote:", packageInfo);
+        if (!selectedPackage) {
+          console.error("[ERROR] Pacote não encontrado:", packageId);
+          setSelectedPackageId("");
+          setSelectedClientPackage(null);
+          return;
+        }
+        
+        let packageInfo = null;
+  
+        // Verificar se é um pacote personalizado (IDs que começam com 'custom_')
+        const isCustomPackage = selectedPackage.package_id?.startsWith('custom_');
+        console.log("[DEBUG] É um pacote personalizado?", isCustomPackage);
+  
+        // Buscar informações do pacote
+        if (!isCustomPackage) {
+          // Para pacotes regulares, buscar da lista de pacotes
+          packageInfo = packages.find(p => p.id === selectedPackage.package_id);
+          console.log("[DEBUG] Informações do pacote regular:", packageInfo);
+        } else {
+          // Para pacotes personalizados, usar os serviços incluídos diretamente no pacote do cliente
+          console.log("[DEBUG] Usando informações do pacote personalizado");
+          console.log("[DEBUG] Pacote completo:", selectedPackage);
           
-          if (packageInfo && packageInfo.services) {
-            console.log("[DEBUG] Serviços do pacote:", packageInfo.services);
+          // Verificar se temos serviços no package_snapshot
+          const packageSnapshot = selectedPackage.package_snapshot;
+          console.log("[DEBUG] Package snapshot:", packageSnapshot);
+          
+          // Verificar diferentes locais onde os serviços podem estar armazenados
+          let packageServices = [];
+          
+          // Opção 1: Serviços no package_snapshot.services (formato de array de objetos com service_id)
+          if (packageSnapshot && packageSnapshot.services && Array.isArray(packageSnapshot.services)) {
+            // Extrair os IDs de serviço do package_snapshot.services
+            packageServices = packageSnapshot.services.map(s => s.service_id);
+            console.log("[DEBUG] Serviços encontrados no package_snapshot:", packageServices);
+          }
+          // Opção 2: Serviços no array services do pacote
+          else if (selectedPackage.services && selectedPackage.services.length > 0) {
+            packageServices = selectedPackage.services;
+            console.log("[DEBUG] Serviços encontrados no array services:", packageServices);
+          }
+          
+          if (packageServices.length > 0) {
+            console.log("[DEBUG] Serviços do pacote personalizado:", packageServices);
             
-            // Filtra apenas os serviços que estão no pacote E que o profissional pode realizar
+            // Filtrar serviços que estão no pacote E que o profissional pode realizar
             availableServices = services.filter(service => {
-              // Verifica se o serviço está no pacote
-              const packageService = packageInfo.services.find(s => s.service_id === service.id);
-              if (packageService) {
-                // Verifica se o profissional pode realizar este serviço
-                const canPerformService = employee.specialties.includes(service.id);
-                // Conta apenas sessões concluídas
-                const usedSessions = selectedPackage.session_history?.filter(
-                  h => h.service_id === service.id && h.status === 'concluido'
-                ).length || 0;
-                const hasAvailableSessions = usedSessions < packageService.quantity;
-                
-                console.log(`[DEBUG] Avaliando serviço ${service.name}:`, {
-                  id: service.id,
-                  packageService,
-                  canPerformService,
-                  usedSessions,
-                  totalSessions: packageService.quantity,
-                  hasAvailableSessions
-                });
-                
-                return canPerformService && hasAvailableSessions;
-              }
-              return false;
+              // Verificar se o serviço está no pacote personalizado
+              const serviceInPackage = packageServices.includes(service.id);
+              // Verificar se o profissional pode realizar este serviço
+              const canPerformService = employee.specialties.includes(service.id);
+              
+              console.log(`[DEBUG] Avaliando serviço personalizado ${service.name}:`, {
+                id: service.id,
+                serviceInPackage,
+                canPerformService
+              });
+              
+              return serviceInPackage && canPerformService;
             }).map(service => ({
               ...service,
-              displayName: getServiceLabel(service, selectedPackage, packageInfo)
+              displayName: `${service.name} (Pacote: ${selectedPackage.name || packageSnapshot?.name || "Personalizado"})`
             }));
+          } else {
+            // Se não encontrarmos serviços em nenhum lugar, mostrar uma mensagem de aviso
+            console.log("[DEBUG] Nenhum serviço encontrado no pacote personalizado");
+            toast({
+              title: "Aviso",
+              description: "Este pacote não possui serviços definidos. Entre em contato com o administrador.",
+              variant: "warning"
+            });
+            availableServices = [];
           }
+        }
+  
+        // Se o pacote não for encontrado e não for personalizado, tentar recarregar
+        if (!packageInfo && !isCustomPackage) {
+          console.log("[DEBUG] Pacote não encontrado na lista atual, tentando recarregar...");
+          try {
+            // Recarregar todos os pacotes
+            const packagesData = await Package.list();
+            console.log("[DEBUG] Pacotes recarregados:", packagesData);
+            setPackages(packagesData);
+      
+            // Tentar encontrar o pacote novamente
+            packageInfo = packagesData.find(p => p.id === selectedPackage.package_id);
+            console.log("[DEBUG] Pacote encontrado após recarga:", packageInfo);
+      
+            if (!packageInfo) {
+              console.log("[DEBUG] Pacote não encontrado mesmo após recarga, tratando como personalizado");
+              // Tratar como personalizado se não encontrar
+            }
+          } catch (error) {
+            console.error("[ERROR] Erro ao recarregar pacotes:", error);
+          }
+        }
+  
+        // Atualiza os estados do pacote imediatamente
+        setSelectedPackageId(packageId);
+        setSelectedClientPackage(selectedPackage);
+  
+        // Limpa o serviço selecionado para forçar uma nova seleção
+        setNewAppointment(prev => ({
+          ...prev,
+          service_id: ""
+        }));
+
+        // Atualiza os serviços disponíveis com base no profissional e pacote selecionados
+        if (newAppointment.employee_id) {
+          // Pequeno delay para garantir que o estado foi atualizado
+          await new Promise(resolve => setTimeout(resolve, 100));
+          // Chama a função com o pacote atual
+          updateServicesForEmployee(newAppointment.employee_id, packageId);
         }
       } else {
         // Se for procedimento avulso ou não houver pacote selecionado, mostrar todos os serviços que o profissional pode realizar
@@ -646,52 +722,106 @@ export default function Appointments() {
       return;
     }
     
-    let packageInfo = packages.find(p => p.id === selectedPackage.package_id);
-    console.log("[DEBUG] Informações do pacote selecionado:", packageInfo);
-    
-    // Se o pacote não for encontrado na lista atual, tente recarregar
-    if (!packageInfo) {
+    let packageInfo = null;
+  
+    // Verificar se é um pacote personalizado (IDs que começam com 'custom_')
+    const isCustomPackage = selectedPackage.package_id?.startsWith('custom_');
+    console.log("[DEBUG] É um pacote personalizado?", isCustomPackage);
+  
+    // Buscar informações do pacote
+    if (!isCustomPackage) {
+      // Para pacotes regulares, buscar da lista de pacotes
+      packageInfo = packages.find(p => p.id === selectedPackage.package_id);
+      console.log("[DEBUG] Informações do pacote regular:", packageInfo);
+    } else {
+      // Para pacotes personalizados, usar as informações do próprio pacote do cliente
+      console.log("[DEBUG] Usando informações do pacote personalizado");
+      console.log("[DEBUG] Pacote completo:", selectedPackage);
+      
+      // Verificar se temos serviços no package_snapshot
+      const packageSnapshot = selectedPackage.package_snapshot;
+      console.log("[DEBUG] Package snapshot:", packageSnapshot);
+      
+      // Verificar diferentes locais onde os serviços podem estar armazenados
+      let packageServices = [];
+      
+      // Opção 1: Serviços no package_snapshot.services (formato de array de objetos com service_id)
+      if (packageSnapshot && packageSnapshot.services && Array.isArray(packageSnapshot.services)) {
+        // Extrair os IDs de serviço do package_snapshot.services
+        packageServices = packageSnapshot.services.map(s => s.service_id);
+        console.log("[DEBUG] Serviços encontrados no package_snapshot:", packageServices);
+      }
+      // Opção 2: Serviços no array services do pacote
+      else if (selectedPackage.services && selectedPackage.services.length > 0) {
+        packageServices = selectedPackage.services;
+        console.log("[DEBUG] Serviços encontrados no array services:", packageServices);
+      }
+      if (packageServices.length > 0) {
+        console.log("[DEBUG] Serviços do pacote personalizado:", packageServices);
+        
+        // Filtrar serviços que estão no pacote
+        const filteredServices = services.filter(service => {
+          // Verificar se o serviço está no pacote personalizado
+          const serviceInPackage = packageServices.includes(service.id);
+          
+          console.log(`[DEBUG] Avaliando serviço personalizado ${service.name}:`, {
+            id: service.id,
+            serviceInPackage
+          });
+          
+          return serviceInPackage;
+        }).map(service => ({
+          ...service,
+          displayName: `${service.name} (Pacote: ${selectedPackage.name || packageSnapshot?.name || "Personalizado"})`
+        }));
+        
+        // Armazenar os serviços filtrados para uso posterior na função updateServicesForEmployee
+        setFilteredServices(filteredServices);
+      } else {
+        // Se não encontrarmos serviços em nenhum lugar, mostrar uma mensagem de aviso
+        console.log("[DEBUG] Nenhum serviço encontrado no pacote personalizado");
+        toast({
+          title: "Aviso",
+          description: "Este pacote não possui serviços definidos. Entre em contato com o administrador.",
+          variant: "warning"
+        });
+        setFilteredServices([]);
+      }
+    }
+  
+    // Se o pacote não for encontrado e não for personalizado, tentar recarregar
+    if (!packageInfo && !isCustomPackage) {
       console.log("[DEBUG] Pacote não encontrado na lista atual, tentando recarregar...");
       try {
         // Recarregar todos os pacotes
         const packagesData = await Package.list();
         console.log("[DEBUG] Pacotes recarregados:", packagesData);
         setPackages(packagesData);
-        
+      
         // Tentar encontrar o pacote novamente
         packageInfo = packagesData.find(p => p.id === selectedPackage.package_id);
         console.log("[DEBUG] Pacote encontrado após recarga:", packageInfo);
-        
+      
         if (!packageInfo) {
-          console.error("[ERROR] Pacote não encontrado mesmo após recarga:", selectedPackage.package_id);
-          toast({
-            title: "Aviso",
-            description: "Informações do pacote não encontradas. Alguns dados podem não ser exibidos corretamente.",
-            variant: "warning"
-          });
+          console.log("[DEBUG] Pacote não encontrado mesmo após recarga, tratando como personalizado");
+          // Tratar como personalizado se não encontrar
         }
       } catch (error) {
         console.error("[ERROR] Erro ao recarregar pacotes:", error);
       }
     }
-    
-    // Atualiza os estados do pacote
+  
+    // Atualiza os estados do pacote imediatamente
     setSelectedPackageId(packageId);
     setSelectedClientPackage(selectedPackage);
-    
+  
     // Limpa o serviço selecionado para forçar uma nova seleção
     setNewAppointment(prev => ({
       ...prev,
       service_id: ""
     }));
 
-    // Atualiza os serviços disponíveis com base no profissional e pacote selecionados
-    if (newAppointment.employee_id) {
-      // Pequeno delay para garantir que o estado foi atualizado
-      await new Promise(resolve => setTimeout(resolve, 100));
-      // Chama a função com o pacote atual
-      updateServicesForEmployee(newAppointment.employee_id, packageId);
-    }
+    
   };
 
   const handleSelectAppointment = async (appointment) => {
@@ -1065,20 +1195,109 @@ export default function Appointments() {
 
   const updatePackageSession = async (appointment, newStatus) => {
     try {
+      console.log("[DEBUG] Iniciando atualização de sessão do pacote para agendamento:", appointment.id);
+      console.log("[DEBUG] Serviço do agendamento:", appointment.service_id);
+      
       const clientPackages = await ClientPackage.filter({ 
         client_id: appointment.client_id,
         status: 'ativo'
       });
       
+      console.log("[DEBUG] Pacotes do cliente encontrados:", clientPackages.length);
+      
+      // Modificado para verificar tanto pacotes regulares quanto personalizados
       const relevantPackage = clientPackages.find(pkg => {
-        const packageData = packages.find(p => p.id === pkg.package_id);
-        return packageData?.services.some(s => s.service_id === appointment.service_id);
+        // Verificar se é um pacote personalizado
+        const isCustomPackage = pkg.package_id?.startsWith('custom_');
+        
+        console.log("[DEBUG] Analisando pacote:", {
+          id: pkg.id,
+          package_id: pkg.package_id,
+          isCustom: isCustomPackage,
+          serviceId: appointment.service_id
+        });
+        
+        if (isCustomPackage) {
+          // Para pacotes personalizados, verificar no package_snapshot
+          const packageSnapshot = pkg.package_snapshot;
+          
+          // Verificar se o serviço está no array de serviços do pacote personalizado
+          // Comparar diretamente com o service_id do agendamento
+          let hasService = false;
+          
+          if (packageSnapshot?.services) {
+            console.log("[DEBUG] Tipo de services:", typeof packageSnapshot.services, Array.isArray(packageSnapshot.services));
+            console.log("[DEBUG] Conteúdo de services:", JSON.stringify(packageSnapshot.services));
+            
+            // Verificar se os serviços são objetos ou strings
+            hasService = packageSnapshot.services.some(service => {
+              // Se for um objeto, verificar o service_id ou id
+              if (typeof service === 'object' && service !== null) {
+                const serviceId = service.service_id || service.id;
+                const match = serviceId === appointment.service_id;
+                console.log(`[DEBUG] Comparando serviço objeto ${serviceId} com ${appointment.service_id}: ${match}`);
+                return match;
+              } 
+              // Se for uma string, comparar diretamente
+              else if (typeof service === 'string') {
+                const match = service === appointment.service_id;
+                console.log(`[DEBUG] Comparando serviço string ${service} com ${appointment.service_id}: ${match}`);
+                return match;
+              }
+              return false;
+            });
+          }
+          
+          console.log("[DEBUG] Pacote personalizado:", {
+            snapshot: packageSnapshot ? "presente" : "ausente",
+            services: packageSnapshot?.services || [],
+            hasService
+          });
+          
+          return hasService;
+        } else {
+          // Para pacotes regulares, verificar nos services do pacote
+          const packageData = packages.find(p => p.id === pkg.package_id);
+          
+          if (!packageData) {
+            console.log("[DEBUG] Pacote regular não encontrado:", pkg.package_id);
+            return false;
+          }
+          
+          let hasService = false;
+          
+          if (packageData.services) {
+            hasService = packageData.services.some(s => {
+              if (typeof s === 'object' && s !== null) {
+                const serviceId = s.service_id || s.id;
+                const match = serviceId === appointment.service_id;
+                console.log(`[DEBUG] Comparando serviço objeto ${serviceId} com ${appointment.service_id}: ${match}`);
+                return match;
+              } else if (typeof s === 'string') {
+                const match = s === appointment.service_id;
+                console.log(`[DEBUG] Comparando serviço string ${s} com ${appointment.service_id}: ${match}`);
+                return match;
+              }
+              return false;
+            });
+          }
+          
+          console.log("[DEBUG] Pacote regular:", {
+            packageData: packageData ? "presente" : "ausente",
+            services: packageData?.services?.map(s => typeof s === 'object' ? (s.service_id || s.id) : s) || [],
+            hasService
+          });
+          
+          return hasService;
+        }
       });
 
       if (relevantPackage) {
+        console.log("[DEBUG] Pacote relevante encontrado:", relevantPackage.id);
+        
         const serviceData = services.find(s => s.id === appointment.service_id);
         const employeeData = employees.find(e => e.id === appointment.employee_id);
-        
+
         // Atualiza o status da sessão no histórico
         const currentSessionHistory = Array.isArray(relevantPackage.session_history) 
           ? relevantPackage.session_history 
@@ -1089,6 +1308,11 @@ export default function Appointments() {
           s => s.appointment_id === appointment.id
         );
 
+        console.log("[DEBUG] Histórico de sessões atual:", {
+          total: currentSessionHistory.length,
+          encontrado: sessionIndex >= 0
+        });
+
         if (sessionIndex >= 0) {
           // Atualiza a sessão existente
           updatedSessionHistory = currentSessionHistory.map((session, index) => 
@@ -1096,6 +1320,8 @@ export default function Appointments() {
               ? { ...session, status: newStatus }
               : session
           );
+          
+          console.log("[DEBUG] Atualizando sessão existente no histórico");
         } else {
           // Cria uma nova entrada no histórico
           const sessionHistoryEntry = {
@@ -1110,19 +1336,37 @@ export default function Appointments() {
           };
 
           updatedSessionHistory = [...currentSessionHistory, sessionHistoryEntry];
+          console.log("[DEBUG] Adicionando nova sessão ao histórico");
         }
         
         // Só incrementa o contador se o status for 'concluido'
         const sessionsToAdd = newStatus === 'concluido' ? 1 : 0;
-        const currentUsedSessions = relevantPackage.session_history?.filter(
+        
+        // Recalcular o número de sessões concluídas com base no histórico atualizado
+        const completedSessions = updatedSessionHistory.filter(
           s => s.status === 'concluido'
-        ).length || 0;
+        ).length;
+        
+        console.log("[DEBUG] Atualizando pacote:", {
+          id: relevantPackage.id,
+          pacote: relevantPackage.package_id,
+          sessõesConcluídas: completedSessions,
+          totalSessões: relevantPackage.total_sessions
+        });
         
         await ClientPackage.update(relevantPackage.id, {
           session_history: updatedSessionHistory,
-          sessions_used: currentUsedSessions + sessionsToAdd,
-          status: (currentUsedSessions + sessionsToAdd) >= relevantPackage.total_sessions ? 'finalizado' : 'ativo'
+          sessions_used: completedSessions,
+          status: completedSessions >= relevantPackage.total_sessions ? 'finalizado' : 'ativo'
         });
+        
+        console.log("[DEBUG] Pacote atualizado com sucesso");
+        
+        // Recarregar os pacotes do cliente para atualizar a UI
+        const updatedClientPackages = await ClientPackage.filter({ client_id: appointment.client_id });
+        setClientPackages(updatedClientPackages);
+      } else {
+        console.log("[DEBUG] Nenhum pacote relevante encontrado para o agendamento:", appointment.id);
       }
     } catch (error) {
       console.error("Erro ao atualizar sessão do pacote:", error);
@@ -1327,7 +1571,7 @@ export default function Appointments() {
                     return (
                       <tr key={hour} className="border-b">
                         <td className="p-2 border-r text-sm text-gray-500 text-center">
-                          {format(timeSlotDate, 'HH:mm')}
+                          {format(timeSlotDate, "HH:mm")}
                         </td>
 
                         {filteredEmployees.map(employee => {
@@ -1371,9 +1615,12 @@ export default function Appointments() {
                                   
                                   // Verifica se já existe agendamento neste horário
                                   const hasConflict = slotAppointments.some(app => 
-                                    app.employee_id === employee.id && app.id !== appointmentId
+                                    app.id !== appointmentId &&
+                                    app.employee_id === employee.id &&
+                                    format(new Date(app.date), "HH:mm") === format(timeSlotDate, "HH:mm") &&
+                                    format(new Date(app.date), "yyyy-MM-dd") === format(timeSlotDate, "yyyy-MM-dd")
                                   );
-                                  
+
                                   if (hasConflict) {
                                     toast({
                                       title: "Conflito de horário",
@@ -1386,7 +1633,7 @@ export default function Appointments() {
                                   // Atualiza o agendamento
                                   const appointment = appointments.find(app => app.id === appointmentId);
                                   if (!appointment) return;
-                                  
+
                                   const newDate = new Date(date);
                                   newDate.setHours(hour, 0, 0, 0);
                                   
@@ -1636,19 +1883,32 @@ export default function Appointments() {
                     <SelectValue placeholder="Selecione um pacote..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {clientPackages.map((pkg) => {
-                      const packageData = packages.find(p => p.id === pkg.package_id);
-                      console.log(`[DEBUG] Renderizando pacote ${pkg.id}:`, {
-                        packageId: pkg.package_id,
-                        packageData: packageData,
-                        packageName: packageData?.name || "Pacote sem nome"
-                      });
-                      return (
-                        <SelectItem key={pkg.id} value={pkg.id}>
-                          {packageData?.name || "Pacote sem nome"} - {pkg.sessions_used}/{pkg.total_sessions} sessões
-                        </SelectItem>
-                      );
-                    })}
+                  {clientPackages.map((pkg) => {
+  // Usar o nome do pacote do cliente em vez de tentar buscar pelo package_id
+  const packageData = packages.find(p => p.id === pkg.package_id);
+  
+  // Usar o nome diretamente do pacote do cliente ou do package_snapshot
+  const packageName = pkg.name || (pkg.package_snapshot?.name) || packageData?.name || "Pacote sem nome";
+  
+  // Formatar a data de compra
+  const purchaseDate = pkg.created_date 
+    ? format(new Date(pkg.created_date), "dd/MM/yyyy")
+    : "Data desconhecida";
+  
+  console.log(`[DEBUG] Renderizando pacote ${pkg.id}:`, {
+    packageId: pkg.package_id,
+    packageData: packageData,
+    packageName: packageName,
+    purchaseDate: purchaseDate,
+    rawPackage: pkg
+  });
+  
+  return (
+    <SelectItem key={pkg.id} value={pkg.id}>
+      {packageName} - {pkg.sessions_used}/{pkg.total_sessions} sessões ({purchaseDate})
+    </SelectItem>
+  );
+})}
                   </SelectContent>
                 </Select>
               </div>
@@ -1957,7 +2217,6 @@ export default function Appointments() {
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      className="gap-1"
                       onClick={() => handleViewClientDetails(selectedAppointmentDetails.client.id)}
                     >
                       <User className="h-4 w-4" />
@@ -2025,9 +2284,11 @@ export default function Appointments() {
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-4">
                                 <div className={`w-3 h-3 rounded-full ${
-                                  app.status === 'concluido' ? 'bg-green-500' :
-                                  app.status === 'cancelado' ? 'bg-red-500' :
-                                  'bg-blue-500'
+                                  app.status === 'concluido'
+                                    ? 'bg-green-500'
+                                    : app.status === 'cancelado'
+                                    ? 'bg-red-500'
+                                    : ''
                                 }`} />
                                 <div>
                                   <p className="font-medium">
@@ -2326,8 +2587,8 @@ export default function Appointments() {
                   
                   return (
                     <div key={app.id} className="border p-3 rounded-md bg-gray-50">
-                      <p className="font-medium">{client?.name || "Cliente"}</p>
-                      <p className="text-sm text-gray-600">{service?.name || "Serviço"}</p>
+                      <p className="font-medium">{client?.name}</p>
+                      <p className="text-sm text-gray-600">{service?.name}</p>
                       <p className="text-xs text-gray-500">{format(new Date(app.date), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</p>
                     </div>
                   );
