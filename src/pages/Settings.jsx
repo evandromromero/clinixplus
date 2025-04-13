@@ -50,6 +50,7 @@ import {
   Eye,
   EyeOff
 } from 'lucide-react';
+import SEOHead from '../components/SEOHead';
 
 export default function Settings() {
   console.log('=== Settings component mounted ===');
@@ -637,6 +638,14 @@ export default function Settings() {
 
   return (
     <div className="space-y-6">
+      <SEOHead 
+        title={companySettings.seo_settings?.meta_title || "Configurações - ClinixPlus"} 
+        description={companySettings.seo_settings?.meta_description || "Painel de configurações do sistema ClinixPlus"} 
+        keywords={companySettings.seo_settings?.meta_keywords || "configurações, sistema, clínica, estética"} 
+        author={companySettings.seo_settings?.meta_author || "ClinixPlus"} 
+        faviconUrl={companySettings.seo_settings?.favicon_url || "/favicon.ico"} 
+        siteName={companySettings.seo_settings?.site_name || "ClinixPlus"} 
+      />
       {alert && (
         <SimpleAlert
           message={alert.message}

@@ -21,6 +21,7 @@ import { Employee } from "@/firebase/entities";
 import { CompanySettings } from "@/api/entities"; // Corrigido: importando do caminho correto
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import SEOHead from '../components/SEOHead';
 
 export default function ClientPortal() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -245,8 +246,16 @@ export default function ClientPortal() {
   }
   
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-purple-100">
-      <header className="bg-white/80 backdrop-blur-sm shadow-sm sticky top-0 z-50">
+    <div className="min-h-screen bg-gray-50">
+      <SEOHead 
+        title={company.seo_settings?.meta_title || "Portal do Cliente - ClinixPlus"} 
+        description={company.seo_settings?.meta_description || "Acesse seus agendamentos, pacotes e histórico no Portal do Cliente ClinixPlus"} 
+        keywords={company.seo_settings?.meta_keywords || "portal cliente, agendamentos, pacotes, histórico"} 
+        author={company.seo_settings?.meta_author || "ClinixPlus"} 
+        faviconUrl={company.seo_settings?.favicon_url || "/favicon.ico"} 
+        siteName={company.seo_settings?.site_name || "ClinixPlus"} 
+      />
+      <header className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
           <div className="flex items-center">
             <img src={company.logo_url || "/logo.png"} alt={company.name} className="h-10 mr-4 rounded-full shadow-sm" />
