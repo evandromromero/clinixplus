@@ -338,6 +338,30 @@ src/
    - Verificar se todas as páginas estão carregando
    - Testar o login e outras funcionalidades
 
+## Melhorias Recentes
+
+### Correções de Bugs
+
+#### Busca de Clientes na Modal de Venda de Pacotes
+- **Problema**: Ao selecionar um cliente na busca da modal de venda de pacotes, aparecia "Cliente não encontrado" no botão ao lado, mesmo tendo encontrado e selecionado o cliente corretamente.
+- **Causa**: O sistema usava um cache de nomes de clientes (`clientNamesCache`) que era criado apenas a partir da lista de clientes já carregados inicialmente. Quando um cliente era buscado e selecionado na modal, mas não estava na lista original, o nome não era adicionado ao cache.
+- **Solução**: Modificamos o código para adicionar o cliente selecionado à lista geral de clientes quando ele é selecionado na busca, garantindo que seja incluído no cache de nomes e apareça corretamente no botão.
+
+#### Exibição de Pacotes Personalizados
+- **Problema**: Pacotes personalizados não estavam sendo exibidos corretamente no portal do cliente.
+- **Causa**: O filtro `.filter(cp => cp.packageData)` excluía pacotes sem packageData, que são justamente os pacotes personalizados.
+- **Solução**: Modificamos o código para incluir todos os pacotes, independentemente de serem regulares ou personalizados, e adicionamos uma flag isCustomPackage para identificar pacotes personalizados.
+
+#### Processamento de Serviços em Pacotes
+- **Problema**: Serviços em pacotes personalizados não estavam sendo processados corretamente.
+- **Causa**: A função que processa os serviços do package_snapshot assumia que services era sempre um objeto, quando na verdade poderia ser um array.
+- **Solução**: Modificamos o código para verificar o tipo de dados e processar adequadamente tanto arrays quanto objetos.
+
+#### Atualização de Progresso em Pacotes
+- **Problema**: O progresso dos pacotes não era atualizado corretamente quando um agendamento era concluído.
+- **Causa**: Os serviços em pacotes personalizados podem estar armazenados em diferentes formatos: como strings de IDs ou como objetos completos.
+- **Solução**: A função updatePackageSession foi modificada para verificar ambos os formatos e fazer a comparação adequada em cada caso, garantindo que o progresso dos pacotes seja atualizado corretamente.
+
 ## Atualizações Recentes
 
 ### 25/03/2025
