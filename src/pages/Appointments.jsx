@@ -116,6 +116,11 @@ export default function Appointments() {
   // Estado para controlar a visibilidade dos filtros
   const [showFilters, setShowFilters] = useState(true);
 
+  // --- Bulk Actions Modal State ---
+  const [showBulkActionsModal, setShowBulkActionsModal] = useState(false);
+  const [bulkSelectedAppointments, setBulkSelectedAppointments] = useState([]);
+  const [bulkActionsDate, setBulkActionsDate] = useState(date);
+
   const navigate = useNavigate();
 
   const handleViewClientDetails = (clientId) => {
@@ -1400,6 +1405,58 @@ export default function Appointments() {
     });
   };
 
+  // --- Bulk Action Handlers ---
+  const openBulkActionsModal = () => {
+    setShowBulkActionsModal(true);
+    setBulkSelectedAppointments([]);
+  };
+
+  const closeBulkActionsModal = () => {
+    setShowBulkActionsModal(false);
+    setBulkSelectedAppointments([]);
+  };
+
+  const bulkDayAppointments = getDayAppointments(bulkActionsDate);
+
+  const toggleBulkAppointment = (appointmentId) => {
+    setBulkSelectedAppointments(prev =>
+      prev.includes(appointmentId)
+        ? prev.filter(id => id !== appointmentId)
+        : [...prev, appointmentId]
+    );
+  };
+
+  const handleBulkStatusChange = async (newStatus) => {
+    try {
+      for (const appointmentId of bulkSelectedAppointments) {
+        const appointment = appointments.find(a => a.id === appointmentId);
+        if (!appointment) continue;
+        await Appointment.update(appointmentId, { status: newStatus });
+        if (appointment.package_id) {
+          await updatePackageSession(appointment, newStatus);
+        }
+        if (appointment.pending_service_id) {
+          await PendingService.update(appointment.pending_service_id, {
+            status: newStatus === 'concluido' ? 'concluido' : 'agendado'
+          });
+        }
+      }
+      await loadData();
+      toast({
+        title: 'Sucesso',
+        description: `Agendamentos ${newStatus === 'concluido' ? 'confirmados' : 'cancelados'} com sucesso!`,
+        variant: 'success'
+      });
+      closeBulkActionsModal();
+    } catch (error) {
+      toast({
+        title: 'Erro',
+        description: 'Não foi possível atualizar os agendamentos em massa',
+        variant: 'destructive'
+      });
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -1531,6 +1588,17 @@ export default function Appointments() {
               </div>
             </CardContent>
           </Card>
+
+          <div className="flex justify-end mb-2">
+            <Button
+              variant="outline"
+              className="flex items-center gap-2"
+              onClick={openBulkActionsModal}
+            >
+              <Check className="w-4 h-4" />
+              Ações em Massa do Dia
+            </Button>
+          </div>
         </div>
 
         <Card>
@@ -2613,6 +2681,90 @@ export default function Appointments() {
               className="bg-amber-600 hover:bg-amber-700"
             >
               Agendar mesmo assim
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog 
+        open={showBulkActionsModal} 
+        onOpenChange={closeBulkActionsModal}
+      >
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              Agendamentos do dia
+              <div className="mt-2">
+                <Calendar
+                  mode="single"
+                  selected={bulkActionsDate}
+                  onSelect={(newDate) => newDate && setBulkActionsDate(newDate)}
+                  className="rounded-md border w-fit mx-auto"
+                  locale={ptBR}
+                />
+              </div>
+            </DialogTitle>
+          </DialogHeader>
+          <div className="max-h-[400px] overflow-y-auto my-4">
+            <table className="w-full text-sm">
+              <thead>
+                <tr>
+                  <th></th>
+                  <th>Horário</th>
+                  <th>Cliente</th>
+                  <th>Profissional</th>
+                  <th>Serviço</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bulkDayAppointments.map(app => {
+                  const client = clients.find(c => c.id === app.client_id);
+                  const employee = employees.find(e => e.id === app.employee_id);
+                  const service = services.find(s => s.id === app.service_id);
+                  return (
+                    <tr key={app.id} className={bulkSelectedAppointments.includes(app.id) ? 'bg-purple-50' : ''}>
+                      <td>
+                        <Checkbox
+                          checked={bulkSelectedAppointments.includes(app.id)}
+                          onCheckedChange={() => toggleBulkAppointment(app.id)}
+                        />
+                      </td>
+                      <td>{format(new Date(app.date), 'HH:mm')}</td>
+                      <td>{client?.name || '-'}</td>
+                      <td>{employee?.name || '-'}</td>
+                      <td>{service?.name || '-'}</td>
+                      <td>
+                        <Badge variant={app.status === 'concluido' ? 'success' : 'default'}>
+                          {app.status}
+                        </Badge>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <DialogFooter className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={closeBulkActionsModal}
+            >
+              Fechar
+            </Button>
+            <Button
+              className="bg-green-600 hover:bg-green-700"
+              disabled={bulkSelectedAppointments.length === 0}
+              onClick={() => handleBulkStatusChange('concluido')}
+            >
+              Confirmar Selecionados
+            </Button>
+            <Button
+              className="bg-red-600 hover:bg-red-700"
+              disabled={bulkSelectedAppointments.length === 0}
+              onClick={() => handleBulkStatusChange('cancelado')}
+            >
+              Cancelar Selecionados
             </Button>
           </DialogFooter>
         </DialogContent>
