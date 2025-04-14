@@ -181,211 +181,15 @@ export default function AccountsReceivable() {
     loadData();
   }, []);
 
-  const loadPaymentMethods = async () => {
-    try {
-      console.log('[AccountsReceivable] Carregando métodos de pagamento...');
-      const methods = await PaymentMethod.list();
-      console.log(`[AccountsReceivable] ${methods.length} métodos de pagamento carregados`);
-      setPaymentMethods(methods);
-      return methods;
-    } catch (error) {
-      console.error('[AccountsReceivable] Erro ao carregar métodos de pagamento:', error);
-      return [];
-    }
-  };
-
-  const loadData = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      console.log('[AccountsReceivable] Carregando dados...');
-      
-      // Carrega as transações (agora exclusivamente do Firebase)
-      console.log('[AccountsReceivable] Buscando transações financeiras...');
-      const transactionsData = await FinancialTransaction.list();
-      console.log(`[AccountsReceivable] ${transactionsData.length} transações encontradas`);
-      
-      // Carrega os clientes para enriquecer as transações
-      console.log('[AccountsReceivable] Buscando clientes...');
-      const clientsData = await Client.list();
-      console.log(`[AccountsReceivable] ${clientsData.length} clientes encontrados`);
-      setClients(clientsData);
-      
-      // Carrega os métodos de pagamento
-      console.log('[AccountsReceivable] Buscando métodos de pagamento...');
-      const paymentMethodsData = await PaymentMethod.list();
-      console.log(`[AccountsReceivable] ${paymentMethodsData.length} métodos de pagamento encontrados`);
-      setPaymentMethods(paymentMethodsData);
-      
-      // Carrega as vendas para enriquecer as transações com informações detalhadas
-      console.log('[AccountsReceivable] Buscando vendas...');
-      const salesData = await Sale.list();
-      console.log(`[AccountsReceivable] ${salesData.length} vendas encontradas`);
-      setSales(salesData);
-      
-      // Mapeamento de clientes por ID para facilitar o acesso
-      const clientsMap = clientsData.reduce((acc, client) => {
-        acc[client.id] = client;
-        return acc;
-      }, {});
-      
-      // Mapeamento de vendas por ID para facilitar o acesso
-      const salesMap = salesData.reduce((acc, sale) => {
-        acc[sale.id] = sale;
-        return acc;
-      }, {});
-      
-      // Criar um mapa de métodos de pagamento para facilitar a busca
-      const paymentMethodsMap = paymentMethodsData.reduce((acc, method) => {
-        acc[method.id] = method;
-        return acc;
-      }, {});
-      
-      console.log('[AccountsReceivable] Mapa de métodos de pagamento:', paymentMethodsMap);
-      
-      // Processar transações
-      const processedTransactions = transactionsData
-        .filter(transaction => {
-          // Filtra transações a receber:
-          // 1. Transações do tipo receita que não estão pagas
-          // 2. Transações com cartão de crédito (que são a prazo)
-          // 3. Transações marcadas como parceladas (is_installment)
-          // 4. TODAS as transações do tipo receita (para mostrar histórico)
-          // 5. Excluir aberturas de caixa
-          const paymentMethodId = transaction.payment_method || '';
-          const paymentMethod = paymentMethodsMap[paymentMethodId];
-          
-          // Verifica se é um cartão de crédito baseado no método de pagamento do Firebase
-          const isCredit = paymentMethod ? 
-            (paymentMethod.name && (
-              paymentMethod.name.toLowerCase().includes('crédito') || 
-              paymentMethod.name.toLowerCase().includes('credito')
-            )) : false;
-          
-          // Mostra todas as transações do tipo receita, exceto aberturas de caixa
-          const isOpeningTransaction = transaction.category === 'abertura_caixa';
-          const shouldInclude = transaction.type === 'receita' && !isOpeningTransaction;
-          
-          // Log para cada transação avaliada
-          console.log(`[AccountsReceivable] Avaliando transação ${transaction.id}:`, {
-            type: transaction.type,
-            status: transaction.status,
-            payment_method: paymentMethodId,
-            payment_method_name: paymentMethod ? paymentMethod.name : 'Desconhecido',
-            isCredit,
-            is_installment: transaction.is_installment,
-            shouldInclude
-          });
-          
-          return shouldInclude;
-        })
-        .map(transaction => {
-          // Enriquece a transação com dados do cliente
-          const client = clientsMap[transaction.client_id] || { name: 'Cliente não encontrado' };
-          const sale = salesMap[transaction.sale_id] || { items: [] };
-          
-          return {
-            ...transaction,
-            client_name: client.name,
-            sale_items: sale.items,
-            formatted_amount: formatCurrency(transaction.amount),
-            formatted_due_date: transaction.due_date 
-              ? format(new Date(transaction.due_date), 'dd/MM/yyyy', { locale: ptBR })
-              : 'Sem data',
-            status_class: getStatusClass(transaction.status),
-            // Formata a descrição para mostrar informações mais úteis
-            formatted_description: formatTransactionDescription(transaction, sale)
-          };
-        });
-      
-      // Agrupar transações por sale_id
-      const groupedTransactions = [];
-      const transactionsBySaleId = {};
-      
-      // Primeiro, agrupar as transações pelo sale_id
-      processedTransactions.forEach(transaction => {
-        if (transaction.sale_id) {
-          if (!transactionsBySaleId[transaction.sale_id]) {
-            transactionsBySaleId[transaction.sale_id] = [];
-          }
-          transactionsBySaleId[transaction.sale_id].push(transaction);
-        } else {
-          // Se não tiver sale_id, adicionar diretamente ao resultado final
-          groupedTransactions.push(transaction);
-        }
-      });
-      
-      // Depois, para cada grupo de transações com o mesmo sale_id, criar uma transação combinada
-      Object.keys(transactionsBySaleId).forEach(saleId => {
-        const saleTransactions = transactionsBySaleId[saleId];
-        
-        if (saleTransactions.length === 1) {
-          // Se só tem uma transação para esta venda, adicionar diretamente
-          groupedTransactions.push(saleTransactions[0]);
-        } else {
-          // Se tem múltiplas transações para a mesma venda, combinar em uma única entrada
-          const firstTransaction = saleTransactions[0];
-          const totalAmount = saleTransactions.reduce((sum, t) => sum + parseFloat(t.amount), 0);
-          
-          // Combinar os métodos de pagamento
-          const paymentMethods = saleTransactions.map(t => {
-            const method = paymentMethodsMap[t.payment_method];
-            return {
-              name: method ? method.name : 'Método não identificado',
-              amount: parseFloat(t.amount)
-            };
-          });
-          
-          // Criar uma transação combinada
-          const combinedTransaction = {
-            ...firstTransaction,
-            id: `${firstTransaction.id}_combined`,
-            amount: totalAmount,
-            formatted_amount: formatCurrency(totalAmount),
-            original_transactions: saleTransactions,
-            payment_methods: paymentMethods,
-            is_combined: true
-          };
-          
-          groupedTransactions.push(combinedTransaction);
-        }
-      });
-      
-      // Ordenar as transações agrupadas
-      const sortedTransactions = [...groupedTransactions].sort((a, b) => {
-        const dateA = a.due_date ? new Date(a.due_date) : new Date(0);
-        const dateB = b.due_date ? new Date(b.due_date) : new Date(0);
-        return dateB - dateA; // Ordenar do mais recente para o mais antigo
-      });
-      
-      console.log('[AccountsReceivable] Transações agrupadas:', sortedTransactions);
-      
-      setTransactions(sortedTransactions);
-      setFilteredTransactions(sortedTransactions);
-    } catch (error) {
-      console.error('[AccountsReceivable] Erro ao carregar dados:', error);
-      setError(error);
-      
-      // Exibe mensagem de erro para o usuário
-      toast({
-        title: "Erro ao carregar dados",
-        description: "Não foi possível carregar as transações. Tente novamente mais tarde.",
-        variant: "destructive",
-        duration: 5000,
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  useEffect(() => {
+    loadPaymentMethods();
+  }, []);
 
   useEffect(() => {
     // Aplicar filtros quando os critérios mudarem
     if (!transactions.length) return;
     
-    console.log('[AccountsReceivable] Aplicando filtros...');
-    console.log('[AccountsReceivable] Filtros atuais:', { statusFilter, dateFilter, clientFilter, searchTerm });
-    console.log('[AccountsReceivable] Total de transações antes do filtro:', transactions.length);
-    
+    // Filtrar as transações com base nos critérios selecionados
     let filtered = [...transactions];
     
     // Filtro de status
@@ -438,46 +242,8 @@ export default function AccountsReceivable() {
       );
     }
     
-    // Ordenação - Modificando para ordenar por data mais recente primeiro
-    filtered.sort((a, b) => {
-      let aValue, bValue;
-      
-      if (sortField === "due_date") {
-        // Para datas, invertemos a comparação para mostrar as mais recentes primeiro
-        aValue = a.due_date ? new Date(a.due_date) : new Date(0);
-        bValue = b.due_date ? new Date(b.due_date) : new Date(0);
-        
-        // Inverte a ordenação para mostrar as datas mais recentes primeiro
-        if (sortDirection === "asc") {
-          return bValue - aValue; // Mais recentes primeiro
-        } else {
-          return aValue - bValue; // Mais antigas primeiro
-        }
-      } else if (sortField === "amount") {
-        aValue = a.amount || 0;
-        bValue = b.amount || 0;
-      } else if (sortField === "client_name") {
-        aValue = a.client_name || '';
-        bValue = b.client_name || '';
-      } else {
-        aValue = a[sortField] || '';
-        bValue = b[sortField] || '';
-      }
-      
-      if (sortDirection === "asc") {
-        return aValue > bValue ? 1 : -1;
-      } else {
-        return aValue < bValue ? 1 : -1;
-      }
-    });
-    
-    console.log('[AccountsReceivable] Total de transações após aplicar filtros:', filtered.length);
     setFilteredTransactions(filtered);
   }, [transactions, statusFilter, dateFilter, clientFilter, searchTerm, sortField, sortDirection]);
-
-  useEffect(() => {
-    loadPaymentMethods();
-  }, []);
 
   const toggleSort = (field) => {
     if (sortField === field) {
@@ -814,6 +580,265 @@ export default function AccountsReceivable() {
     } catch (error) {
       console.error("Erro ao salvar conta a receber:", error);
       toast.error("Erro ao salvar conta a receber. Por favor, tente novamente.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadPaymentMethods = async () => {
+    try {
+      const methods = await PaymentMethod.list();
+      setPaymentMethods(methods);
+      return methods;
+    } catch (error) {
+      console.error('[AccountsReceivable] Erro ao carregar métodos de pagamento:', error);
+      return [];
+    }
+  };
+
+  const loadData = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      // Carrega as transações (agora exclusivamente do Firebase)
+      // Otimização: Filtrar diretamente no Firebase para reduzir dados transferidos
+      const transactionsData = await FinancialTransaction.filter({
+        type: 'receita'
+      });
+      
+      // Otimização: Carregar apenas os métodos de pagamento primeiro (são poucos)
+      const paymentMethodsData = await PaymentMethod.list();
+      setPaymentMethods(paymentMethodsData);
+      
+      // Criar um mapa de métodos de pagamento para facilitar a busca
+      const paymentMethodsMap = paymentMethodsData.reduce((acc, method) => {
+        acc[method.id] = method;
+        return acc;
+      }, {});
+      
+      // Processar transações para identificar quais clientes precisamos carregar
+      const clientIds = new Set();
+      const saleIds = new Set();
+      
+      // Pré-filtrar transações relevantes
+      const relevantTransactions = transactionsData.filter(transaction => {
+        // Filtra transações a receber:
+        // 1. Transações do tipo receita que não estão pagas
+        // 2. Transações com cartão de crédito (que são a prazo)
+        // 3. Transações marcadas como parceladas (is_installment)
+        // 4. TODAS as transações do tipo receita (para mostrar histórico)
+        // 5. Excluir aberturas de caixa
+        const paymentMethodId = transaction.payment_method || '';
+        const paymentMethod = paymentMethodsMap[paymentMethodId];
+        
+        // Verifica se é um cartão de crédito baseado no método de pagamento do Firebase
+        const isCredit = paymentMethod ? 
+          (paymentMethod.name && (
+            paymentMethod.name.toLowerCase().includes('crédito') || 
+            paymentMethod.name.toLowerCase().includes('credito')
+          )) : false;
+        
+        // Mostra todas as transações do tipo receita, exceto aberturas de caixa
+        const isOpeningTransaction = transaction.category === 'abertura_caixa';
+        const shouldInclude = transaction.type === 'receita' && !isOpeningTransaction;
+        
+        if (shouldInclude) {
+          // Coletar IDs para carregamento posterior
+          if (transaction.client_id) clientIds.add(transaction.client_id);
+          if (transaction.sale_id) saleIds.add(transaction.sale_id);
+        }
+        
+        return shouldInclude;
+      });
+      
+      // Otimização: Carregar apenas os clientes necessários se houver muitos
+      let clientsMap = {};
+      if (clientIds.size > 0) {
+        // Se tivermos menos de 50 clientes para buscar, usamos o filtro por IDs
+        // Caso contrário, carregamos todos e filtramos em memória
+        let clientsData;
+        if (clientIds.size < 50) {
+          // Carregar clientes em lotes para evitar consultas muito grandes
+          const clientIdsArray = Array.from(clientIds);
+          const clientBatches = [];
+          
+          for (let i = 0; i < clientIdsArray.length; i += 10) {
+            const batch = clientIdsArray.slice(i, i + 10);
+            clientBatches.push(batch);
+          }
+          
+          clientsData = [];
+          for (const batch of clientBatches) {
+            const batchResults = await Promise.all(
+              batch.map(id => Client.get(id))
+            );
+            clientsData.push(...batchResults.filter(Boolean));
+          }
+        } else {
+          clientsData = await Client.list();
+          clientsData = clientsData.filter(client => clientIds.has(client.id));
+        }
+        
+        // Criar mapa de clientes
+        clientsMap = clientsData.reduce((acc, client) => {
+          if (client) acc[client.id] = client;
+          return acc;
+        }, {});
+        
+        // Atualizar o estado com todos os clientes para o seletor de filtro
+        setClients(clientsData);
+      }
+      
+      // Otimização: Carregar apenas as vendas necessárias
+      let salesMap = {};
+      if (saleIds.size > 0) {
+        // Carregar vendas em lotes para evitar consultas muito grandes
+        const saleIdsArray = Array.from(saleIds);
+        const saleBatches = [];
+        
+        for (let i = 0; i < saleIdsArray.length; i += 10) {
+          const batch = saleIdsArray.slice(i, i + 10);
+          saleBatches.push(batch);
+        }
+        
+        let salesData = [];
+        for (const batch of saleBatches) {
+          const batchResults = await Promise.all(
+            batch.map(id => Sale.get(id))
+          );
+          salesData.push(...batchResults.filter(Boolean));
+        }
+        
+        // Criar mapa de vendas
+        salesMap = salesData.reduce((acc, sale) => {
+          if (sale) acc[sale.id] = sale;
+          return acc;
+        }, {});
+        
+        // Atualizar estado
+        setSales(salesData);
+      }
+      
+      // Processar transações com os dados carregados
+      const processedTransactions = relevantTransactions.map(transaction => {
+        // Enriquece a transação com dados do cliente
+        const client = clientsMap[transaction.client_id] || { name: 'Cliente não encontrado' };
+        const sale = salesMap[transaction.sale_id] || { items: [] };
+        
+        return {
+          ...transaction,
+          client_name: client.name,
+          sale_items: sale.items,
+          formatted_amount: formatCurrency(transaction.amount),
+          formatted_due_date: transaction.due_date 
+            ? format(new Date(transaction.due_date), 'dd/MM/yyyy', { locale: ptBR })
+            : 'Sem data',
+          status_class: getStatusClass(transaction.status),
+          // Formata a descrição para mostrar informações mais úteis
+          formatted_description: formatTransactionDescription(transaction, sale)
+        };
+      });
+      
+      // Agrupar transações por sale_id
+      const groupedTransactions = [];
+      const transactionsBySaleId = {};
+      
+      // Primeiro, agrupar as transações pelo sale_id
+      processedTransactions.forEach(transaction => {
+        if (transaction.sale_id) {
+          if (!transactionsBySaleId[transaction.sale_id]) {
+            transactionsBySaleId[transaction.sale_id] = [];
+          }
+          transactionsBySaleId[transaction.sale_id].push(transaction);
+        } else {
+          // Se não tiver sale_id, adicionar diretamente ao resultado final
+          groupedTransactions.push(transaction);
+        }
+      });
+      
+      // Depois, para cada grupo de transações com o mesmo sale_id, criar uma transação combinada
+      Object.keys(transactionsBySaleId).forEach(saleId => {
+        const saleTransactions = transactionsBySaleId[saleId];
+        
+        if (saleTransactions.length === 1) {
+          // Se só tem uma transação para esta venda, adicionar diretamente
+          groupedTransactions.push(saleTransactions[0]);
+        } else {
+          // Se tem múltiplas transações para a mesma venda, combinar em uma única entrada
+          const firstTransaction = saleTransactions[0];
+          const totalAmount = saleTransactions.reduce((sum, t) => sum + parseFloat(t.amount), 0);
+          
+          // Combinar os métodos de pagamento
+          const paymentMethods = saleTransactions.map(t => {
+            const method = paymentMethodsMap[t.payment_method];
+            return {
+              name: method ? method.name : 'Método não identificado',
+              amount: parseFloat(t.amount)
+            };
+          });
+          
+          // Criar uma transação combinada
+          const combinedTransaction = {
+            ...firstTransaction,
+            id: `${firstTransaction.id}_combined`,
+            amount: totalAmount,
+            formatted_amount: formatCurrency(totalAmount),
+            original_transactions: saleTransactions,
+            payment_methods: paymentMethods,
+            is_combined: true
+          };
+          
+          groupedTransactions.push(combinedTransaction);
+        }
+      });
+      
+      // Ordenar as transações agrupadas
+      const sortedTransactions = [...groupedTransactions].sort((a, b) => {
+        let aValue, bValue;
+        
+        if (sortField === "due_date") {
+          // Para datas, invertemos a comparação para mostrar as mais recentes primeiro
+          aValue = a.due_date ? new Date(a.due_date) : new Date(0);
+          bValue = b.due_date ? new Date(b.due_date) : new Date(0);
+          
+          // Inverte a ordenação para mostrar as datas mais recentes primeiro
+          if (sortDirection === "asc") {
+            return bValue - aValue; // Mais recentes primeiro
+          } else {
+            return aValue - bValue; // Mais antigas primeiro
+          }
+        } else if (sortField === "amount") {
+          aValue = a.amount || 0;
+          bValue = b.amount || 0;
+        } else if (sortField === "client_name") {
+          aValue = a.client_name || '';
+          bValue = b.client_name || '';
+        } else {
+          aValue = a[sortField] || '';
+          bValue = b[sortField] || '';
+        }
+        
+        if (sortDirection === "asc") {
+          return aValue > bValue ? 1 : -1;
+        } else {
+          return aValue < bValue ? 1 : -1;
+        }
+      });
+      
+      setTransactions(sortedTransactions);
+      setFilteredTransactions(sortedTransactions);
+    } catch (error) {
+      console.error('[AccountsReceivable] Erro ao carregar dados:', error);
+      setError(error);
+      
+      // Exibe mensagem de erro para o usuário
+      toast({
+        title: "Erro ao carregar dados",
+        description: "Não foi possível carregar as transações. Tente novamente mais tarde.",
+        variant: "destructive",
+        duration: 5000,
+      });
     } finally {
       setIsLoading(false);
     }
