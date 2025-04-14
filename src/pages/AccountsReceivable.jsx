@@ -21,7 +21,7 @@ import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
 import { normalizeDate } from "@/utils/dateUtils";
 import { ptBR } from "date-fns/locale";
-import { Search, Filter, ChevronDown, ChevronUp, RefreshCw, FileText, Download, Printer, Plus, CalendarIcon, XCircle, Trash2 } from "lucide-react";
+import { Search, Filter, ChevronDown, ChevronUp, RefreshCw, FileText, Download, Printer, Plus, CalendarIcon, XCircle, Trash2, DollarSign, AlertCircle, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight } from "lucide-react";
 import { FinancialTransaction, Client, PaymentMethod, Sale } from "@/firebase/entities";
 import RateLimitHandler from '@/components/RateLimitHandler';
 import { toast } from "@/components/ui/use-toast";
@@ -66,6 +66,11 @@ export default function AccountsReceivable() {
   const [isSearchingClients, setIsSearchingClients] = useState(false);
   const [clientSearchTimeout, setClientSearchTimeout] = useState(null);
   const [clientCache, setClientCache] = useState(new Map());
+
+  // Estado para paginação
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [totalPages, setTotalPages] = useState(1);
 
   const handleDelete = async (transaction) => {
     try {
@@ -329,6 +334,13 @@ export default function AccountsReceivable() {
     
     setFilteredTransactions(filtered);
   }, [transactions, statusFilter, dateFilter, clientFilter, searchTerm, sortField, sortDirection]);
+
+  useEffect(() => {
+    // Calcular paginação sempre que os dados filtrados mudarem
+    setTotalPages(Math.ceil(filteredTransactions.length / itemsPerPage));
+    // Resetar para a primeira página quando os filtros mudarem
+    setCurrentPage(1);
+  }, [filteredTransactions, itemsPerPage]);
 
   const toggleSort = (field) => {
     if (sortField === field) {
@@ -776,7 +788,7 @@ export default function AccountsReceivable() {
         const saleIdsArray = Array.from(saleIds);
         const saleBatches = [];
         
-        for (let i = 0; i < saleIdsArray.length; i += 10) {
+        for (let i = 0; i <saleIdsArray.length; i += 10) {
           const batch = saleIdsArray.slice(i, i + 10);
           saleBatches.push(batch);
         }
@@ -921,6 +933,24 @@ export default function AccountsReceivable() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Função para mudar de página
+  const handlePageChange = (page) => {
+    setCurrentPage(page);
+  };
+
+  // Função para mudar o número de itens por página
+  const handleItemsPerPageChange = (value) => {
+    setItemsPerPage(parseInt(value));
+    setCurrentPage(1); // Voltar para a primeira página ao mudar itens por página
+  };
+
+  // Obter os itens da página atual
+  const getCurrentPageItems = () => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredTransactions.slice(startIndex, endIndex);
   };
 
   if (isLoading) {
@@ -1088,71 +1118,179 @@ export default function AccountsReceivable() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredTransactions.length === 0 ? (
+              {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-gray-500">
-                    Nenhuma conta a receber encontrada com os filtros atuais.
+                  <TableCell colSpan={6} className="text-center py-10">
+                    <div className="flex flex-col items-center">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#294380]"></div>
+                      <p className="mt-2 text-gray-500">Carregando transações...</p>
+                    </div>
                   </TableCell>
                 </TableRow>
-              ) : (
-                filteredTransactions.map((transaction) => (
+              ) : getCurrentPageItems().length > 0 ? (
+                getCurrentPageItems().map((transaction) => (
                   <TableRow key={transaction.id}>
+                    <TableCell>
+                      <div className="font-medium">{transaction.formatted_description}</div>
+                      <div className="text-xs text-gray-500">{transaction.category.replace(/_/g, ' ')}</div>
+                    </TableCell>
+                    <TableCell>{transaction.client_name || '-'}</TableCell>
+                    <TableCell>
+                      {transaction.due_date ? format(new Date(transaction.due_date), "dd/MM/yyyy") : '-'}
+                    </TableCell>
                     <TableCell className="font-medium">
-                      {transaction.formatted_description}
-                    </TableCell>
-                    <TableCell>{transaction.client_name}</TableCell>
-                    <TableCell>
-                      {transaction.due_date && format(new Date(transaction.due_date), "dd/MM/yyyy")}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {transaction.formatted_amount}
+                      {formatCurrency(transaction.amount)}
                     </TableCell>
                     <TableCell>
-                      <span 
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-                          ${transaction.status === 'pago' ? 'bg-green-100 text-green-800' : 
-                            transaction.status === 'pendente' ? 'bg-yellow-100 text-yellow-800' : 
-                            'bg-red-100 text-red-800'}`}
-                      >
+                      <span className={getStatusClass(transaction.status)}>
                         {formatStatus(transaction.status)}
                       </span>
                     </TableCell>
                     <TableCell>
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm" onClick={() => {
-                          setSelectedTransaction(transaction);
-                          setShowDetailsDialog(true);
-                        }}>
-                          Detalhes
-                        </Button>
+                      <div className="flex space-x-1">
                         {transaction.status === 'pendente' && (
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            className="text-green-600 border-green-200 hover:bg-green-50"
+                          <Button
+                            variant="ghost"
+                            size="icon"
                             onClick={() => handleShowReceiveDialog(transaction)}
+                            title="Receber pagamento"
                           >
-                            Receber
+                            <DollarSign className="h-4 w-4 text-green-600" />
                           </Button>
                         )}
                         <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-red-600 border-red-200 hover:bg-red-50"
-                          onClick={() => handleDelete(transaction)}
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            setSelectedTransaction(transaction);
+                            generateReceipt(transaction);
+                            setShowDetailsDialog(true);
+                          }}
+                          title="Ver detalhes"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <FileText className="h-4 w-4 text-[#294380]" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDelete(transaction)}
+                          title="Excluir"
+                        >
+                          <Trash2 className="h-4 w-4 text-red-600" />
                         </Button>
                       </div>
                     </TableCell>
                   </TableRow>
                 ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-6">
+                    <div className="flex flex-col items-center">
+                      <AlertCircle className="h-6 w-6 text-gray-400 mb-2" />
+                      <p className="text-gray-500">Nenhuma transação encontrada</p>
+                    </div>
+                  </TableCell>
+                </TableRow>
               )}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
-      
+
+      {/* Controles de paginação */}
+      {filteredTransactions.length > 0 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-500">
+              Mostrando {Math.min((currentPage - 1) * itemsPerPage + 1, filteredTransactions.length)} a {Math.min(currentPage * itemsPerPage, filteredTransactions.length)} de {filteredTransactions.length} transações
+            </span>
+            <Select
+              value={String(itemsPerPage)}
+              onValueChange={handleItemsPerPageChange}
+            >
+              <SelectTrigger className="w-[80px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="5">5</SelectItem>
+                <SelectItem value="10">10</SelectItem>
+                <SelectItem value="20">20</SelectItem>
+                <SelectItem value="50">50</SelectItem>
+                <SelectItem value="100">100</SelectItem>
+              </SelectContent>
+            </Select>
+            <span className="text-sm text-gray-500">por página</span>
+          </div>
+          
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handlePageChange(1)}
+              disabled={currentPage === 1}
+            >
+              <ChevronsLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            
+            {/* Botões de página */}
+            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+              // Lógica para mostrar as páginas ao redor da página atual
+              let pageNum;
+              if (totalPages <= 5) {
+                // Se tivermos 5 ou menos páginas, mostrar todas
+                pageNum = i + 1;
+              } else if (currentPage <= 3) {
+                // Se estivermos nas primeiras páginas
+                pageNum = i + 1;
+              } else if (currentPage >= totalPages - 2) {
+                // Se estivermos nas últimas páginas
+                pageNum = totalPages - 4 + i;
+              } else {
+                // Se estivermos no meio
+                pageNum = currentPage - 2 + i;
+              }
+              
+              return (
+                <Button
+                  key={pageNum}
+                  variant={currentPage === pageNum ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => handlePageChange(pageNum)}
+                  className={currentPage === pageNum ? "bg-[#294380]" : ""}
+                >
+                  {pageNum}
+                </Button>
+              );
+            })}
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handlePageChange(totalPages)}
+              disabled={currentPage === totalPages}
+            >
+              <ChevronsRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Diálogo de Detalhes da Transação */}
       <Dialog open={showDetailsDialog} onOpenChange={setShowDetailsDialog}>
         <DialogContent className="max-w-4xl">
