@@ -60,6 +60,13 @@ export default function AccountsReceivable() {
     payments: [{ method: '', amount: 0 }]
   });
 
+  // Novo estado para busca de clientes sob demanda
+  const [clientSearchTerm, setClientSearchTerm] = useState("");
+  const [clientSearchResults, setClientSearchResults] = useState([]);
+  const [isSearchingClients, setIsSearchingClients] = useState(false);
+  const [clientSearchTimeout, setClientSearchTimeout] = useState(null);
+  const [clientCache, setClientCache] = useState(new Map());
+
   const handleDelete = async (transaction) => {
     try {
       if (!transaction) return;
@@ -187,6 +194,73 @@ export default function AccountsReceivable() {
     notes: '',
     source: 'cliente' // Nova propriedade para indicar a origem do recebimento
   });
+
+  const handleClientSearch = async (searchTerm) => {
+    console.log("[DEBUG] Buscando cliente:", searchTerm);
+    
+    if (!searchTerm || searchTerm.length < 2) {
+      setClientSearchResults([]);
+      return;
+    }
+
+    // Limpar timeout anterior
+    if (clientSearchTimeout) {
+      clearTimeout(clientSearchTimeout);
+    }
+
+    // Criar novo timeout (debounce)
+    const newTimeout = setTimeout(async () => {
+      try {
+        setIsSearchingClients(true);
+        const startTime = performance.now();
+
+        // Normalizar o termo de busca
+        const normalizedTerm = searchTerm.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        console.log("[DEBUG] Termo normalizado:", normalizedTerm);
+        
+        // Verificar cache
+        if (clientCache.has(normalizedTerm)) {
+          console.log("[DEBUG] Usando cache para:", normalizedTerm);
+          setClientSearchResults(clientCache.get(normalizedTerm));
+          setIsSearchingClients(false);
+          return;
+        }
+
+        // Buscar clientes do Firebase
+        const clientsRef = collection(db, 'clients');
+        const nameQuery = query(
+          clientsRef,
+          where('name', '>=', normalizedTerm),
+          where('name', '<=', normalizedTerm + '\uf8ff'),
+          limit(20)
+        );
+
+        const snapshot = await getDocs(nameQuery);
+        const results = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        
+        console.log("[DEBUG] Resultados encontrados:", results.length);
+        console.log("[DEBUG] Tempo de busca:", Math.round(performance.now() - startTime), "ms");
+
+        // Atualizar cache
+        setClientCache(prev => new Map(prev).set(normalizedTerm, results));
+        setClientSearchResults(results);
+      } catch (error) {
+        console.error("Erro na busca:", error);
+        toast({
+          title: "Erro",
+          description: "Erro ao buscar clientes",
+          variant: "destructive"
+        });
+      } finally {
+        setIsSearchingClients(false);
+      }
+    }, 300); // 300ms de debounce
+
+    setClientSearchTimeout(newTimeout);
+  };
 
   useEffect(() => {
     loadData();
@@ -663,42 +737,36 @@ export default function AccountsReceivable() {
         return shouldInclude;
       });
       
-      // Otimização: Carregar apenas os clientes necessários se houver muitos
+      // Otimização: Carregar apenas os clientes necessários para as transações atuais
+      // em vez de carregar todos os 5849 clientes
       let clientsMap = {};
       if (clientIds.size > 0) {
-        // Se tivermos menos de 50 clientes para buscar, usamos o filtro por IDs
-        // Caso contrário, carregamos todos e filtramos em memória
-        let clientsData;
-        if (clientIds.size < 50) {
-          // Carregar clientes em lotes para evitar consultas muito grandes
-          const clientIdsArray = Array.from(clientIds);
-          const clientBatches = [];
-          
-          for (let i = 0; i < clientIdsArray.length; i += 10) {
-            const batch = clientIdsArray.slice(i, i + 10);
-            clientBatches.push(batch);
-          }
-          
-          clientsData = [];
-          for (const batch of clientBatches) {
-            const batchResults = await Promise.all(
-              batch.map(id => Client.get(id))
-            );
-            clientsData.push(...batchResults.filter(Boolean));
-          }
-        } else {
-          clientsData = await Client.list();
-          clientsData = clientsData.filter(client => clientIds.has(client.id));
+        // Carregar clientes em lotes para evitar consultas muito grandes
+        const clientIdsArray = Array.from(clientIds);
+        const clientBatches = [];
+        
+        // Dividir em lotes de 10 IDs para evitar consultas muito grandes
+        for (let i = 0; i < clientIdsArray.length; i += 10) {
+          const batch = clientIdsArray.slice(i, i + 10);
+          clientBatches.push(batch);
         }
         
-        // Criar mapa de clientes
-        clientsMap = clientsData.reduce((acc, client) => {
-          if (client) acc[client.id] = client;
-          return acc;
-        }, {});
+        console.log(`[DEBUG] Carregando ${clientIds.size} clientes em ${clientBatches.length} lotes`);
         
-        // Atualizar o estado com todos os clientes para o seletor de filtro
-        setClients(clientsData);
+        clientsMap = {};
+        for (const batch of clientBatches) {
+          const batchResults = await Promise.all(
+            batch.map(id => Client.get(id))
+          );
+          
+          // Adicionar ao mapa apenas os clientes que existem
+          batchResults.filter(Boolean).forEach(client => {
+            clientsMap[client.id] = client;
+          });
+        }
+        
+        // Atualizar o estado apenas com os clientes necessários para o filtro
+        setClients(Object.values(clientsMap));
       }
       
       // Otimização: Carregar apenas as vendas necessárias
@@ -1206,158 +1274,101 @@ export default function AccountsReceivable() {
 
       {/* Diálogo de Nova Conta a Receber */}
       <Dialog open={showNewReceivableDialog} onOpenChange={setShowNewReceivableDialog}>
-        <DialogContent className="max-w-4xl">
+        <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle>Nova Conta a Receberr</DialogTitle>
-            <DialogDescription>
-              Cadastre uma nova conta a receber de cliente, fornecedor, funcionário ou outros.
-            </DialogDescription>
+            <DialogTitle>Nova Conta a Receber</DialogTitle>
           </DialogHeader>
-          <div className="space-y-6 py-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Informações básicas */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium">Informações Básicas</h3>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="description">Descrição</Label>
-                  <Input
-                    id="description"
-                    value={newReceivable.description}
-                    onChange={(e) => setNewReceivable({ ...newReceivable, description: e.target.value })}
-                    placeholder="Descreva a conta a receber"
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="amount">Valor</Label>
-                  <Input
-                    id="amount"
-                    value={newReceivable.amount}
-                    onChange={(e) => setNewReceivable({ ...newReceivable, amount: e.target.value })}
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    placeholder="0,00"
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="category">Categoria</Label>
-                  <Select value={newReceivable.category} onValueChange={(value) => setNewReceivable({ ...newReceivable, category: value })}>
-                    <SelectTrigger id="category">
-                      <SelectValue placeholder="Selecione uma categoria" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="venda">Venda</SelectItem>
-                      <SelectItem value="serviço">Serviço</SelectItem>
-                      <SelectItem value="comissão">Comissão</SelectItem>
-                      <SelectItem value="reembolso">Reembolso</SelectItem>
-                      <SelectItem value="empréstimo">Empréstimo</SelectItem>
-                      <SelectItem value="outros">Outros</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="source">Origem</Label>
-                  <Select value={newReceivable.source} onValueChange={(value) => setNewReceivable({ ...newReceivable, source: value })}>
-                    <SelectTrigger id="source">
-                      <SelectValue placeholder="Selecione a origem" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="cliente">Cliente</SelectItem>
-                      <SelectItem value="fornecedor">Fornecedor</SelectItem>
-                      <SelectItem value="funcionário">Funcionário</SelectItem>
-                      <SelectItem value="outros">Outros</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label>Descrição</Label>
+              <Input
+                value={newReceivable.description}
+                onChange={(e) => setNewReceivable({...newReceivable, description: e.target.value})}
+                placeholder="Descrição da conta a receber"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Categoria</Label>
+                <Select
+                  value={newReceivable.category}
+                  onValueChange={(value) => setNewReceivable({...newReceivable, category: value})}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione uma categoria" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="venda_servico">Venda de Serviço</SelectItem>
+                    <SelectItem value="venda_produto">Venda de Produto</SelectItem>
+                    <SelectItem value="venda_pacote">Venda de Pacote</SelectItem>
+                    <SelectItem value="outros">Outros</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-              
-              {/* Informações de pagamento */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium">Informações de Pagamento</h3>
+              <div className="space-y-2">
+                <Label>Valor (R$)</Label>
+                <Input
+                  type="number"
+                  value={newReceivable.amount}
+                  onChange={(e) => setNewReceivable({...newReceivable, amount: parseFloat(e.target.value) || 0})}
+                  placeholder="0,00"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Cliente</Label>
+              <div className="space-y-2">
+                <Input
+                  type="text"
+                  placeholder="Buscar cliente..."
+                  value={clientSearchTerm}
+                  onChange={(e) => {
+                    setClientSearchTerm(e.target.value);
+                    handleClientSearch(e.target.value);
+                  }}
+                />
                 
-                <div className="space-y-2">
-                  <Label htmlFor="client">Cliente</Label>
-                  <Select value={newReceivable.client_id} onValueChange={(value) => setNewReceivable({ ...newReceivable, client_id: value })}>
-                    <SelectTrigger id="client">
-                      <SelectValue placeholder="Selecione um cliente" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="sem_cliente">Sem cliente</SelectItem>
-                      {clients.map(client => (
-                        <SelectItem key={client.id} value={client.id}>
-                          {client.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="payment_method">Método de Pagamento</Label>
-                  <Select value={newReceivable.payment_method} onValueChange={(value) => setNewReceivable({ ...newReceivable, payment_method: value })}>
-                    <SelectTrigger id="payment_method">
-                      <SelectValue placeholder="Selecione um método de pagamento" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="sem_metodo">Sem método de pagamento</SelectItem>
-                      {paymentMethods.map(method => (
-                        <SelectItem key={method.id} value={method.id}>
-                          {method.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="due_date">Data de Vencimento</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className="w-full justify-start text-left font-normal"
-                      >
-                        {newReceivable.due_date ? format(newReceivable.due_date, "dd/MM/yyyy") : "Selecione uma data"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar
-                        mode="single"
-                        selected={newReceivable.due_date}
-                        onSelect={(date) => setNewReceivable({ ...newReceivable, due_date: date })}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="status">Status</Label>
-                  <Select value={newReceivable.status} onValueChange={(value) => setNewReceivable({ ...newReceivable, status: value })}>
-                    <SelectTrigger id="status">
-                      <SelectValue placeholder="Selecione um status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pendente">Pendente</SelectItem>
-                      <SelectItem value="pago">Pago</SelectItem>
-                      <SelectItem value="cancelado">Cancelado</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                {clientSearchTerm.length >= 2 && (
+                  <div className="border rounded-md max-h-[200px] overflow-y-auto">
+                    {isSearchingClients ? (
+                      <div className="p-2 text-center text-sm text-gray-500">Buscando...</div>
+                    ) : clientSearchResults.length > 0 ? (
+                      <div className="divide-y">
+                        {clientSearchResults.map(client => (
+                          <div 
+                            key={client.id} 
+                            className="p-2 hover:bg-gray-100 cursor-pointer"
+                            onClick={() => {
+                              setNewReceivable({...newReceivable, client_id: client.id});
+                              setClientSearchTerm(client.name);
+                              setClientSearchResults([]);
+                            }}
+                          >
+                            <div className="font-medium">{client.name}</div>
+                            <div className="text-xs text-gray-500">
+                              {client.email || ''} {client.cpf ? `• CPF: ${client.cpf}` : ''}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-2 text-center text-sm text-gray-500">
+                        Nenhum cliente encontrado
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
             
             {/* Observações */}
             <div className="space-y-2">
-              <Label htmlFor="notes">Observações</Label>
+              <Label>Observações</Label>
               <Textarea
-                id="notes"
                 value={newReceivable.notes}
-                onChange={(e) => setNewReceivable({ ...newReceivable, notes: e.target.value })}
+                onChange={(e) => setNewReceivable({...newReceivable, notes: e.target.value})}
                 placeholder="Observações adicionais sobre esta conta a receber"
                 className="min-h-[100px]"
               />
