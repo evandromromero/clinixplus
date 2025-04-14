@@ -466,32 +466,46 @@ export default function ClientPackages() {
           return;
         }
 
-        // SOLUÇÃO 1: Buscar todos os clientes e filtrar no lado do cliente
-        console.log("[DEBUG] Buscando todos os clientes para filtrar no cliente");
-        const allClientsSnapshot = await getDocs(collection(db, 'clients'));
-        const allClients = allClientsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        
-        console.log("[DEBUG] Total de clientes no banco:", allClients.length);
-        
-        // Filtrar clientes que contêm o termo de busca (não apenas os que começam com ele)
-        const filteredClients = allClients.filter(client => {
-          // Normalizar o nome do cliente para comparação
-          const normalizedName = (client.name || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-          const normalizedEmail = (client.email || "").toLowerCase();
-          const normalizedCpf = (client.cpf || "");
-          
-          return normalizedName.includes(normalizedTerm) || 
-                 normalizedEmail.includes(normalizedTerm) || 
-                 normalizedCpf.includes(normalizedTerm);
+        // Buscar clientes do Firebase
+        const clientsRef = collection(db, 'clients');
+        const nameQuery = query(
+          clientsRef,
+          where('name', '>=', normalizedTerm),
+          where('name', '<=', normalizedTerm + '\uf8ff'),
+          limit(20)
+        );
+
+        const emailQuery = query(
+          clientsRef,
+          where('email', '>=', normalizedTerm),
+          where('email', '<=', normalizedTerm + '\uf8ff'),
+          limit(20)
+        );
+
+        const cpfQuery = query(
+          clientsRef,
+          where('cpf', '>=', normalizedTerm),
+          where('cpf', '<=', normalizedTerm + '\uf8ff'),
+          limit(20)
+        );
+
+        console.log("[DEBUG] Executando queries de busca");
+        const [nameSnapshot, emailSnapshot, cpfSnapshot] = await Promise.all([
+          getDocs(nameQuery),
+          getDocs(emailQuery),
+          getDocs(cpfQuery)
+        ]);
+
+        // Combinar resultados removendo duplicatas
+        const resultsMap = new Map();
+        [...nameSnapshot.docs, ...emailSnapshot.docs, ...cpfSnapshot.docs].forEach(doc => {
+          if (!resultsMap.has(doc.id)) {
+            resultsMap.set(doc.id, { id: doc.id, ...doc.data() });
+          }
         });
-        
-        console.log("[DEBUG] Clientes filtrados:", filteredClients.length);
-        console.log("[DEBUG] Nomes dos clientes filtrados:", filteredClients.map(c => c.name));
-        
-        // Limitar resultados para não sobrecarregar a interface
-        const results = filteredClients.slice(0, 20);
-        
-        console.log("[DEBUG] Resultados limitados:", results.length);
+
+        const results = Array.from(resultsMap.values());
+        console.log("[DEBUG] Resultados encontrados:", results.length);
         console.log("[DEBUG] Tempo de busca:", Math.round(performance.now() - startTime), "ms");
 
         // Atualizar cache
@@ -768,7 +782,7 @@ export default function ClientPackages() {
       };
       
       const createdPackage = await ClientPackage.create(newClientPackage);
-
+      
       // Cria uma venda não finalizada
       await UnfinishedSale.create({
         client_id: sellForm.client_id,
@@ -787,7 +801,7 @@ export default function ClientPackages() {
         date_created: new Date().toISOString(),
         status: 'pendente'
       });
-
+      
       // Redireciona para a página de registro de venda
       const saleParams = new URLSearchParams({
         type: 'pacote',

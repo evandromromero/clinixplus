@@ -128,6 +128,17 @@ export default function AccountsReceivable() {
     try {
       if (!selectedTransaction) return;
 
+      // Validar se todas as formas de pagamento foram selecionadas
+      const hasEmptyMethod = paymentData.payments.some(p => !p.method);
+      if (hasEmptyMethod) {
+        toast({
+          title: "Erro",
+          description: "Selecione uma forma de pagamento para continuar",
+          variant: "destructive"
+        });
+        return;
+      }
+
       // Validar se o total dos pagamentos é igual ao valor da transação
       const totalPayments = paymentData.payments.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0);
       if (Math.abs(totalPayments - selectedTransaction.amount) > 0.01) {
@@ -1468,7 +1479,10 @@ export default function AccountsReceivable() {
             <Button variant="outline" onClick={() => setShowReceiveDialog(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleReceivePayment}>
+            <Button 
+              onClick={handleReceivePayment}
+              disabled={paymentData.payments.some(p => !p.method)}
+            >
               Confirmar Recebimento
             </Button>
           </DialogFooter>
