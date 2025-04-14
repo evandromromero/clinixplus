@@ -49,6 +49,14 @@ import {
 } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/use-toast"; // Import the useToast hook
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+} from "@/components/ui/command";
 
 export default function Appointments() {
   const { toast } = useToast(); // Get the toast function from the hook
@@ -122,6 +130,16 @@ export default function Appointments() {
   const [bulkActionsDate, setBulkActionsDate] = useState(date);
 
   const navigate = useNavigate();
+
+  // Estados para popovers dos campos digitáveis
+  const [showProfessionalPopover, setShowProfessionalPopover] = useState(false);
+  const [showServicePopover, setShowServicePopover] = useState(false);
+  const [showPendingPopover, setShowPendingPopover] = useState(false);
+
+  // Helpers para valores selecionados
+  const selectedProfessional = employees.find(e => e.id === newAppointment.employee_id);
+  const selectedService = services.find(s => s.id === newAppointment.service_id);
+  const selectedPendingService = pendingServices.find(ps => ps.service_id === newAppointment.service_id);
 
   const handleViewClientDetails = (clientId) => {
     navigate(`/client-details?id=${clientId}`);
@@ -1888,30 +1906,49 @@ export default function Appointments() {
 
               <div className="space-y-2">
                 <Label>Profissional</Label>
-                <Select
-                  value={newAppointment.employee_id}
-                  onValueChange={(value) => {
-                    setNewAppointment({...newAppointment, employee_id: value, service_id: ""});
-                    updateServicesForEmployee(value);
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o profissional..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {employees.map((employee) => (
-                      <SelectItem key={employee.id} value={employee.id}>
-                        <div className="flex items-center gap-2">
-                          <div 
-                            className="w-3 h-3 rounded-full"
-                            style={{ backgroundColor: employee.color || '#94a3b8' }}
-                          />
-                          {employee.name.length > 16 ? employee.name.substring(0, 16) + '...' : employee.name}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Popover open={showProfessionalPopover} onOpenChange={setShowProfessionalPopover}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      className="w-full justify-start text-left font-normal"
+                      aria-expanded={showProfessionalPopover}
+                    >
+                      {selectedProfessional ? (
+                        <span className="flex items-center gap-2">
+                          <span className="w-3 h-3 rounded-full" style={{ backgroundColor: selectedProfessional.color || '#94a3b8' }} />
+                          {selectedProfessional.name.length > 16 ? selectedProfessional.name.substring(0, 16) + '...' : selectedProfessional.name}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">Selecione o profissional...</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="p-0 w-[300px]">
+                    <Command>
+                      <CommandInput placeholder="Buscar profissional..." />
+                      <CommandEmpty>Nenhum profissional encontrado.</CommandEmpty>
+                      <CommandList>
+                        <CommandGroup>
+                          {employees.map((employee) => (
+                            <CommandItem
+                              key={employee.id}
+                              value={employee.name}
+                              onSelect={() => {
+                                setNewAppointment({ ...newAppointment, employee_id: employee.id, service_id: "" });
+                                updateServicesForEmployee(employee.id);
+                                setShowProfessionalPopover(false);
+                              }}
+                            >
+                              <span className="w-3 h-3 rounded-full mr-2 inline-block" style={{ backgroundColor: employee.color || '#94a3b8' }} />
+                              {employee.name.length > 24 ? employee.name.substring(0, 24) + '...' : employee.name}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
 
@@ -1985,87 +2022,92 @@ export default function Appointments() {
             {newAppointment.client_id && pendingServices.length > 0 && (
               <div className="space-y-2">
                 <Label>Serviços Pendentes</Label>
-                <Select
-                  value={newAppointment.service_id}
-                  onValueChange={(value) => {
-                    const pendingService = pendingServices.find(ps => ps.service_id === value);
-                    const service = services.find(s => s.id === value);
-                    if (pendingService && service) {
-                      setNewAppointment({
-                        ...newAppointment,
-                        service_id: value,
-                        duration: service.duration || 60
-                      });
-                    }
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione um serviço pendente..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {pendingServices.map((ps, index) => {
-                      const service = services.find(s => s.id === ps.service_id);
-                      if (!service) return null;
-                      
-                      const key = `${ps.id}-${ps.service_id}-${index}`;
-                      const purchaseDate = format(new Date(ps.created_date), "dd/MM/yyyy");
-                      
-                      return (
-                        <SelectItem 
-                          key={key}
-                          value={ps.service_id}
-                        >
-                          {service.name} - {purchaseDate}
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
+                <Popover open={showPendingPopover} onOpenChange={setShowPendingPopover}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      className="w-full justify-start text-left font-normal"
+                      aria-expanded={showPendingPopover}
+                    >
+                      {selectedPendingService ? (
+                        <span>{selectedPendingService.name}</span>
+                      ) : (
+                        <span className="text-muted-foreground">Selecione um serviço pendente...</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="p-0 w-[300px]">
+                    <Command>
+                      <CommandInput placeholder="Buscar serviço pendente..." />
+                      <CommandEmpty>Nenhum serviço pendente encontrado.</CommandEmpty>
+                      <CommandList>
+                        <CommandGroup>
+                          {pendingServices.map((ps, idx) => {
+                            const service = services.find(s => s.id === ps.service_id);
+                            if (!service) return null;
+                            return (
+                              <CommandItem
+                                key={ps.service_id + '-' + idx}
+                                value={service.name}
+                                onSelect={() => {
+                                  setNewAppointment({ ...newAppointment, service_id: ps.service_id });
+                                  setShowPendingPopover(false);
+                                }}
+                              >
+                                {service.name}
+                              </CommandItem>
+                            );
+                          })}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
             )}
 
             <div className="space-y-2">
               <Label>Serviço</Label>
-              <Select
-                value={newAppointment.service_id}
-                onValueChange={(value) => setNewAppointment({...newAppointment, service_id: value})}
-                disabled={!newAppointment.employee_id}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={
-                    !newAppointment.employee_id 
-                      ? "Selecione um profissional primeiro" 
-                      : "Selecione o serviço..."
-                  } />
-                </SelectTrigger>
-                <SelectContent>
-                  {filteredServices.length > 0 ? (
-                    filteredServices.map((service) => (
-                      <SelectItem key={service.id} value={service.id}>
-                        {service.displayName || service.name} ({service.duration}min)
-                        {selectedPackageId && (
-                          <span className="ml-2 text-green-600 font-medium">Pacote</span>
-                        )}
-                      </SelectItem>
-                    ))
-                  ) : (
-                    <SelectItem value={null} disabled>
-                      {newAppointment.employee_id 
-                        ? selectedPackageId 
-                          ? "Nenhum serviço disponível neste pacote para este profissional" 
-                          : "Nenhum serviço disponível para este profissional" 
-                        : "Selecione um profissional primeiro"}
-                    </SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
-              {newAppointment.employee_id && filteredServices.length === 0 && (
-                <p className="text-sm text-red-500 mt-1">
-                  {selectedPackageId 
-                    ? "Este profissional não possui serviços associados neste pacote."
-                    : "Este profissional não possui serviços associados. Edite o cadastro do profissional para adicionar especialidades."}
-                </p>
-              )}
+              <Popover open={showServicePopover} onOpenChange={setShowServicePopover}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-start text-left font-normal"
+                    aria-expanded={showServicePopover}
+                    disabled={!newAppointment.employee_id}
+                  >
+                    {selectedService ? (
+                      <span>{selectedService.displayName || selectedService.name}</span>
+                    ) : (
+                      <span className="text-muted-foreground">Selecione o serviço...</span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="p-0 w-[300px]">
+                  <Command>
+                    <CommandInput placeholder="Buscar serviço..." />
+                    <CommandEmpty>Nenhum serviço encontrado.</CommandEmpty>
+                    <CommandList>
+                      <CommandGroup>
+                        {filteredServices.map((service) => (
+                          <CommandItem
+                            key={service.id}
+                            value={service.displayName || service.name}
+                            onSelect={() => {
+                              setNewAppointment({ ...newAppointment, service_id: service.id });
+                              setShowServicePopover(false);
+                            }}
+                          >
+                            {service.displayName || service.name} ({service.duration}min)
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
