@@ -399,7 +399,7 @@ export default function ClientPackages() {
   useEffect(() => {
     const timer = setTimeout(() => {
       if (debouncedClientSearch) {
-        handleClientSearch(debouncedClientSearch);
+        handleSearchClients(debouncedClientSearch);
       }
     }, 300);
     return () => clearTimeout(timer);
@@ -466,7 +466,7 @@ export default function ClientPackages() {
           return;
         }
 
-        // Buscar clientes do Firebase
+        // Buscar clientes do Firestore
         const clientsRef = collection(db, 'clients');
         const nameQuery = query(
           clientsRef,
@@ -524,6 +524,49 @@ export default function ClientPackages() {
     }, 300); // 300ms de debounce
 
     setSearchTimeout(newTimeout);
+  };
+
+  const handleSearchClients = async (searchTerm) => {
+    if (!searchTerm.trim()) {
+      setClientSearchResults([]);
+      return;
+    }
+
+    try {
+      setIsSearchingClients(true);
+      
+      // Buscar todos os clientes do Firestore
+      const clientsRef = collection(db, 'clients');
+      const clientsSnapshot = await getDocs(clientsRef);
+      
+      // Filtrar os resultados no lado do cliente
+      const filteredClients = [];
+      
+      clientsSnapshot.forEach(doc => {
+        const client = { id: doc.id, ...doc.data() };
+        
+        // Verificar se o nome, email ou CPF contém o termo de busca (case insensitive)
+        if (
+          (client.name && client.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+          (client.email && client.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+          (client.cpf && client.cpf.includes(searchTerm))
+        ) {
+          filteredClients.push(client);
+        }
+      });
+      
+      console.log(`[DEBUG] Encontrados ${filteredClients.length} resultados para "${searchTerm}"`);
+      setClientSearchResults(filteredClients);
+    } catch (error) {
+      console.error("Erro ao buscar clientes:", error);
+      toast({
+        title: "Erro na busca",
+        description: "Não foi possível buscar os clientes",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSearchingClients(false);
+    }
   };
 
   // Função otimizada de busca de pacotes
@@ -782,7 +825,7 @@ export default function ClientPackages() {
       };
       
       const createdPackage = await ClientPackage.create(newClientPackage);
-      
+
       // Cria uma venda não finalizada
       await UnfinishedSale.create({
         client_id: sellForm.client_id,
@@ -801,7 +844,7 @@ export default function ClientPackages() {
         date_created: new Date().toISOString(),
         status: 'pendente'
       });
-      
+
       // Redireciona para a página de registro de venda
       const saleParams = new URLSearchParams({
         type: 'pacote',
@@ -1393,20 +1436,7 @@ export default function ClientPackages() {
     }
   };
 
-  const handleSearchClients = (searchTerm) => {
-    if (!searchTerm.trim()) {
-      setClientSearchResults([]);
-      return;
-    }
 
-    const filteredClients = clients.filter(client => 
-      client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (client.email && client.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (client.cpf && client.cpf.includes(searchTerm))
-    );
-
-    setClientSearchResults(filteredClients);
-  };
 
   const handleSearchPackages = (searchTerm) => {
     if (!searchTerm.trim()) {
@@ -1853,7 +1883,7 @@ export default function ClientPackages() {
                   value={clientSearchTerm}
                   onChange={(e) => {
                     setClientSearchTerm(e.target.value);
-                    handleClientSearch(e.target.value);
+                    handleSearchClients(e.target.value);
                     setShowClientSearch(true);
                   }}
                   onFocus={() => setShowClientSearch(true)}
@@ -1938,6 +1968,7 @@ export default function ClientPackages() {
                       setSelectedClient(client.id);
                       setClientSearchTerm('');
                       setShowClientSearch(false);
+                      setClients(prev => [...prev, client]);
                     }}
                   >
                     <div className="font-medium">{client.name}</div>
@@ -2144,7 +2175,7 @@ export default function ClientPackages() {
                                       className="p-3 bg-gray-50 rounded-lg border border-gray-200"
                                     >
                                       <div className="flex items-center justify-between">
-                                        <span className="font-medium">{session.service_name}</span>
+                                        <span className="font-medium">{getServiceName(session.service_id)}</span>
                                         <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
                                           Concluído
                                         </Badge>
@@ -2329,7 +2360,7 @@ export default function ClientPackages() {
                             <Button 
                               variant="ghost" 
                               size="icon"
-                              className="text-red-500 hover:bg-red-50 h-8 w-8"
+                              className="text-red-500 hover:text-red-700 hover:bg-red-50"
                               onClick={() => handleRemoveSession(index)}
                               title="Excluir sessão"
                             >
@@ -2541,7 +2572,7 @@ export default function ClientPackages() {
                         value={clientSearchTerm}
                         onChange={(e) => {
                           setClientSearchTerm(e.target.value);
-                          handleClientSearch(e.target.value);
+                          handleSearchClients(e.target.value);
                           setShowClientSearch(true);
                         }}
                         onFocus={() => setShowClientSearch(true)}
@@ -2566,6 +2597,7 @@ export default function ClientPackages() {
                             setSellForm({...sellForm, client_id: client.id});
                             setClientSearchTerm(client.name);
                             setShowClientSearch(false);
+                            setClients(prev => [...prev, client]);
                           }}
                         >
                           <div className="font-medium">{client.name}</div>
