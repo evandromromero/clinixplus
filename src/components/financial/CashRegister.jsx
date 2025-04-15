@@ -1464,14 +1464,22 @@ export default function CashRegister() {
   const handleDownloadReport = async () => {
     try {
       setIsGeneratingReport(true);
-      await generatePDFReport(cashRegisters[0], transactions);
+      // Filtrar transações pela data selecionada
+      const dateToUse = selectedDate || format(new Date(), "yyyy-MM-dd");
+      const filteredTransactions = getTransactionsByDate(dateToUse);
+      await generatePDFReport(cashRegisters[0], filteredTransactions);
     } catch (error) {
       console.error('Erro ao gerar relatório:', error);
-      toast({
-        title: "Erro",
-        description: "Erro ao gerar relatório",
-        type: "error"
-      });
+      // Corrigir chamada do toast, se necessário
+      if (typeof toast === 'function') {
+        toast({
+          title: "Erro",
+          description: "Erro ao gerar relatório",
+          type: "error"
+        });
+      } else if (toast && typeof toast.error === 'function') {
+        toast.error("Erro ao gerar relatório");
+      }
     } finally {
       setIsGeneratingReport(false);
       setShowReportDialog(false);
@@ -1781,22 +1789,23 @@ export default function CashRegister() {
               </tbody>
             </table>
           </div>
-          
+
           <div>
             <h2 class="text-lg font-semibold mb-2">Transações do Dia</h2>
             <table class="w-full border-collapse">
               <thead>
                 <tr class="bg-gray-100">
-                  <th class="border p-2 text-left">Descrição</th>
-                  <th class="border p-2 text-left">Tipo</th>
-                  <th class="border p-2 text-left">Método</th>
-                  <th class="border p-2 text-left">Cliente</th>
-                  <th class="border p-2 text-left">Data/Hora</th>
-                  <th class="border p-2 text-left">Valor</th>
+                  <th class="border p-2 text-left">DESCRIÇÃO</th>
+                  <th class="border p-2 text-left">REF.</th>
+                  <th class="border p-2 text-left">VALOR</th>
+                  <th class="border p-2 text-left">DATA</th>
+                  <th class="border p-2 text-left">HORA</th>
+                  <th class="border p-2 text-left">CLIENTE</th>
+                  <th class="border p-2 text-left">FORMA PGTO</th>
                 </tr>
               </thead>
               <tbody>
-                ${transactionRows || '<tr><td colspan="6" class="border p-2 text-center">Nenhuma transação encontrada</td></tr>'}
+                ${transactionRows || '<tr><td colspan="7" class="border p-2 text-center">Nenhuma transação encontrada</td></tr>'}
               </tbody>
             </table>
           </div>
