@@ -1062,7 +1062,7 @@ export default function CashRegister() {
   const getPaymentMethodTotals = (transactions) => {
     // Inicializar objeto de totais com base nos métodos de pagamento disponíveis
     const totals = {};
-    
+
     // Adicionar métodos de pagamento do Firebase
     if (paymentMethods && paymentMethods.length > 0) {
       paymentMethods.forEach(method => {
@@ -1079,13 +1079,14 @@ export default function CashRegister() {
 
     // Processar transações
     transactions.forEach(t => {
-      // Verificar se está usando o novo formato (array de payment_methods)
       if (t.type === 'receita') {
         if (t.payment_methods && Array.isArray(t.payment_methods) && t.payment_methods.length > 0) {
           // Novo formato: array de payment_methods
           t.payment_methods.forEach(pm => {
-            if (pm.method_id && totals[pm.method_id] !== undefined) {
-              totals[pm.method_id] += Number(pm.amount || 0);
+            // Suporta tanto 'method_id' quanto 'method' para compatibilidade
+            const methodId = pm.method_id || pm.method;
+            if (methodId && totals[methodId] !== undefined) {
+              totals[methodId] += Number(pm.amount || 0);
             }
           });
         } else if (t.payment_method && totals[t.payment_method] !== undefined) {
@@ -1207,7 +1208,7 @@ export default function CashRegister() {
         </table>
 
         <div style="margin-bottom: 20px;">
-          <h3 style="margin-bottom: 10px;">DETALHAMENTO DE ENTRADAS / TOTAL: R$ ${totalReceitas.toFixed(2)}</h3>
+          <h3 style="margin-bottom: 10px;">DETALHAMENTO DE ENTRADAS / TOTAL: R$ ${transactions.reduce((acc, t) => t.type === 'receita' ? acc + Number(t.amount) : acc, 0).toFixed(2)}</h3>
           <table style="width: 100%; border-collapse: collapse; table-layout: fixed;">
             <tr style="background-color: #f0f0f0;">
               ${paymentMethodHeaders}
