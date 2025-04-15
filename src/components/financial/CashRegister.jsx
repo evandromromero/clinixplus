@@ -732,21 +732,20 @@ export default function CashRegister() {
   
   // Função para formatar os métodos de pagamento para exibição
   const formatPaymentMethods = (transaction) => {
-    // Se estiver usando o novo formato (array de payment_methods)
+    // Novo formato (array de métodos)
     if (transaction.payment_methods && Array.isArray(transaction.payment_methods) && transaction.payment_methods.length > 0) {
-      // Mapear os métodos de pagamento para seus nomes
       return transaction.payment_methods.map(pm => {
-        const method = paymentMethods.find(m => m.id === pm.method_id);
+        // Suporta tanto 'method_id' quanto 'method' para compatibilidade
+        const methodId = pm.method_id || pm.method;
+        const method = paymentMethods.find(m => m.id === methodId);
         return method ? method.name : "Método não identificado";
       }).join(", ");
     }
-    
-    // Fallback para o formato antigo (payment_method string)
+    // Formato antigo (string)
     if (transaction.payment_method) {
       const method = paymentMethods.find(m => m.id === transaction.payment_method);
       return method ? method.name : transaction.payment_method_name || "Método não identificado";
     }
-    
     return "Método não identificado";
   };
 
@@ -1100,21 +1099,21 @@ export default function CashRegister() {
   };
 
   const formatPaymentMethodsForReport = (transaction) => {
-    // Se estiver usando o novo formato (array de payment_methods)
+    // Novo formato (array de métodos)
     if (transaction.payment_methods && Array.isArray(transaction.payment_methods) && transaction.payment_methods.length > 0) {
       return transaction.payment_methods.map(pm => {
-        const method = paymentMethods.find(m => m.id === pm.method_id);
+        // Suporta tanto 'method_id' quanto 'method' para compatibilidade
+        const methodId = pm.method_id || pm.method;
+        const method = paymentMethods.find(m => m.id === methodId);
         const methodName = method ? method.name.toUpperCase() : pm.method_id;
         return `${methodName} (R$ ${Number(pm.amount).toFixed(2)})`;
       }).join(' + ');
     }
-    
-    // Formato antigo: payment_method string
+    // Formato antigo (string)
     if (transaction.payment_method) {
       const method = paymentMethods.find(m => m.id === transaction.payment_method);
       return method ? method.name.toUpperCase() : transaction.payment_method.toUpperCase();
     }
-    
     return '-';
   };
 
@@ -1766,7 +1765,7 @@ export default function CashRegister() {
           </div>
           
           <div class="mb-6">
-            <h2 class="text-lg font-semibold mb-2">Totais por Método de Pagamento</h2>
+            <h3 class="text-lg font-semibold mb-2">Totais por Método de Pagamento</h3>
             <table class="w-full border-collapse">
               <thead>
                 <tr class="bg-gray-100">
@@ -2639,10 +2638,10 @@ export default function CashRegister() {
                 onChange={(e) => {
                   const newAmount = parseFloat(e.target.value);
                   // Atualizar o valor do primeiro método de pagamento também
-                  const updatedMethods = [...newTransaction.payment_methods];
-                  if (updatedMethods.length > 0) {
-                    updatedMethods[0].amount = newAmount;
-                  }
+                  const updatedMethods = newTransaction.payment_methods.map(method => ({
+                    ...method,
+                    amount: newAmount
+                  }));
                   setNewTransaction({
                     ...newTransaction, 
                     amount: newAmount,
@@ -2791,7 +2790,7 @@ export default function CashRegister() {
               <div className="flex justify-between items-center mb-2">
                 <h3 className="font-medium">Formas de Pagamento</h3>
                 <Button 
-                  variant="outline"
+                  variant="outline" 
                   size="sm"
                   onClick={() => {
                     // Distribuir o valor total entre os métodos de pagamento existentes
