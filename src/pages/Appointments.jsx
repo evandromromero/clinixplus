@@ -1699,56 +1699,23 @@ export default function Appointments() {
                                   // Evita mover para o mesmo lugar
                                   if (originalEmployeeId === employee.id && originalHour === hour) return;
                                   
-                                  // Verifica se já existe agendamento neste horário
-                                  const hasConflict = slotAppointments.some(app => 
-                                    app.id !== appointmentId &&
-                                    app.employee_id === employee.id &&
-                                    format(new Date(app.date), "HH:mm") === format(timeSlotDate, "HH:mm") &&
-                                    format(new Date(app.date), "yyyy-MM-dd") === format(timeSlotDate, "yyyy-MM-dd")
-                                  );
-
-                                  if (hasConflict) {
-                                    toast({
-                                      title: "Conflito de horário",
-                                      description: "Já existe um agendamento neste horário",
-                                      variant: "destructive"
-                                    });
-                                    return;
-                                  }
-                                  
-                                  // Atualiza o agendamento
-                                  const appointment = appointments.find(app => app.id === appointmentId);
-                                  if (!appointment) return;
-
-                                  const newDate = new Date(date);
-                                  newDate.setHours(hour, 0, 0, 0);
-                                  
                                   await Appointment.update(appointmentId, {
                                     employee_id: employee.id,
-                                    date: format(newDate, "yyyy-MM-dd'T'HH:mm:ss")
+                                    date: format(timeSlotDate, "yyyy-MM-dd'T'HH:mm:ss")
                                   });
-                                  
-                                  // Recarrega os dados e atualiza a modal se necessário
+
                                   await loadData();
                                   
-                                  if (selectedAppointmentDetails?.appointment?.id === appointmentId) {
-                                    const updatedAppointment = await Appointment.get(appointmentId);
-                                    if (updatedAppointment) {
-                                      await handleSelectAppointment(updatedAppointment);
-                                    }
-                                  }
-                                  
-                                  toast({
-                                    title: "Sucesso",
-                                    description: "Agendamento movido com sucesso",
-                                    variant: "success"
-                                  });
+                                  console.log("Agendamento movido com sucesso.");
                                 } catch (error) {
                                   console.error("Erro ao mover agendamento:", error);
-                                  toast({
-                                    title: "Erro",
-                                    description: "Não foi possível mover o agendamento",
-                                    variant: "destructive"
+                                } finally {
+                                  setShowMoveDialog(false);
+                                  setSelectedAppointment(null);
+                                  setMoveTarget({
+                                    employeeId: "",
+                                    hour: null,
+                                    date: null
                                   });
                                 }
                               }}
