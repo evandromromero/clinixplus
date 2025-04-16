@@ -155,6 +155,58 @@ export default function ClientPackages() {
 
   const [expandedPackages, setExpandedPackages] = useState({});
 
+  // Estado para abrir/fechar o modal de importação de pacote antigo
+  const [showImportPackageDialog, setShowImportPackageDialog] = useState(false);
+
+  // Estado do formulário de importação de pacote antigo
+  const [importPackageForm, setImportPackageForm] = useState({
+    client_id: '',
+    services: [], // { service_id: '', total: 1, used: 0, sessions: [{ date: '', obs: '' }] }
+    notes: '',
+  });
+
+  // Funções auxiliares para manipular serviços do pacote importado
+  const handleAddServiceToImport = () => {
+    setImportPackageForm(prev => ({
+      ...prev,
+      services: [
+        ...prev.services,
+        { service_id: '', total: 1, used: 0, sessions: [] },
+      ],
+    }));
+  };
+  const handleRemoveServiceFromImport = (idx) => {
+    setImportPackageForm(prev => ({
+      ...prev,
+      services: prev.services.filter((_, i) => i !== idx),
+    }));
+  };
+  const handleImportServiceChange = (idx, field, value) => {
+    setImportPackageForm(prev => {
+      const services = [...prev.services];
+      services[idx][field] = value;
+      return { ...prev, services };
+    });
+  };
+
+  const handleAddSessionToService = (idx) => {
+    setImportPackageForm(prev => {
+      const services = [...prev.services];
+      if (!services[idx].sessions) services[idx].sessions = [];
+      services[idx].sessions.push({ date: '', obs: '' });
+      services[idx].used = (services[idx].used || 0) + 1;
+      return { ...prev, services };
+    });
+  };
+
+  const handleSessionChange = (serviceIdx, sessionIdx, field, value) => {
+    setImportPackageForm(prev => {
+      const services = [...prev.services];
+      services[serviceIdx].sessions[sessionIdx][field] = value;
+      return { ...prev, services };
+    });
+  };
+
   const resetNewPackageForm = () => {
     setNewPackage({
       client_id: '',
@@ -1804,6 +1856,75 @@ export default function ClientPackages() {
     }));
   };
 
+  // Função para salvar o pacote importado
+  async function handleSaveImportPackage() {
+    if (!importPackageForm.client_id || importPackageForm.services.length === 0) {
+      toast({ title: 'Preencha todos os campos obrigatórios.' });
+      return;
+    }
+    // Validação: cada serviço precisa ter id e quantidade
+    for (const svc of importPackageForm.services) {
+      if (!svc.service_id || !svc.total || svc.total < 1) {
+        toast({ title: 'Preencha todos os serviços corretamente.' });
+        return;
+      }
+    }
+    const newPackage = {
+      client_id: importPackageForm.client_id,
+      services: importPackageForm.services,
+      isImported: true,
+      notes: importPackageForm.notes,
+      created_at: new Date().toISOString(),
+    };
+    try {
+      await ClientPackage.add(newPackage);
+      toast({ title: 'Pacote importado adicionado com sucesso!', variant: 'success' });
+      setShowImportPackageDialog(false);
+      setImportPackageForm({ client_id: '', services: [], notes: '' });
+      // Atualizar lista de pacotes
+      if (typeof loadData === 'function') loadData();
+    } catch (error) {
+      toast({ title: 'Erro ao importar pacote', description: error.message || 'Tente novamente.', variant: 'destructive' });
+    }
+  }
+
+  // Estado para busca de cliente/serviço
+  const [clientSearchTermImport, setClientSearchTermImport] = useState("");
+  const [serviceSearchTermsImport, setServiceSearchTermsImport] = useState({});
+
+  // Função para filtrar clientes
+  const filteredClientsImport = clients.filter(c =>
+    c.name.toLowerCase().includes(clientSearchTermImport.toLowerCase())
+  );
+  // Função para filtrar serviços
+  const getFilteredServicesImport = idx => {
+    const term = serviceSearchTermsImport[idx] || "";
+    return services.filter(s =>
+      s.name.toLowerCase().includes(term.toLowerCase())
+    );
+  };
+
+  function handleServiceSearchChangeImport(idx, value) {
+    setServiceSearchTermsImport(prev => ({ ...prev, [idx]: value }));
+  }
+  function handleClientSelectImport(id, name) {
+    setImportPackageForm(prev => ({ ...prev, client_id: id }));
+    setClientSearchTermImport(name);
+  }
+  function handleServiceSelectImport(idx, id, name) {
+    handleImportServiceChange(idx, 'service_id', id);
+    handleServiceSearchChangeImport(idx, name);
+  }
+
+  useEffect(() => {
+    if (showImportPackageDialog) {
+      // Só carrega se ainda não estiver carregado
+      if (!clients || clients.length === 0) {
+        Client.list().then(setClients);
+      }
+    }
+  }, [showImportPackageDialog]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -1823,6 +1944,13 @@ export default function ClientPackages() {
             <ShoppingBag className="w-4 h-4 mr-2" />
             Vender Pacote
           </Button>
+          <Button
+            variant="outline"
+            className="ml-2"
+            onClick={() => setShowImportPackageDialog(true)}
+          >
+            Importar Pacote
+          </Button>
         </div>
       </div>
 
@@ -1841,11 +1969,11 @@ export default function ClientPackages() {
                       Pacote: {clientPackage?.package_snapshot?.name || "Pacote"} - 
                       {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(sale.total_amount)}
                     </p>
-                    <p className="text-xs text-yellow-600">
+                    <p className="text-sm text-yellow-600">
                       Iniciado em: {formatDateSafe(sale.date_created)}
                     </p>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex items-center gap-2">
                     <Button 
                       onClick={() => handleContinueSale(sale)}
                       className="bg-yellow-500 hover:bg-yellow-600 text-white"
@@ -1892,11 +2020,11 @@ export default function ClientPackages() {
                 <Search className="w-4 h-4 absolute left-3 top-3 text-gray-400" />
               </div>
               <Button
-                onClick={() => setShowSellDialog(true)}
-                size="icon"
-                className="shrink-0 bg-primary hover:bg-primary/90"
+                variant="outline"
+                className="ml-2"
+                onClick={() => setShowImportPackageDialog(true)}
               >
-                <Plus className="h-4 w-4" />
+                Importar Pacote
               </Button>
             </div>
 
@@ -2069,7 +2197,7 @@ export default function ClientPackages() {
                   >
                     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                       <div className="space-y-1 flex-1">
-                        <h3 className="font-medium text-gray-900">
+                        <h3 className="text-sm font-medium text-gray-900">
                           {getPackageName(clientPkg.id)}
                         </h3>
                         <p className="text-sm text-gray-600">
@@ -2140,24 +2268,17 @@ export default function ClientPackages() {
                           <div className="mt-2">
                             <h4 className="text-sm font-medium mb-2">Serviços Incluídos:</h4>
                             <div className="space-y-2">
-                              {getPackageServices(clientPkg.id).map((service, index) => {
-                                const serviceName = getServiceName(service.service_id);
-                                const usedSessions = clientPkg.session_history?.filter(
-                                  s => s.service_id === service.service_id && s.status === 'concluido'
-                                ).length || 0;
-                                
-                                return (
-                                  <div 
-                                    key={`${clientPkg.id}-${service.service_id}-${index}`}
-                                    className="p-3 bg-gray-50 rounded-lg border border-gray-200"
-                                  >
-                                    <div className="flex items-center justify-between">
-                                      <span className="font-medium">{serviceName}</span>
-                                      <span className="text-sm text-gray-600">{usedSessions}/{service.quantity} sessões</span>
-                                    </div>
+                              {getPackageServices(clientPkg.id).map((service, index) => (
+                                <div 
+                                  key={`${clientPkg.id}-${service.service_id}-${index}`}
+                                  className="p-3 bg-gray-50 rounded-lg border border-gray-200"
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-medium">{getServiceName(service.service_id)}</span>
+                                    <span className="text-sm text-gray-600">{service.quantity}x</span>
                                   </div>
-                                );
-                              })}
+                                </div>
+                              ))}
                             </div>
                           </div>
 
@@ -2172,20 +2293,43 @@ export default function ClientPackages() {
                                   .map((session, index) => (
                                     <div 
                                       key={`${clientPkg.id}-session-${index}`}
-                                      className="p-3 bg-gray-50 rounded-lg border border-gray-200"
+                                      className="flex justify-between items-center"
                                     >
-                                      <div className="flex items-center justify-between">
-                                        <span className="font-medium">{getServiceName(session.service_id)}</span>
-                                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                                          Concluído
+                                      <div>
+                                        <p className="font-medium">{getServiceName(session.service_id)}</p>
+                                        <p className="text-sm text-gray-500">
+                                          {formatDateSafe(session.date)}
+                                        </p>
+                                        <p className="text-sm text-gray-500">
+                                          Profissional: {getEmployeeName(session.employee_id)}
+                                        </p>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <Badge 
+                                          variant="outline" 
+                                          className={
+                                            session.status === 'concluido' ? 'bg-green-50 text-green-700' :
+                                            session.status === 'agendado' ? 'bg-blue-50 text-blue-700' :
+                                            session.status === 'cancelado' ? 'bg-red-50 text-red-700' :
+                                            'bg-gray-50 text-gray-700'
+                                          }
+                                        >
+                                          {session.status === 'concluido' ? 'Concluído' :
+                                           session.status === 'agendado' ? 'Agendado' :
+                                           session.status === 'cancelado' ? 'Cancelado' :
+                                           session.status}
                                         </Badge>
-                                      </div>
-                                      <div className="mt-1 text-sm text-gray-600 flex items-center">
-                                        <Calendar className="h-3 w-3 mr-1" />
-                                        {formatDateSafe(session.date, true)}
-                                      </div>
-                                      <div className="text-sm text-gray-600">
-                                        Profissional: {session.employee_name || "Não informado"}
+                                        {(
+                                          <Button 
+                                            variant="ghost" 
+                                            size="icon"
+                                            className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                                            onClick={() => handleRemoveSession(index)}
+                                            title="Excluir sessão"
+                                          >
+                                            <Trash2 className="h-4 w-4" />
+                                          </Button>
+                                        )}
                                       </div>
                                     </div>
                                   ))}
@@ -2330,7 +2474,7 @@ export default function ClientPackages() {
                     {selectedPackage.session_history.map((session, index) => (
                       <div 
                         key={index}
-                        className="flex justify-between items-center p-2 bg-gray-50 rounded-md text-sm"
+                        className="flex justify-between items-center"
                       >
                         <div>
                           <p className="font-medium">{getServiceName(session.service_id)}</p>
@@ -2394,7 +2538,7 @@ export default function ClientPackages() {
                     {selectedPackage.dependents.map((dependent, index) => (
                       <div 
                         key={index}
-                        className="flex justify-between items-start p-2 bg-gray-50 rounded-md text-sm"
+                        className="flex justify-between items-start"
                       >
                         <div>
                           <p className="font-medium">{dependent.name}</p>
@@ -2658,7 +2802,7 @@ export default function ClientPackages() {
                         setShowNewPackageDialog(true);
                       }}
                     >
-                      <PlusCircle className="h-4 w-4 mr-2" />
+                      <PlusCircle className="w-4 h-4 mr-2" />
                       Criar Novo
                     </Button>
                   </div>
@@ -2693,8 +2837,8 @@ export default function ClientPackages() {
                     <Label className="flex items-center">
                       Adicionar Serviços <span className="text-red-500 ml-1">*</span>
                     </Label>
-                    <div className="flex space-x-2">
-                      <div className="relative flex-1">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div className="relative">
                         <Input
                           placeholder="Cadastrar serviço..."
                           value={serviceSearchTerm}
@@ -2722,25 +2866,33 @@ export default function ClientPackages() {
                               >
                                 <div className="font-medium">{service.name}</div>
                                 <div className="text-sm text-gray-500">
-                                  R$ {parseFloat(service.price).toFixed(2)}
+                                  R$ {service.price.toFixed(2)} • {service.duration} min
                                 </div>
                               </button>
                             ))}
                           </div>
                         )}
                       </div>
-                      <Input
-                        type="number"
-                        min="1"
-                        value={selectedServiceQuantity}
-                        onChange={(e) => setSelectedServiceQuantity(parseInt(e.target.value))}
-                        className="w-20"
-                      />
+
+                      <div className="flex space-x-2">
+                        <div className="w-full">
+                          <Input
+                            type="number"
+                            min="1"
+                            placeholder="Quantidade"
+                            value={selectedServiceQuantity}
+                            onChange={(e) => setSelectedServiceQuantity(parseInt(e.target.value))}
+                          />
+                        </div>
+                      </div>
+
                       <Button 
-                        variant="outline" 
-                        onClick={() => handleAddServiceToCustomPackage()}
+                        type="button"
+                        onClick={handleAddServiceToCustomPackage}
+                        disabled={!selectedServiceId}
                       >
-                        <Plus className="h-4 w-4" />
+                        <Plus className="w-4 h-4 mr-2" />
+                        Adicionar Serviço
                       </Button>
                     </div>
                   </div>
@@ -2753,24 +2905,28 @@ export default function ClientPackages() {
                           <TableHeader>
                             <TableRow>
                               <TableHead>Serviço</TableHead>
-                              <TableHead>Qtd</TableHead>
-                              <TableHead>Preço</TableHead>
-                              <TableHead></TableHead>
+                              <TableHead className="text-right">Quantidade</TableHead>
+                              <TableHead className="text-right">Preço</TableHead>
+                              <TableHead className="text-right">Subtotal</TableHead>
+                              <TableHead className="text-right"></TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
                             {customPackageForm.services.map((service, index) => (
                               <TableRow key={index}>
                                 <TableCell>{service.name}</TableCell>
-                                <TableCell>{service.quantity}</TableCell>
-                                <TableCell>R$ {(service.price * service.quantity).toFixed(2)}</TableCell>
-                                <TableCell>
+                                <TableCell className="text-right">{service.quantity}</TableCell>
+                                <TableCell className="text-right">R$ {service.price.toFixed(2)}</TableCell>
+                                <TableCell className="text-right">R$ {(service.price * service.quantity).toFixed(2)}</TableCell>
+                                <TableCell className="text-right">
                                   <Button 
                                     variant="ghost" 
-                                    size="icon" 
+                                    size="icon"
+                                    className="text-red-500 hover:text-red-700 hover:bg-red-50"
                                     onClick={() => handleRemoveServiceFromCustomPackage(index)}
+                                    title="Excluir serviço"
                                   >
-                                    <Trash2 className="h-4 w-4 text-red-500" />
+                                    <Trash2 className="h-4 w-4" />
                                   </Button>
                                 </TableCell>
                               </TableRow>
@@ -3068,8 +3224,9 @@ export default function ClientPackages() {
                           <Button 
                             variant="ghost" 
                             size="icon"
-                            onClick={() => handleRemoveService(service.service_id)}
                             className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                            onClick={() => handleRemoveService(service.service_id)}
+                            title="Excluir serviço"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -3191,6 +3348,138 @@ export default function ClientPackages() {
             >
               Excluir
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de importação de pacote antigo */}
+      <Dialog open={showImportPackageDialog} onOpenChange={setShowImportPackageDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Importar Pacote Antigo</DialogTitle>
+            <DialogDescription>Adicione pacotes já pagos em outro sistema para um cliente.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Seleção de cliente */}
+            <div>
+              <Label>Cliente</Label>
+              <div className="relative">
+                <Input
+                  placeholder="Digite para buscar..."
+                  value={clientSearchTermImport}
+                  onChange={(e) => {
+                    setClientSearchTermImport(e.target.value);
+                    setShowClientSearch(true);
+                  }}
+                  onFocus={() => setShowClientSearch(true)}
+                  className="mb-1"
+                  autoComplete="off"
+                />
+                {clientSearchTermImport && (
+                  <div className="absolute z-10 bg-white border rounded w-full max-h-40 overflow-y-auto shadow">
+                    {filteredClientsImport.length === 0 && (
+                      <div className="p-2 text-gray-500 text-sm">Nenhum cliente encontrado</div>
+                    )}
+                    {filteredClientsImport.map(c => (
+                      <div
+                        key={c.id}
+                        className="p-2 hover:bg-gray-100 cursor-pointer"
+                        onClick={() => handleClientSelectImport(c.id, c.name)}
+                      >
+                        {c.name}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Serviços */}
+            <div>
+              <Label>Serviços e Quantidades</Label>
+              {importPackageForm.services.length === 0 && (
+                <div className="text-sm text-gray-500">Adicione ao menos um serviço</div>
+              )}
+              {importPackageForm.services.map((svc, idx) => (
+                <div key={idx} className="flex items-center gap-2 mb-2">
+                  <div className="relative">
+                    <Input
+                      placeholder="Cadastrar serviço..."
+                      value={serviceSearchTermsImport[idx] || ""}
+                      onChange={(e) => handleServiceSearchChangeImport(idx, e.target.value)}
+                      className="mb-1 min-w-[140px]"
+                      autoComplete="off"
+                    />
+                    {serviceSearchTermsImport[idx] && (
+                      <div className="absolute z-10 bg-white border rounded w-full max-h-40 overflow-y-auto shadow">
+                        {getFilteredServicesImport(idx).length === 0 && (
+                          <div className="p-2 text-gray-500 text-sm">Nenhum serviço encontrado</div>
+                        )}
+                        {getFilteredServicesImport(idx).map(s => (
+                          <div
+                            key={s.id}
+                            className="p-2 hover:bg-gray-100 cursor-pointer"
+                            onClick={() => handleServiceSelectImport(idx, s.id, s.name)}
+                          >
+                            {s.name}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={svc.total}
+                    onChange={e => handleImportServiceChange(idx, 'total', Number(e.target.value))}
+                    className="w-20"
+                    placeholder="Qtd."
+                  />
+                  <Button size="icon" variant="ghost" onClick={() => handleRemoveServiceFromImport(idx)}><Trash2 /></Button>
+                </div>
+              ))}
+              <Button size="sm" variant="outline" onClick={handleAddServiceToImport} className="mt-2"><PlusCircle className="w-4 h-4 mr-1" />Adicionar Serviço</Button>
+            </div>
+            {/* Sessões concluídas */}
+            <div>
+              <Label>Sessões Concluídas</Label>
+              {importPackageForm.services.map((svc, idx) => (
+                <div key={idx} className="mb-2">
+                  <div className="font-medium mb-1">{services.find(s => s.id === svc.service_id)?.name || 'Serviço'}</div>
+                  {(svc.sessions || []).map((sess, sidx) => (
+                    <div key={sidx} className="flex gap-2 mb-1">
+                      <Input
+                        type="date"
+                        value={sess.date}
+                        onChange={e => handleSessionChange(idx, sidx, 'date', e.target.value)}
+                        className="w-36"
+                      />
+                      <Input
+                        value={sess.obs}
+                        onChange={e => handleSessionChange(idx, sidx, 'obs', e.target.value)}
+                        placeholder="Observações"
+                        className="flex-1"
+                      />
+                    </div>
+                  ))}
+                  <Button size="xs" variant="outline" onClick={() => handleAddSessionToService(idx)} className="mt-1"><Plus className="w-3 h-3 mr-1" />Adicionar Sessão Concluída</Button>
+                  <div className="text-xs text-gray-500 mt-1">Total: {svc.total || 0}, Usadas: {svc.used || 0}, Restantes: {(svc.total || 0) - (svc.used || 0)}</div>
+                </div>
+              ))}
+            </div>
+            {/* Observações */}
+            <div>
+              <Label>Observações</Label>
+              <Textarea
+                value={importPackageForm.notes}
+                onChange={e => setImportPackageForm(prev => ({ ...prev, notes: e.target.value }))}
+                placeholder="Observações gerais sobre o pacote importado"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowImportPackageDialog(false)}>Cancelar</Button>
+            <Button className="bg-[#294380] hover:bg-[#1b2d5d]" onClick={handleSaveImportPackage}>Salvar Pacote Importado</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
