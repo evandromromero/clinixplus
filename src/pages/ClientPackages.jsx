@@ -168,6 +168,9 @@ export default function ClientPackages() {
   // Estado para busca de cliente/serviço
   const [clientSearchTermImport, setClientSearchTermImport] = useState("");
   const [clientSearchResultsImport, setClientSearchResultsImport] = useState([]);
+  const [allClientsCacheImport, setAllClientsCacheImport] = useState(null);
+  const [lastClientDocImport, setLastClientDocImport] = useState(null);
+  const [hasMoreClientsImport, setHasMoreClientsImport] = useState(true);
 
   // Funções auxiliares para manipular serviços do pacote importado
   const handleAddServiceToImport = () => {
@@ -1940,47 +1943,67 @@ export default function ClientPackages() {
     console.log('[DEBUG] Estado de clients atualizado:', clients);
   }, [clients]);
 
-  // Busca otimizada de clientes para o modal de importação de pacote antigo
-  const handleClientSearchImport = async (searchTerm) => {
-    if (!searchTerm || searchTerm.trim().length < 2) {
-      setClientSearchResultsImport([]);
-      return;
-    }
-    setIsSearchingClients(true);
-    try {
-      // Busca por nome (começa com)
-      const q = query(
-        collection(db, 'clients'),
-        where('name', '>=', searchTerm),
-        where('name', '<=', searchTerm + '\uf8ff'),
-        limit(10)
-      );
-      const snapshot = await getDocs(q);
-      let results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  
+  // Busca eficiente de clientes para o modal de importação de pacote (igual à busca da tela de vendas)
+const handleClientSearchImport = async (searchTerm) => {
+  console.log("[DEBUG] (Import) Iniciando busca com termo:", searchTerm);
+  if (!searchTerm || searchTerm.length < 3) {
+    setClientSearchResultsImport([]);
+    return;
+  }
 
-      // Se for número ou e-mail, busca extra
-      if (results.length < 5 && (searchTerm.match(/\d{3,}/) || searchTerm.includes('@'))) {
-        const allClientsSnap = await getDocs(collection(db, 'clients'));
-        const extraResults = allClientsSnap.docs
-          .map(doc => ({ id: doc.id, ...doc.data() }))
-          .filter(client =>
-            (client.cpf && client.cpf.includes(searchTerm)) ||
-            (client.email && client.email.toLowerCase().includes(searchTerm.toLowerCase()))
-          );
-        results = [...results, ...extraResults.filter(c => !results.find(r => r.id === c.id))];
-      }
-      setClientSearchResultsImport(results);
-    } catch (error) {
-      console.error('Erro ao buscar clientes (importação):', error);
-      toast({
-        title: 'Erro na busca',
-        description: 'Não foi possível buscar os clientes',
-        variant: 'destructive'
-      });
-    } finally {
-      setIsSearchingClients(false);
+  setIsSearchingClients(true);
+  try {
+    // Usar cache local para evitar múltiplas buscas
+    let allClients;
+    if (window._allClientsCacheImport) {
+      allClients = window._allClientsCacheImport;
+      console.log("[DEBUG] (Import) Cache encontrado com", allClients.length, "clientes");
+    } else {
+      allClients = await Client.list();
+      window._allClientsCacheImport = allClients;
+      console.log("[DEBUG] (Import) Clientes carregados do Firestore:", allClients.length);
     }
-  };
+
+    // Normalizar termo
+    const normalizedTerm = searchTerm.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const resultsMap = new Map();
+
+    allClients.forEach(client => {
+      const normalizedName = (client.name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const normalizedCpf = (client.cpf || '');
+      const normalizedEmail = (client.email || '').toLowerCase();
+      const normalizedPhone = (client.phone || '');
+
+      if (
+        normalizedName.includes(normalizedTerm) ||
+        normalizedCpf.includes(searchTerm) ||
+        normalizedEmail.includes(searchTerm.toLowerCase()) ||
+        normalizedPhone.includes(searchTerm)
+      ) {
+        resultsMap.set(client.id, client);
+      }
+    });
+
+    const results = Array.from(resultsMap.values()).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    setClientSearchResultsImport(results.slice(0, 20));
+    setLastClientDocImport(results[19] || null);
+    setHasMoreClientsImport(results.length > 20);
+    console.log('[DEBUG] (Import) Resultados encontrados:', results.length);
+    if (results.length > 0) {
+      console.log('[DEBUG] (Import) Primeiros 5 resultados:', results.slice(0,5).map(c => c.name));
+    }
+  } catch (error) {
+    console.error('Erro ao buscar clientes (importação):', error);
+    toast({
+      title: 'Erro na busca',
+      description: 'Não foi possível buscar os clientes',
+      variant: 'destructive'
+    });
+  } finally {
+    setIsSearchingClients(false);
+  }
+};
 
   return (
     <div className="space-y-6">
