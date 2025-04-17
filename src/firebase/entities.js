@@ -182,6 +182,109 @@ export const Client = {
       console.error('Error saving anamnese:', error);
       throw error;
     }
+  },
+  async list() {
+    try {
+      const collectionRef = collection(db, this.collection);
+      const querySnapshot = await getDocs(collectionRef);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('Erro ao listar clientes:', error);
+      throw error;
+    }
+  },
+  async filter(filters) {
+    try {
+      let q = collection(db, this.collection);
+      if (filters) {
+        if (filters.client_id) {
+          q = query(q, where('client_id', '==', filters.client_id));
+        }
+        if (filters.status) {
+          q = query(q, where('status', '==', filters.status));
+        }
+        if (filters.id) {
+          q = query(q, where('__name__', '==', filters.id));
+        }
+      }
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('Erro ao filtrar clientes:', error);
+      throw error;
+    }
+  },
+  async get(id) {
+    try {
+      if (!id) {
+        throw new Error('ID do cliente não fornecido');
+      }
+      const docRef = doc(db, this.collection, id);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        return {
+          id: docSnap.id,
+          ...docSnap.data()
+        };
+      } else {
+        throw new Error('Cliente não encontrado');
+      }
+    } catch (error) {
+      console.error(`Erro ao buscar cliente ${id}:`, error);
+      throw error;
+    }
+  },
+  async create(data) {
+    try {
+      const collectionRef = collection(db, this.collection);
+      const docRef = await addDoc(collectionRef, {
+        ...data,
+        created_date: new Date().toISOString()
+      });
+      return {
+        id: docRef.id,
+        ...data
+      };
+    } catch (error) {
+      console.error('Erro ao criar cliente:', error);
+      throw error;
+    }
+  },
+  async delete(id) {
+    try {
+      if (!id) {
+        throw new Error('ID do cliente não fornecido');
+      }
+      const docRef = doc(db, this.collection, id);
+      await deleteDoc(docRef);
+      return { success: true };
+    } catch (error) {
+      console.error(`Erro ao excluir cliente ${id}:`, error);
+      throw error;
+    }
+  },
+  update: async function(id, data) {
+    try {
+      if (!id) {
+        throw new Error('ID do cliente não fornecido');
+      }
+      const updatedData = {
+        ...data,
+        updated_at: new Date().toISOString()
+      };
+      const docRef = doc(db, this.collection, id);
+      await updateDoc(docRef, updatedData);
+      return { id, ...updatedData };
+    } catch (error) {
+      console.error('Erro ao atualizar cliente:', error);
+      throw error;
+    }
   }
 };
 

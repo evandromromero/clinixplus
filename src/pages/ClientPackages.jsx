@@ -165,6 +165,10 @@ export default function ClientPackages() {
     notes: '',
   });
 
+  // Estado para busca de cliente/serviço
+  const [clientSearchTermImport, setClientSearchTermImport] = useState("");
+  const [clientSearchResultsImport, setClientSearchResultsImport] = useState([]);
+
   // Funções auxiliares para manipular serviços do pacote importado
   const handleAddServiceToImport = () => {
     setImportPackageForm(prev => ({
@@ -577,7 +581,6 @@ export default function ClientPackages() {
 
     setSearchTimeout(newTimeout);
   };
-
   const handleSearchClients = async (searchTerm) => {
     if (!searchTerm.trim()) {
       setClientSearchResults([]);
@@ -1889,41 +1892,95 @@ export default function ClientPackages() {
   }
 
   // Estado para busca de cliente/serviço
-  const [clientSearchTermImport, setClientSearchTermImport] = useState("");
-  const [serviceSearchTermsImport, setServiceSearchTermsImport] = useState({});
+  
+
 
   // Função para filtrar clientes
   const filteredClientsImport = clients.filter(c =>
     c.name.toLowerCase().includes(clientSearchTermImport.toLowerCase())
   );
-  // Função para filtrar serviços
-  const getFilteredServicesImport = idx => {
-    const term = serviceSearchTermsImport[idx] || "";
-    return services.filter(s =>
-      s.name.toLowerCase().includes(term.toLowerCase())
-    );
-  };
-
-  function handleServiceSearchChangeImport(idx, value) {
-    setServiceSearchTermsImport(prev => ({ ...prev, [idx]: value }));
-  }
-  function handleClientSelectImport(id, name) {
-    setImportPackageForm(prev => ({ ...prev, client_id: id }));
-    setClientSearchTermImport(name);
-  }
-  function handleServiceSelectImport(idx, id, name) {
-    handleImportServiceChange(idx, 'service_id', id);
-    handleServiceSearchChangeImport(idx, name);
-  }
 
   useEffect(() => {
+    if (!showImportPackageDialog) {
+      setClientSearchResultsImport([]);
+      setClientSearchTermImport("");
+      return;
+    }
+    if (!clientSearchTermImport.trim()) {
+      setClientSearchResultsImport([]);
+      return;
+    }
+    // Filtro local, igual venda de pacote
+    const filtered = clients.filter(c =>
+      c.name?.toLowerCase().includes(clientSearchTermImport.toLowerCase()) ||
+      c.email?.toLowerCase().includes(clientSearchTermImport.toLowerCase()) ||
+      c.cpf?.includes(clientSearchTermImport)
+    );
+    setClientSearchResultsImport(filtered);
+  }, [clientSearchTermImport, clients, showImportPackageDialog]);
+
+  // --- LOGS PARA DEBUG DA BUSCA DE CLIENTES ---
+  useEffect(() => {
     if (showImportPackageDialog) {
+      console.log('[DEBUG] Modal de importação aberto. Estado atual de clients:', clients);
       // Só carrega se ainda não estiver carregado
       if (!clients || clients.length === 0) {
-        Client.list().then(setClients);
+        console.log('[DEBUG] Buscando todos os clientes do banco de dados...');
+        Client.list().then(result => {
+          console.log('[DEBUG] Resultado da busca de clientes:', result);
+          setClients(result);
+        }).catch(err => {
+          console.error('[DEBUG] Erro ao buscar clientes:', err);
+        });
       }
     }
   }, [showImportPackageDialog]);
+
+  useEffect(() => {
+    console.log('[DEBUG] Estado de clients atualizado:', clients);
+  }, [clients]);
+
+  // Busca otimizada de clientes para o modal de importação de pacote antigo
+  const handleClientSearchImport = async (searchTerm) => {
+    if (!searchTerm || searchTerm.trim().length < 2) {
+      setClientSearchResultsImport([]);
+      return;
+    }
+    setIsSearchingClients(true);
+    try {
+      // Busca por nome (começa com)
+      const q = query(
+        collection(db, 'clients'),
+        where('name', '>=', searchTerm),
+        where('name', '<=', searchTerm + '\uf8ff'),
+        limit(10)
+      );
+      const snapshot = await getDocs(q);
+      let results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+      // Se for número ou e-mail, busca extra
+      if (results.length < 5 && (searchTerm.match(/\d{3,}/) || searchTerm.includes('@'))) {
+        const allClientsSnap = await getDocs(collection(db, 'clients'));
+        const extraResults = allClientsSnap.docs
+          .map(doc => ({ id: doc.id, ...doc.data() }))
+          .filter(client =>
+            (client.cpf && client.cpf.includes(searchTerm)) ||
+            (client.email && client.email.toLowerCase().includes(searchTerm.toLowerCase()))
+          );
+        results = [...results, ...extraResults.filter(c => !results.find(r => r.id === c.id))];
+      }
+      setClientSearchResultsImport(results);
+    } catch (error) {
+      console.error('Erro ao buscar clientes (importação):', error);
+      toast({
+        title: 'Erro na busca',
+        description: 'Não foi possível buscar os clientes',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsSearchingClients(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -2732,7 +2789,7 @@ export default function ClientPackages() {
                   </div>
 
                   {showClientSearch && clientSearchResults.length > 0 && (
-                    <div className="absolute z-10 w-full mt-1 bg-white rounded-md shadow-lg border max-h-60 overflow-auto">
+                    <div className="absolute z-10 w-full mt-1 bg-white rounded-md shadow-lg border max-h-60 overflow-y-auto">
                       {clientSearchResults.map((client) => (
                         <button
                           key={client.id}
@@ -2760,7 +2817,7 @@ export default function ClientPackages() {
                 <div className="space-y-2">
                   <Label htmlFor="package">Pacote</Label>
                   <div className="flex space-x-2">
-                    <div className="relative flex-1">
+                    <div className="relative">
                       <Input
                         placeholder="Buscar pacote por nome ou descrição..."
                         value={packageSearchTerm}
@@ -2775,7 +2832,7 @@ export default function ClientPackages() {
                       <Search className="absolute right-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
 
                       {showPackageSearch && packageSearchResults.length > 0 && (
-                        <div className="absolute z-10 w-full mt-1 bg-white rounded-md shadow-lg border max-h-60 overflow-auto">
+                        <div className="absolute z-10 w-full mt-1 bg-white rounded-md shadow-lg border max-h-60 overflow-y-auto">
                           {packageSearchResults.map((pkg) => (
                             <button
                               key={pkg.id}
@@ -2853,7 +2910,7 @@ export default function ClientPackages() {
                         <Search className="absolute right-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
 
                         {showServiceSearch && serviceSearchResults.length > 0 && (
-                          <div className="absolute z-10 w-full mt-1 bg-white rounded-md shadow-lg border max-h-60 overflow-auto">
+                          <div className="absolute z-10 w-full mt-1 bg-white rounded-md shadow-lg border max-h-60 overflow-y-auto">
                             {serviceSearchResults.map((service) => (
                               <button
                                 key={service.id}
@@ -3152,7 +3209,7 @@ export default function ClientPackages() {
                   <Search className="absolute right-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
 
                   {showServiceSearch && serviceSearchResults.length > 0 && (
-                    <div className="absolute z-10 w-full mt-1 bg-white rounded-md shadow-lg border max-h-60 overflow-auto">
+                    <div className="absolute z-10 w-full mt-1 bg-white rounded-md shadow-lg border max-h-60 overflow-y-auto">
                       {serviceSearchResults.map((service) => (
                         <button
                           key={service.id}
@@ -3360,35 +3417,45 @@ export default function ClientPackages() {
             <DialogDescription>Adicione pacotes já pagos em outro sistema para um cliente.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            {/* Seleção de cliente */}
-            <div>
+            {/* Campo de busca/autocomplete do CLIENTE na modal de importação */}
+            <div className="mb-4">
               <Label>Cliente</Label>
               <div className="relative">
                 <Input
-                  placeholder="Digite para buscar..."
                   value={clientSearchTermImport}
-                  onChange={(e) => {
+                  onChange={e => {
                     setClientSearchTermImport(e.target.value);
-                    setShowClientSearch(true);
+                    handleClientSearchImport(e.target.value);
                   }}
-                  onFocus={() => setShowClientSearch(true)}
-                  className="mb-1"
+                  placeholder="Digite o nome, CPF ou e-mail do cliente"
                   autoComplete="off"
                 />
                 {clientSearchTermImport && (
                   <div className="absolute z-10 bg-white border rounded w-full max-h-40 overflow-y-auto shadow">
-                    {filteredClientsImport.length === 0 && (
-                      <div className="p-2 text-gray-500 text-sm">Nenhum cliente encontrado</div>
+                    {isSearchingClients ? (
+                      <div className="p-2 text-gray-400">Buscando...</div>
+                    ) : clientSearchResultsImport.length > 0 ? (
+                      clientSearchResultsImport.map(client => (
+                        <div
+                          key={client.id}
+                          className="p-2 hover:bg-gray-100 cursor-pointer"
+                          onClick={() => {
+                            setImportPackageForm(prev => ({
+                              ...prev,
+                              client_id: client.id
+                            }));
+                            setClientSearchTermImport(client.name || "");
+                            setClientSearchResultsImport([]);
+                          }}
+                        >
+                          {client.name}
+                          {client.cpf ? ` - ${client.cpf}` : ""}
+                          {client.email ? ` - ${client.email}` : ""}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="p-2 text-gray-400">Nenhum cliente encontrado</div>
                     )}
-                    {filteredClientsImport.map(c => (
-                      <div
-                        key={c.id}
-                        className="p-2 hover:bg-gray-100 cursor-pointer"
-                        onClick={() => handleClientSelectImport(c.id, c.name)}
-                      >
-                        {c.name}
-                      </div>
-                    ))}
                   </div>
                 )}
               </div>
