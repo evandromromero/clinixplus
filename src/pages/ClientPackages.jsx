@@ -172,6 +172,9 @@ export default function ClientPackages() {
   const [lastClientDocImport, setLastClientDocImport] = useState(null);
   const [hasMoreClientsImport, setHasMoreClientsImport] = useState(true);
 
+  // Estado para os termos de busca dos serviços no import
+  const [serviceSearchTermsImport, setServiceSearchTermsImport] = useState([]);
+
   // Funções auxiliares para manipular serviços do pacote importado
   const handleAddServiceToImport = () => {
     setImportPackageForm(prev => ({
@@ -493,133 +496,32 @@ export default function ClientPackages() {
       .slice(0, 10);
   }, [packages, packageSearchTerm]);
 
-  // Função otimizada de busca de clientes
-  const handleClientSearch = async (searchTerm) => {
-    console.log("[DEBUG] Buscando cliente:", searchTerm);
-    
-    if (!searchTerm || searchTerm.length < 2) {
+  // Busca local de clientes, igual à tela de vendas
+  const handleClientSearch = async (term) => {
+    const normalizedTerm = term.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    if (!term || term.length < 2) {
       setClientSearchResults([]);
       return;
     }
-
-    // Limpar timeout anterior
-    if (searchTimeout) {
-      clearTimeout(searchTimeout);
-    }
-
-    // Criar novo timeout (debounce)
-    const newTimeout = setTimeout(async () => {
-      try {
-        setIsSearching(true);
-        const startTime = performance.now();
-
-        // Normalizar o termo de busca
-        const normalizedTerm = searchTerm.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-        console.log("[DEBUG] Termo normalizado:", normalizedTerm);
-        
-        // Verificar cache
-        if (searchResultsCache.has(normalizedTerm)) {
-          console.log("[DEBUG] Usando cache para:", normalizedTerm);
-          setClientSearchResults(searchResultsCache.get(normalizedTerm));
-          setIsSearching(false);
-          return;
-        }
-
-        // Buscar clientes do Firestore
-        const clientsRef = collection(db, 'clients');
-        const nameQuery = query(
-          clientsRef,
-          where('name', '>=', normalizedTerm),
-          where('name', '<=', normalizedTerm + '\uf8ff'),
-          limit(20)
-        );
-
-        const emailQuery = query(
-          clientsRef,
-          where('email', '>=', normalizedTerm),
-          where('email', '<=', normalizedTerm + '\uf8ff'),
-          limit(20)
-        );
-
-        const cpfQuery = query(
-          clientsRef,
-          where('cpf', '>=', normalizedTerm),
-          where('cpf', '<=', normalizedTerm + '\uf8ff'),
-          limit(20)
-        );
-
-        console.log("[DEBUG] Executando queries de busca");
-        const [nameSnapshot, emailSnapshot, cpfSnapshot] = await Promise.all([
-          getDocs(nameQuery),
-          getDocs(emailQuery),
-          getDocs(cpfQuery)
-        ]);
-
-        // Combinar resultados removendo duplicatas
-        const resultsMap = new Map();
-        [...nameSnapshot.docs, ...emailSnapshot.docs, ...cpfSnapshot.docs].forEach(doc => {
-          if (!resultsMap.has(doc.id)) {
-            resultsMap.set(doc.id, { id: doc.id, ...doc.data() });
-          }
-        });
-
-        const results = Array.from(resultsMap.values());
-        console.log("[DEBUG] Resultados encontrados:", results.length);
-        console.log("[DEBUG] Tempo de busca:", Math.round(performance.now() - startTime), "ms");
-
-        // Atualizar cache
-        setSearchResultsCache(prev => new Map(prev).set(normalizedTerm, results));
-        setClientSearchResults(results);
-      } catch (error) {
-        console.error("Erro na busca:", error);
-        toast({
-          title: "Erro",
-          description: "Erro ao buscar clientes",
-          variant: "destructive"
-        });
-      } finally {
-        setIsSearching(false);
-      }
-    }, 300); // 300ms de debounce
-
-    setSearchTimeout(newTimeout);
-  };
-  const handleSearchClients = async (searchTerm) => {
-    if (!searchTerm.trim()) {
-      setClientSearchResults([]);
-      return;
-    }
-
+    setIsSearchingClients(true);
     try {
-      setIsSearchingClients(true);
-      
-      // Buscar todos os clientes do Firestore
-      const clientsRef = collection(db, 'clients');
-      const clientsSnapshot = await getDocs(clientsRef);
-      
-      // Filtrar os resultados no lado do cliente
-      const filteredClients = [];
-      
-      clientsSnapshot.forEach(doc => {
-        const client = { id: doc.id, ...doc.data() };
-        
-        // Verificar se o nome, email ou CPF contém o termo de busca (case insensitive)
-        if (
-          (client.name && client.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-          (client.email && client.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
-          (client.cpf && client.cpf.includes(searchTerm))
-        ) {
-          filteredClients.push(client);
-        }
+      // Filtra localmente todos os clientes já carregados
+      const results = clients.filter(client => {
+        const name = (client.name || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const email = (client.email || "").toLowerCase();
+        const cpf = (client.cpf || "");
+        return (
+          name.includes(normalizedTerm) ||
+          email.includes(term.toLowerCase()) ||
+          cpf.includes(term)
+        );
       });
-      
-      console.log(`[DEBUG] Encontrados ${filteredClients.length} resultados para "${searchTerm}"`);
-      setClientSearchResults(filteredClients);
+      setClientSearchResults(results);
     } catch (error) {
-      console.error("Erro ao buscar clientes:", error);
+      console.error("Erro na busca local de clientes:", error);
       toast({
-        title: "Erro na busca",
-        description: "Não foi possível buscar os clientes",
+        title: "Erro",
+        description: "Erro ao buscar clientes localmente.",
         variant: "destructive"
       });
     } finally {
@@ -1898,112 +1800,40 @@ export default function ClientPackages() {
   
 
 
-  // Função para filtrar clientes
-  const filteredClientsImport = clients.filter(c =>
-    c.name.toLowerCase().includes(clientSearchTermImport.toLowerCase())
-  );
-
-  useEffect(() => {
-    if (!showImportPackageDialog) {
-      setClientSearchResultsImport([]);
-      setClientSearchTermImport("");
-      return;
-    }
-    if (!clientSearchTermImport.trim()) {
-      setClientSearchResultsImport([]);
-      return;
-    }
-    // Filtro local, igual venda de pacote
-    const filtered = clients.filter(c =>
-      c.name?.toLowerCase().includes(clientSearchTermImport.toLowerCase()) ||
-      c.email?.toLowerCase().includes(clientSearchTermImport.toLowerCase()) ||
-      c.cpf?.includes(clientSearchTermImport)
-    );
-    setClientSearchResultsImport(filtered);
-  }, [clientSearchTermImport, clients, showImportPackageDialog]);
-
-  // --- LOGS PARA DEBUG DA BUSCA DE CLIENTES ---
-  useEffect(() => {
-    if (showImportPackageDialog) {
-      console.log('[DEBUG] Modal de importação aberto. Estado atual de clients:', clients);
-      // Só carrega se ainda não estiver carregado
-      if (!clients || clients.length === 0) {
-        console.log('[DEBUG] Buscando todos os clientes do banco de dados...');
-        Client.list().then(result => {
-          console.log('[DEBUG] Resultado da busca de clientes:', result);
-          setClients(result);
-        }).catch(err => {
-          console.error('[DEBUG] Erro ao buscar clientes:', err);
-        });
-      }
-    }
-  }, [showImportPackageDialog]);
-
-  useEffect(() => {
-    console.log('[DEBUG] Estado de clients atualizado:', clients);
-  }, [clients]);
-
+  // Funções auxiliares para manipular serviços do pacote importado
   
-  // Busca eficiente de clientes para o modal de importação de pacote (igual à busca da tela de vendas)
-const handleClientSearchImport = async (searchTerm) => {
-  console.log("[DEBUG] (Import) Iniciando busca com termo:", searchTerm);
-  if (!searchTerm || searchTerm.length < 3) {
-    setClientSearchResultsImport([]);
-    return;
-  }
 
-  setIsSearchingClients(true);
-  try {
-    // Usar cache local para evitar múltiplas buscas
-    let allClients;
-    if (window._allClientsCacheImport) {
-      allClients = window._allClientsCacheImport;
-      console.log("[DEBUG] (Import) Cache encontrado com", allClients.length, "clientes");
-    } else {
-      allClients = await Client.list();
-      window._allClientsCacheImport = allClients;
-      console.log("[DEBUG] (Import) Clientes carregados do Firestore:", allClients.length);
-    }
 
-    // Normalizar termo
-    const normalizedTerm = searchTerm.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-    const resultsMap = new Map();
-
-    allClients.forEach(client => {
-      const normalizedName = (client.name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-      const normalizedCpf = (client.cpf || '');
-      const normalizedEmail = (client.email || '').toLowerCase();
-      const normalizedPhone = (client.phone || '');
-
-      if (
-        normalizedName.includes(normalizedTerm) ||
-        normalizedCpf.includes(searchTerm) ||
-        normalizedEmail.includes(searchTerm.toLowerCase()) ||
-        normalizedPhone.includes(searchTerm)
-      ) {
-        resultsMap.set(client.id, client);
-      }
+  const handleServiceSelectImport = (idx, serviceId, serviceName) => {
+    setImportPackageForm(prev => {
+      const newServices = [...prev.services];
+      newServices[idx] = {
+        ...newServices[idx],
+        service_id: serviceId,
+        name: serviceName
+      };
+      return { ...prev, services: newServices };
     });
-
-    const results = Array.from(resultsMap.values()).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-    setClientSearchResultsImport(results.slice(0, 20));
-    setLastClientDocImport(results[19] || null);
-    setHasMoreClientsImport(results.length > 20);
-    console.log('[DEBUG] (Import) Resultados encontrados:', results.length);
-    if (results.length > 0) {
-      console.log('[DEBUG] (Import) Primeiros 5 resultados:', results.slice(0,5).map(c => c.name));
-    }
-  } catch (error) {
-    console.error('Erro ao buscar clientes (importação):', error);
-    toast({
-      title: 'Erro na busca',
-      description: 'Não foi possível buscar os clientes',
-      variant: 'destructive'
+    setServiceSearchTermsImport(prev => {
+      const arr = [...prev];
+      arr[idx] = serviceName;
+      return arr;
     });
-  } finally {
-    setIsSearchingClients(false);
-  }
-};
+  };
+
+  const handleServiceSearchChangeImport = (idx, value) => {
+    setServiceSearchTermsImport(prev => {
+      const arr = [...prev];
+      arr[idx] = value;
+      return arr;
+    });
+  };
+
+  const getFilteredServicesImport = (idx) => {
+    const term = (serviceSearchTermsImport[idx] || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    if (!term) return services;
+    return services.filter(s => (s.name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').includes(term));
+  };
 
   return (
     <div className="space-y-6">
@@ -2044,9 +1874,9 @@ const handleClientSearchImport = async (searchTerm) => {
               return (
                 <div key={sale.id} className="flex justify-between items-center">
                   <div>
-                    <p>Cliente: {client?.name || 'Cliente não encontrado'}</p>
+                    <p>Cliente: {client ? client.name : <span className="text-red-600">Cliente não encontrado</span>}</p>
                     <p className="text-sm text-yellow-700">
-                      Pacote: {clientPackage?.package_snapshot?.name || "Pacote"} - 
+                      Pacote: {clientPackage && clientPackage.package_snapshot && clientPackage.package_snapshot.name ? clientPackage.package_snapshot.name : <span className="text-red-600">Pacote não encontrado</span>} - 
                       {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(sale.total_amount)}
                     </p>
                     <p className="text-sm text-yellow-600">
@@ -2091,7 +1921,7 @@ const handleClientSearchImport = async (searchTerm) => {
                   value={clientSearchTerm}
                   onChange={(e) => {
                     setClientSearchTerm(e.target.value);
-                    handleSearchClients(e.target.value);
+                    handleClientSearch(e.target.value);
                     setShowClientSearch(true);
                   }}
                   onFocus={() => setShowClientSearch(true)}
@@ -2796,7 +2626,7 @@ const handleClientSearchImport = async (searchTerm) => {
                         value={clientSearchTerm}
                         onChange={(e) => {
                           setClientSearchTerm(e.target.value);
-                          handleSearchClients(e.target.value);
+                          handleClientSearch(e.target.value);
                           setShowClientSearch(true);
                         }}
                         onFocus={() => setShowClientSearch(true)}
@@ -3232,7 +3062,7 @@ const handleClientSearchImport = async (searchTerm) => {
                   <Search className="absolute right-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
 
                   {showServiceSearch && serviceSearchResults.length > 0 && (
-                    <div className="absolute z-10 w-full mt-1 bg-white rounded-md shadow-lg border max-h-60 overflow-y-auto">
+                    <div className="absolute z-10 bg-white border rounded w-full max-h-60 overflow-y-auto shadow">
                       {serviceSearchResults.map((service) => (
                         <button
                           key={service.id}
