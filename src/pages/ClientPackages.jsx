@@ -2754,10 +2754,13 @@ export default function ClientPackages() {
                           key={client.id}
                           className="w-full text-left px-4 py-2 hover:bg-gray-100"
                           onClick={() => {
-                            setSellForm({...sellForm, client_id: client.id});
-                            setClientSearchTerm(client.name || "");
-                            setShowClientSearch(false);
-                            setClients(prev => [...prev, client]);
+                            console.log('Selecionado cliente da busca:', client.name); // Log para debug
+                            setSellForm({ ...sellForm, client_id: client.id });
+                            setClientSearchTerm(client.name); // Atualiza o input com o nome
+                            setClientSearchResults([]);       // Limpa os resultados da busca
+                            setShowClientSearch(false);       // Esconde o dropdown de resultados
+                            const searchInput = document.getElementById('client-search-sell');
+                            if (searchInput) searchInput.blur(); // Remover foco do input
                           }}
                         >
                           <div className="font-medium">{client.name}</div>
