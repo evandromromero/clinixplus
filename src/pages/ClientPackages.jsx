@@ -2745,15 +2745,17 @@ export default function ClientPackages() {
                     )}
                   </div>
 
-                  {showClientSearch && clientSearchResults.length > 0 && (
+                  {(isSearchingClients || clientSearchResults.length > 0) && (
                     <div className="absolute z-10 w-full mt-1 bg-white rounded-md shadow-lg border max-h-60 overflow-y-auto">
-                      {clientSearchResults.map((client) => (
+                      {isSearchingClients ? (
+                        <div className="p-2 text-gray-400">Buscando...</div>
+                      ) : clientSearchResults.map((client) => (
                         <button
                           key={client.id}
                           className="w-full text-left px-4 py-2 hover:bg-gray-100"
                           onClick={() => {
                             setSellForm({...sellForm, client_id: client.id});
-                            setClientSearchTerm(client.name);
+                            setClientSearchTerm(client.name || "");
                             setShowClientSearch(false);
                             setClients(prev => [...prev, client]);
                           }}
@@ -3387,7 +3389,7 @@ export default function ClientPackages() {
                   placeholder="Digite o nome, CPF ou e-mail do cliente"
                   autoComplete="off"
                 />
-                {clientSearchTermImport && (
+                {(isSearchingClientsImport || clientSearchResultsImport.length > 0) && (
                   <div className="absolute z-10 bg-white border rounded w-full max-h-40 overflow-y-auto shadow">
                     {isSearchingClientsImport ? (
                       <div className="p-2 text-gray-400">Buscando...</div>
