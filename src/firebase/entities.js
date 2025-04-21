@@ -2,7 +2,13 @@
 import { base44 } from '../api/base44Client';
 import { createEnhancedEntity } from './enhancedEntities';
 import { db } from './config';
-import { collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where, orderBy, addDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where, orderBy, limit, addDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+
+// Função de normalização (disponível para todo o módulo)
+function normalizeString(str) {
+  if (!str) return '';
+  return str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
 
 // Criar as versões base das entidades
 const baseClient = createEnhancedEntity('clients', base44.entities.Client);
@@ -242,14 +248,21 @@ export const Client = {
   },
   async create(data) {
     try {
-      const collectionRef = collection(db, this.collection);
-      const docRef = await addDoc(collectionRef, {
+      // Função de normalização (usada internamente e na busca)
+      // CREATE: Adiciona name_normalized automaticamente
+      const templateData = {
         ...data,
-        created_date: new Date().toISOString()
-      });
+        createdAt: serverTimestamp(),
+        // Calcula e adiciona name_normalized se o nome existir
+        ...(data.name && { name_normalized: normalizeString(data.name) }),
+      };
+      
+      const collectionRef = collection(db, this.collection);
+      const docRef = await addDoc(collectionRef, templateData);
+      
       return {
         id: docRef.id,
-        ...data
+        ...templateData
       };
     } catch (error) {
       console.error('Erro ao criar cliente:', error);
@@ -274,16 +287,61 @@ export const Client = {
       if (!id) {
         throw new Error('ID do cliente não fornecido');
       }
-      const updatedData = {
+      
+      // UPDATE: Adiciona name_normalized se o nome estiver sendo atualizado
+      const dataToUpdate = {
         ...data,
-        updated_at: new Date().toISOString()
+        updatedAt: serverTimestamp(),
+        // Calcula e adiciona name_normalized se o nome estiver sendo atualizado
+        ...(data.name && { name_normalized: normalizeString(data.name) }),
       };
+      
       const docRef = doc(db, this.collection, id);
-      await updateDoc(docRef, updatedData);
-      return { id, ...updatedData };
+      await updateDoc(docRef, dataToUpdate);
+      
+      return { id, ...dataToUpdate };
     } catch (error) {
       console.error('Erro ao atualizar cliente:', error);
       throw error;
+    }
+  },
+  async search(searchTerm, resultLimit = 20) {
+    // Normaliza o termo de busca da mesma forma que o campo name_normalized
+    const normalizedTerm = normalizeString(searchTerm);
+
+    if (!normalizedTerm || normalizedTerm.length < 2) {
+      return []; // Retorna vazio se o termo for muito curto
+    }
+
+    console.log(`[Client.search] Searching for prefix: '${normalizedTerm}' (Original: '${searchTerm}')`);
+
+    const clientsRef = collection(db, 'clients');
+    // Caractere especial que define o fim do intervalo para busca por prefixo
+    const endTerm = normalizedTerm + '\uf8ff';
+
+    // Usa o índice: clients name_normalized Crescente
+    const q = query(
+      clientsRef,
+      where('name_normalized', '>=', normalizedTerm),
+      where('name_normalized', '<=', endTerm),
+      orderBy('name_normalized'), // Ordena pelo campo indexado
+      // orderBy('name'), // Poderia ordenar pelo nome original se tivesse índice composto (name_normalized ASC, name ASC)
+      limit(resultLimit)
+    );
+
+    console.log(`[Client.search] Firestore Prefix Query on 'name_normalized': >= '${normalizedTerm}', <= '${endTerm}'`);
+
+    try {
+      const querySnapshot = await getDocs(q);
+      console.log(`[Client.search] Firestore documents found: ${querySnapshot.size}`);
+      return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    } catch (error) {
+      console.error("Error searching clients with prefix query: ", error);
+      // Log para ajudar a debuggar erros de índice:
+      if (error.code === 'failed-precondition') {
+        console.warn(`Firestore index missing or not ready for query: ${error.message}. Check the Firestore console for index creation links OR wait for index creation.`);
+      }
+      return []; // Retorna vazio em caso de erro
     }
   }
 };
@@ -311,8 +369,7 @@ export const ContractTemplate = {
       };
 
       const collectionRef = collection(db, this.collection);
-      const docRef = doc(collectionRef);
-      await setDoc(docRef, templateData);
+      const docRef = await addDoc(collectionRef, templateData);
 
       return { id: docRef.id, ...templateData };
     } catch (error) {

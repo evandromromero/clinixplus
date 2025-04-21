@@ -43,7 +43,7 @@ import {
   ChevronUp, 
   ChevronDown 
 } from "lucide-react";
-import { collection, query, where, limit, getDocs } from 'firebase/firestore';
+import { collection, query, where, limit, getDocs, doc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/firebase/config';
 import { Loader2 } from 'lucide-react';
 
@@ -171,6 +171,7 @@ export default function ClientPackages() {
   const [allClientsCacheImport, setAllClientsCacheImport] = useState(null);
   const [lastClientDocImport, setLastClientDocImport] = useState(null);
   const [hasMoreClientsImport, setHasMoreClientsImport] = useState(true);
+  const [isSearchingClientsImport, setIsSearchingClientsImport] = useState(false);
 
   // Estado para os termos de busca dos serviços no import
   const [serviceSearchTermsImport, setServiceSearchTermsImport] = useState([]);
@@ -390,8 +391,130 @@ export default function ClientPackages() {
   };
   
   // Função para vender pacote personalizado
+  const handleSellCustomPackage = async () => {
+    try {
+      if (!sellForm.client_id || !customPackageForm.name || customPackageForm.services.length === 0) {
+        toast({
+          title: "Erro",
+          description: "Preencha todos os campos obrigatórios",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      const packageSnapshot = {
+        name: customPackageForm.name,
+        description: customPackageForm.description,
+        validity_days: customPackageForm.validity_days,
+        services: customPackageForm.services.map(s => ({
+          service_id: s.service_id,
+          quantity: s.quantity
+        })),
+        total_price: calculateCustomPackageTotal(),
+        discount: customPackageForm.discount,
+        discount_type: customPackageForm.discount_type,
+        snapshot_date: new Date().toISOString()
+      };
+
+      const purchaseDate = new Date(sellForm.purchase_date);
+      const expirationDate = addDays(purchaseDate, customPackageForm.validity_days);
+
+      const totalSessions = customPackageForm.services.reduce((sum, service) => sum + service.quantity, 0);
+
+      // Cria o objeto do pacote que será salvo no Firestore para o cliente
+      const newClientPackage = {
+        client_id: sellForm.client_id,
+        package_id: packageSnapshot.id, // Use the snapshot ID
+        purchase_date: format(purchaseDate, 'yyyy-MM-dd'),
+        expiration_date: format(expirationDate, 'yyyy-MM-dd'),
+        total_sessions: totalSessions,
+        sessions_used: 0,
+        status: 'ativo', // Initial status
+        session_history: [], // Initialize empty history
+        package_snapshot: packageSnapshot, // Store the detailed snapshot
+        is_custom_package: true // Flag for custom package
+      };
+
+      // --- Firestore Operations ---
+      // Use a batch write for atomicity (create client package + unfinished sale)
+      const batch = writeBatch(db);
+
+      // 1. Create Client Package document reference
+      const clientPackageRef = doc(collection(db, 'client_packages')); // Auto-generate ID
+      batch.set(clientPackageRef, newClientPackage);
+
+      // 2. Create Unfinished Sale document reference
+      const unfinishedSaleRef = doc(collection(db, 'unfinished_sales')); // Auto-generate ID
+      const unfinishedSaleData = {
+        client_id: sellForm.client_id,
+        type: 'pacote',
+        items: [
+          {
+            item_id: packageSnapshot.id, // Link to the package
+            name: packageSnapshot.name,
+            quantity: 1,
+            price: calculateCustomPackageTotal(), // Final price of the package
+            discount: customPackageForm.discount // Store the calculated discount
+          }
+        ],
+        total_amount: calculateCustomPackageTotal(),
+        client_package_id: clientPackageRef.id, // Link to the created client package ID
+        date_created: serverTimestamp(), // Use server timestamp
+        status: 'pendente' // Initial status
+      };
+      batch.set(unfinishedSaleRef, unfinishedSaleData);
+
+      // Commit the batch
+      await batch.commit();
+      console.log('Pacote personalizado e venda pendente criados com sucesso. ClientPackage ID:', clientPackageRef.id);
+
+      // Redireciona para a página de vendas com os parâmetros necessários
+      const params = new URLSearchParams({
+        type: 'pacote',
+        client_id: sellForm.client_id,
+        client_package_id: clientPackageRef.id,
+        amount: calculateCustomPackageTotal()
+      }).toString();
+
+      navigate(createPageUrl('SalesRegister', params));
+
+      setShowSellDialog(false);
+      setSellForm({
+        client_id: "",
+        package_id: "",
+        purchase_date: format(new Date(), 'yyyy-MM-dd'),
+        total_sessions: 0,
+        expiration_date: ""
+      });
+
+      setCustomPackageForm({
+        name: "",
+        description: "",
+        validity_days: 90,
+        services: [],
+        total_price: 0,
+        discount: 0,
+        discount_type: "percentage",
+        desired_price: ""
+      });
+
+      toast({
+        title: "Sucesso",
+        description: "Pacote personalizado criado com sucesso! Redirecionando para lançar a venda...",
+        variant: "success"
+      });
+    } catch (error) {
+      console.error("Erro ao vender pacote personalizado:", error);
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao criar pacote. Tente novamente.",
+        variant: "destructive"
+      });
+    }
+  };
+  
   // Função para adicionar serviço ao pacote personalizado
-  const handleAddServiceToCustomPackage = () => {
+  const handleAddServiceToCustomPackage = async () => {
     try {
       if (!selectedServiceId) {
         toast({
@@ -498,32 +621,26 @@ export default function ClientPackages() {
 
   // Busca local de clientes, igual à tela de vendas
   const handleClientSearch = async (term) => {
-    const normalizedTerm = term.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    console.log(`[handleClientSearch] Original term: '${term}'`);
     if (!term || term.length < 2) {
       setClientSearchResults([]);
       return;
     }
     setIsSearchingClients(true);
     try {
-      // Filtra localmente todos os clientes já carregados
-      const results = clients.filter(client => {
-        const name = (client.name || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-        const email = (client.email || "").toLowerCase();
-        const cpf = (client.cpf || "");
-        return (
-          name.includes(normalizedTerm) ||
-          email.includes(term.toLowerCase()) ||
-          cpf.includes(term)
-        );
-      });
+      // ****** USA Client.search (que usa busca por prefixo no Firestore) ******
+      const results = await Client.search(term, 20);
+      console.log(`[handleClientSearch] Search results received:`, results);
       setClientSearchResults(results);
     } catch (error) {
-      console.error("Erro na busca local de clientes:", error);
+      // Client.search já loga o erro específico do Firestore.
+      console.error("Erro ao buscar clientes para venda (chamada em ClientPackages):", error);
       toast({
         title: "Erro",
-        description: "Erro ao buscar clientes localmente.",
+        description: "Erro ao buscar clientes no banco de dados.",
         variant: "destructive"
       });
+      setClientSearchResults([]); // Garante limpeza em caso de erro
     } finally {
       setIsSearchingClients(false);
     }
@@ -613,273 +730,6 @@ export default function ClientPackages() {
     }
   };
 
-  const handleRemoveServiceFromCustomPackage = (index) => {
-    try {
-      const updatedServices = [...customPackageForm.services];
-      updatedServices.splice(index, 1);
-      
-      setCustomPackageForm({
-        ...customPackageForm,
-        services: updatedServices
-      });
-    } catch (error) {
-      console.error("Erro ao remover serviço do pacote personalizado:", error);
-      toast({
-        title: "Erro",
-        description: "Não foi possível remover o serviço",
-        variant: "destructive"
-      });
-    }
-  };
-  
-  // Função para calcular o subtotal do pacote personalizado
-  const calculateCustomPackageSubtotal = () => {
-    return customPackageForm.services.reduce((total, service) => {
-      return total + (parseFloat(service.price) * parseInt(service.quantity));
-    }, 0);
-  };
-  
-  // Função para calcular o desconto do pacote personalizado
-  const calculateCustomPackageDiscount = () => {
-    const subtotal = calculateCustomPackageSubtotal();
-    let discount = 0;
-    
-    if (customPackageForm.discount_type === "percentage") {
-      discount = (subtotal * parseFloat(customPackageForm.discount)) / 100;
-    } else if (customPackageForm.discount_type === "fixed") {
-      discount = parseFloat(customPackageForm.discount);
-    } else if (customPackageForm.discount_type === "desired_price") {
-      if (customPackageForm.desired_price === "") {
-        discount = 0;
-      } else {
-        const desiredPrice = parseFloat(customPackageForm.desired_price);
-        if (desiredPrice < subtotal) {
-          discount = subtotal - desiredPrice;
-        } else {
-          discount = 0;
-        }
-      }
-    }
-    
-    return discount;
-  };
-  
-  // Função para calcular o total do pacote personalizado
-  const calculateCustomPackageTotal = () => {
-    const subtotal = calculateCustomPackageSubtotal();
-    const discount = calculateCustomPackageDiscount();
-    
-    if (customPackageForm.discount_type === "desired_price" && customPackageForm.desired_price !== "") {
-      return parseFloat(customPackageForm.desired_price);
-    }
-    
-    return subtotal - discount;
-  };
-  
-  // Função para alterar o tipo de desconto do pacote personalizado
-  const handleCustomDiscountTypeChange = (type) => {
-    setCustomPackageForm({
-      ...customPackageForm,
-      discount_type: type,
-      discount: 0,
-      desired_price: ""
-    });
-  };
-  
-  // Função para alterar o desconto do pacote personalizado
-  const handleCustomDiscountChange = (value, type) => {
-    setCustomPackageForm({
-      ...customPackageForm,
-      discount: value,
-      discount_type: type
-    });
-  };
-  
-  // Função para alterar o preço desejado do pacote personalizado
-  const handleCustomDesiredPriceChange = (value) => {
-    setCustomPackageForm({
-      ...customPackageForm,
-      desired_price: value,
-      discount_type: "desired_price"
-    });
-  };
-  
-  // Função para validar os campos do pacote personalizado
-  const validateCustomPackage = () => {
-    if (!sellForm.client_id) {
-      toast({
-        title: "Erro",
-        description: "É necessário selecionar um cliente",
-        variant: "destructive"
-      });
-      return false;
-    }
-
-    if (!customPackageForm.name || customPackageForm.name.trim() === "") {
-      toast({
-        title: "Erro",
-        description: "É necessário informar um nome para o pacote personalizado",
-        variant: "destructive"
-      });
-      return false;
-    }
-
-    if (customPackageForm.services.length === 0) {
-      toast({
-        title: "Erro",
-        description: "É necessário adicionar pelo menos um serviço ao pacote personalizado",
-        variant: "destructive"
-      });
-      return false;
-    }
-
-    return true;
-  };
-
-  const handleSellCustomPackage = async () => {
-    try {
-      // Validar os campos antes de prosseguir
-      if (!validateCustomPackage()) {
-        return;
-      }
-      
-      // Calcula o preço final
-      const finalPrice = calculateCustomPackageTotal();
-      
-      // Calcula o total de sessões
-      const totalSessions = customPackageForm.services.reduce((total, service) => {
-        return total + parseInt(service.quantity);
-      }, 0);
-      
-      // Define a data de compra como a data atual
-      const purchaseDate = new Date();
-      // Calcula a data de expiração
-      const expirationDate = addDays(purchaseDate, customPackageForm.validity_days);
-      
-      // Cria um snapshot do pacote personalizado
-      const packageSnapshot = {
-        id: `custom_${Date.now()}`,
-        name: customPackageForm.name,
-        description: customPackageForm.description || "Pacote personalizado",
-        validity_days: customPackageForm.validity_days,
-        services: customPackageForm.services,
-        total_price: finalPrice,
-        discount: calculateCustomPackageDiscount(),
-        discount_type: customPackageForm.discount_type,
-        color: "#294380",
-        is_custom: true
-      };
-      
-      // Cria o pacote do cliente
-      const newClientPackage = {
-        client_id: sellForm.client_id,
-        package_id: packageSnapshot.id,
-        purchase_date: format(purchaseDate, 'yyyy-MM-dd'),
-        expiration_date: format(expirationDate, 'yyyy-MM-dd'),
-        total_sessions: totalSessions,
-        sessions_used: 0,
-        status: 'ativo',
-        session_history: [],
-        package_snapshot: packageSnapshot,
-        is_custom_package: true
-      };
-      
-      const createdPackage = await ClientPackage.create(newClientPackage);
-
-      // Cria uma venda não finalizada
-      await UnfinishedSale.create({
-        client_id: sellForm.client_id,
-        type: 'pacote',
-        items: [
-          {
-            item_id: packageSnapshot.id,
-            name: packageSnapshot.name,
-            quantity: 1,
-            price: finalPrice,
-            discount: calculateCustomPackageDiscount()
-          }
-        ],
-        total_amount: finalPrice,
-        client_package_id: createdPackage.id,
-        date_created: new Date().toISOString(),
-        status: 'pendente'
-      });
-
-      // Redireciona para a página de registro de venda
-      const saleParams = new URLSearchParams({
-        type: 'pacote',
-        client_id: sellForm.client_id,
-        client_package_id: createdPackage.id,
-        amount: finalPrice
-      }).toString();
-      
-      navigate(createPageUrl('SalesRegister', saleParams));
-      
-      // Limpa o formulário e fecha a modal
-      setShowSellDialog(false);
-      setSellForm({
-        client_id: "",
-        package_id: "",
-        purchase_date: format(new Date(), 'yyyy-MM-dd'),
-        total_sessions: 0,
-        expiration_date: ""
-      });
-      
-      setCustomPackageForm({
-        name: "",
-        description: "",
-        validity_days: 90,
-        services: [],
-        total_price: 0,
-        discount: 0,
-        discount_type: "percentage",
-        desired_price: ""
-      });
-      
-      toast({
-        title: "Sucesso",
-        description: "Pacote personalizado criado com sucesso! Redirecionando para lançar a venda...",
-        variant: "success"
-      });
-    } catch (error) {
-      console.error("Erro ao vender pacote personalizado:", error);
-      toast({
-        title: "Erro",
-        description: error.message || "Erro ao criar pacote personalizado. Tente novamente.",
-        variant: "destructive"
-      });
-    }
-  };
-
-  useEffect(() => {
-    // Carregar o usuário atual do localStorage
-    const userData = localStorage.getItem('user');
-    console.log('Dados do usuário do localStorage:', userData);
-    
-    if (userData) {
-      try {
-        const parsedUser = JSON.parse(userData);
-        console.log('Usuário carregado:', parsedUser);
-        setCurrentUser(parsedUser);
-      } catch (error) {
-        console.error('Erro ao carregar dados do usuário:', error);
-      }
-    } else {
-      console.log('Nenhum usuário encontrado no localStorage');
-    }
-    
-    loadData();
-    checkUnfinishedSales();
-    
-    // Verificar a cada 30 segundos se há atualizações nas vendas
-    const interval = setInterval(() => {
-      checkUnfinishedSaleStatus();
-    }, 30000);
-
-    // Limpar o intervalo quando o componente for desmontado
-    return () => clearInterval(interval);
-  }, []);
-
   const handleRemoveSession = async (sessionIndex) => {
     if (!window.confirm('Tem certeza que deseja excluir esta sessão do histórico? Esta ação não pode ser desfeita.')) {
       return;
@@ -917,6 +767,191 @@ export default function ClientPackages() {
     }
   };
 
+  // ----- Funções de Cálculo para Pacote Personalizado ----- 
+
+  // Função para calcular o subtotal do pacote personalizado
+  const calculateCustomPackageSubtotal = () => {
+    return customPackageForm.services.reduce((total, service) => {
+      // Ensure price and quantity are numbers
+      const price = parseFloat(service.price || 0);
+      const quantity = parseInt(service.quantity || 0);
+      return total + (price * quantity);
+    }, 0);
+  };
+  
+  // Função para calcular o desconto do pacote personalizado
+  const calculateCustomPackageDiscount = () => {
+    const subtotal = calculateCustomPackageSubtotal();
+    let discount = 0;
+    const discountValue = parseFloat(customPackageForm.discount || 0);
+    const desiredPriceValue = parseFloat(customPackageForm.desired_price || 0);
+
+    if (customPackageForm.discount_type === "percentage") {
+      discount = (subtotal * discountValue) / 100;
+    } else if (customPackageForm.discount_type === "fixed") {
+      discount = discountValue;
+    } else if (customPackageForm.discount_type === "desired_price") {
+      if (customPackageForm.desired_price === "") {
+        discount = 0;
+      } else {
+        if (desiredPriceValue < subtotal) {
+          discount = subtotal - desiredPriceValue;
+        } else {
+          discount = 0; // Desired price cannot be higher than subtotal
+        }
+      }
+    }
+
+    // Ensure discount is not negative or greater than subtotal
+    discount = Math.max(0, discount);
+    discount = Math.min(subtotal, discount);
+
+    return discount;
+  };
+  
+  // Função para calcular o total do pacote personalizado
+  const calculateCustomPackageTotal = () => {
+    const subtotal = calculateCustomPackageSubtotal();
+    const discount = calculateCustomPackageDiscount();
+
+    if (customPackageForm.discount_type === "desired_price" && customPackageForm.desired_price !== "") {
+       const desiredPriceValue = parseFloat(customPackageForm.desired_price || 0);
+       // Ensure desired price is not higher than subtotal
+       return Math.min(subtotal, desiredPriceValue);
+    }
+
+    return Math.max(0, subtotal - discount); // Ensure total is not negative
+  };
+  // ----- Fim Funções de Cálculo -----
+  
+  // ----- Funções Handler do Formulário de Pacote Personalizado ----- 
+  const handleRemoveServiceFromCustomPackage = (index) => {
+    try {
+      const updatedServices = [...customPackageForm.services];
+      updatedServices.splice(index, 1);
+      
+      setCustomPackageForm({
+        ...customPackageForm,
+        services: updatedServices
+      });
+    } catch (error) {
+      console.error("Erro ao remover serviço do pacote personalizado:", error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível remover o serviço",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Função para alterar o tipo de desconto do pacote personalizado
+  const handleCustomDiscountTypeChange = (type) => {
+    setCustomPackageForm({
+      ...customPackageForm,
+      discount_type: type,
+      discount: 0,
+      desired_price: "" // Reset desired price when type changes
+    });
+  };
+  
+  // Função para alterar o desconto do pacote personalizado
+  const handleCustomDiscountChange = (value, type) => {
+    setCustomPackageForm({
+      ...customPackageForm,
+      discount: value, // Store the raw value
+      discount_type: type,
+      desired_price: type !== 'desired_price' ? "" : customPackageForm.desired_price // Clear desired price if changing to fixed/percentage
+    });
+  };
+  
+  // Função para alterar o preço desejado do pacote personalizado
+  const handleCustomDesiredPriceChange = (value) => {
+    setCustomPackageForm({
+      ...customPackageForm,
+      desired_price: value, // Store the raw value
+      discount_type: "desired_price",
+      discount: 0 // Clear fixed/percentage discount when setting desired price
+    });
+  };
+  // ----- Fim Funções Handler do Formulário -----
+  
+  // ----- Função de Validação do Pacote Personalizado ----- 
+  const validateCustomPackage = () => {
+    if (!sellForm.client_id) {
+      toast({
+        title: "Erro de Validação",
+        description: "É necessário selecionar um cliente.",
+        variant: "destructive"
+      });
+      return false;
+    }
+
+    if (!customPackageForm.name || customPackageForm.name.trim() === "") {
+      toast({
+        title: "Erro de Validação",
+        description: "É necessário informar um nome para o pacote.",
+        variant: "destructive"
+      });
+      return false;
+    }
+
+    if (customPackageForm.services.length === 0) {
+      toast({
+        title: "Erro de Validação",
+        description: "Adicione pelo menos um serviço ao pacote.",
+        variant: "destructive"
+      });
+      return false;
+    }
+
+    // Validate individual services
+    for (const service of customPackageForm.services) {
+        if (!service.quantity || parseInt(service.quantity) <= 0) {
+            toast({
+                title: "Erro de Validação",
+                description: `Quantidade inválida para o serviço: ${service.name}`,
+                variant: "destructive"
+            });
+            return false;
+        }
+         if (service.price === undefined || service.price === null || parseFloat(service.price) < 0) {
+             toast({
+                 title: "Erro de Validação",
+                 description: `Preço inválido para o serviço: ${service.name}`,
+                 variant: "destructive"
+             });
+             return false;
+         }
+    }
+
+    // Validate discount/price fields
+    const discountValue = parseFloat(customPackageForm.discount || 0);
+    const desiredPriceValue = parseFloat(customPackageForm.desired_price || 0);
+
+    if (customPackageForm.discount_type === 'percentage' && (discountValue < 0 || discountValue > 100)) {
+         toast({ title: "Erro de Validação", description: "Desconto percentual deve ser entre 0 e 100.", variant: "destructive" });
+         return false;
+    }
+    if (customPackageForm.discount_type === 'fixed' && discountValue < 0) {
+         toast({ title: "Erro de Validação", description: "Desconto fixo não pode ser negativo.", variant: "destructive" });
+         return false;
+    }
+     if (customPackageForm.discount_type === 'desired_price') {
+        if (customPackageForm.desired_price === "" || desiredPriceValue < 0) {
+             toast({ title: "Erro de Validação", description: "Preço desejado inválido.", variant: "destructive" });
+             return false;
+        }
+     }
+     if (!customPackageForm.validity_days || parseInt(customPackageForm.validity_days) <= 0) {
+         toast({ title: "Erro de Validação", description: "Validade em dias deve ser maior que zero.", variant: "destructive" });
+         return false;
+     }
+
+
+    return true;
+  };
+  // ----- Fim Função de Validação -----
+  
   const loadData = async () => {
     try {
       setLoading(true);
@@ -1499,7 +1534,7 @@ export default function ClientPackages() {
         service_id: selectedServiceId,
         name: serviceToAdd.name,
         quantity: selectedServiceQuantity,
-        price: serviceToAdd.price
+        price: parseFloat(serviceToAdd.price)
       };
 
       const updatedServices = [...packageForm.services, newService];
@@ -1614,8 +1649,8 @@ export default function ClientPackages() {
       console.log('Mapped package services:', packageServices);
 
       // Calcula os valores finais
-      const subtotal = packageServices.reduce((sum, service) => 
-        sum + (service.price * service.quantity), 0);
+      const subtotal = packageServices.reduce((total, service) => 
+        total + (service.price * service.quantity), 0);
       const discount = parseFloat(packageToEdit.discount) || 0;
       const total = subtotal - (subtotal * discount / 100);
 
@@ -1835,6 +1870,75 @@ export default function ClientPackages() {
     return services.filter(s => (s.name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').includes(term));
   };
 
+  
+    // Função para buscar clientes especificamente na modal de importação
+    const handleClientSearchImport = async (term) => {
+      setClientSearchTermImport(term);
+      console.log(`[handleClientSearchImport] Original term: '${term}'`);
+      // Normaliza o termo da mesma forma que deve estar no array searchableFields
+      const normalizedTerm = term.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      console.log(`[handleClientSearchImport] Normalized term for search: '${normalizedTerm}'`);
+
+      // Reduzi para 2 caracteres para permitir busca mais cedo, ajuste se necessário
+      if (!term || term.length < 2) {
+        setClientSearchResultsImport([]);
+        return;
+      }
+      setIsSearchingClientsImport(true);
+      try {
+        // ****** USA Client.search (que usa 'array-contains' no Firestore) ******
+        // Passa o termo normalizado e o limite
+        const results = await Client.search(normalizedTerm, 20);
+        console.log(`[handleClientSearchImport] Search results received:`, results);
+
+        setClientSearchResultsImport(results);
+
+      } catch (error) {
+        // O erro já é logado dentro de Client.search, aqui apenas tratamos a UI
+        console.error("Erro ao buscar clientes (chamada em ClientPackages):", error); // Log adicional opcional
+        toast({
+          title: "Erro na busca",
+          description: "Não foi possível buscar clientes. Tente novamente ou verifique o console.",
+          variant: "destructive",
+        });
+        setClientSearchResultsImport([]); // Limpa resultados em caso de erro
+      } finally {
+        setIsSearchingClientsImport(false);
+      }
+    };
+
+  // ----- useEffect Hook for Initial Data Loading ----- 
+  useEffect(() => {
+    // Carregar o usuário atual do localStorage
+    const userData = localStorage.getItem('user');
+    console.log('Dados do usuário do localStorage:', userData);
+
+    if (userData) {
+      try {
+        const parsedUser = JSON.parse(userData);
+        console.log('Usuário carregado:', parsedUser);
+        setCurrentUser(parsedUser);
+      } catch (error) {
+        console.error('Erro ao carregar dados do usuário:', error);
+      }
+    } else {
+      console.log('Nenhum usuário encontrado no localStorage');
+    }
+
+    loadData(); // Assuming this loads packages, services, etc.
+    checkUnfinishedSales(); // Check for pending sales on load
+
+    // Setup interval for checking unfinished sales status (optional, depends on workflow)
+    // Consider if this polling is necessary or if Firestore listeners are better
+    const interval = setInterval(() => {
+      checkUnfinishedSaleStatus(); // Assuming this function exists and checks status
+    }, 30000); // Poll every 30 seconds
+
+    // Cleanup interval on component unmount
+    return () => clearInterval(interval);
+  }, []); // Run only on mount
+  // ----- Fim useEffect Hook -----
+ 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -3285,7 +3389,7 @@ export default function ClientPackages() {
                 />
                 {clientSearchTermImport && (
                   <div className="absolute z-10 bg-white border rounded w-full max-h-40 overflow-y-auto shadow">
-                    {isSearchingClients ? (
+                    {isSearchingClientsImport ? (
                       <div className="p-2 text-gray-400">Buscando...</div>
                     ) : clientSearchResultsImport.length > 0 ? (
                       clientSearchResultsImport.map(client => (
@@ -3367,7 +3471,10 @@ export default function ClientPackages() {
                 <div key={idx} className="mb-2">
                   <div className="font-medium mb-1">{services.find(s => s.id === svc.service_id)?.name || 'Serviço'}</div>
                   {(svc.sessions || []).map((sess, sidx) => (
-                    <div key={sidx} className="flex gap-2 mb-1">
+                    <div
+                      key={sidx}
+                      className="flex gap-2 mb-1"
+                    >
                       <Input
                         type="date"
                         value={sess.date}
