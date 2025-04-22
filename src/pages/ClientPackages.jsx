@@ -1825,8 +1825,9 @@ export default function ClientPackages() {
         session_history.push({
           date: sess.date,
           service_id: svc.service_id,
-          employee_name: sess.employee_name || '', // ou notes se preferir
-          notes: sess.notes || ''
+          employee_name: sess.employee_name || sess.obs || svc.employee_name || '', // Corrigido para buscar do campo correto
+          notes: sess.notes || '', // Somente observações reais
+          status: 'concluido', // Marca como concluído para exibir corretamente no portal
         });
       });
     });
@@ -1865,6 +1866,18 @@ export default function ClientPackages() {
       console.log('[IMPORT] Pacote importado salvo com sucesso!');
       toast({ title: 'Pacote importado adicionado com sucesso!', variant: 'success' });
       setShowImportPackageDialog(false);
+      // Limpar formulário e estados relacionados após salvar
+      setImportPackageForm({
+        client_id: '',
+        purchase_date: format(new Date(), 'yyyy-MM-dd'),
+        validity_days: 90,
+        services: [],
+        notes: '',
+      });
+      setServiceSearchTermsImport([]);
+      setActiveServiceSearchIndex(null);
+      setClientSearchTermImport("");
+      setClientSearchResultsImport([]);
       await loadData();
     } catch (error) {
       console.error('[IMPORT] Erro ao salvar pacote importado:', error);
