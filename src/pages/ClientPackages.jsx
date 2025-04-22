@@ -1340,8 +1340,10 @@ export default function ClientPackages() {
   };
 
   const handleDeletePackage = async (packageId) => {
+    console.log('[DELETE PACKAGE] Início da função. packageId:', packageId);
     try {
       if (!packageId) {
+        console.error('[DELETE PACKAGE] ID do pacote não fornecido');
         toast({
           title: "Erro",
           description: "ID do pacote não fornecido",
@@ -1352,9 +1354,12 @@ export default function ClientPackages() {
       }
 
       const clientPkgs = await ClientPackage.list();
+      console.log('[DELETE PACKAGE] Pacotes do cliente carregados:', clientPkgs);
       const pkgToDelete = clientPkgs.find(p => p.id === packageId);
+      console.log('[DELETE PACKAGE] Pacote a excluir:', pkgToDelete);
 
       if (!pkgToDelete) {
+        console.error('[DELETE PACKAGE] Pacote não encontrado');
         toast({
           title: "Erro",
           description: "Pacote não encontrado",
@@ -1364,35 +1369,18 @@ export default function ClientPackages() {
         return;
       }
 
-      if (pkgToDelete.status === "finalizado" || pkgToDelete.status === "expirado") {
-        toast({
-          title: "Erro",
-          description: "Não é possível excluir um pacote finalizado ou expirado",
-          variant: "destructive"
-        });
-        setShowDeleteDialog(false);
-        return;
-      }
-
-      if (pkgToDelete.sessions_used > 0) {
-        toast({
-          title: "Erro",
-          description: "Não é possível excluir um pacote que já teve sessões utilizadas",
-          variant: "destructive"
-        });
-        setShowDeleteDialog(false);
-        return;
-      }
-
       try {
         const sales = await Sale.list();
+        console.log('[DELETE PACKAGE] Vendas carregadas:', sales);
         const relatedSale = sales.find(s => 
           s.items?.some(item => 
             item.client_package_id === packageId
           )
         );
+        console.log('[DELETE PACKAGE] Venda relacionada:', relatedSale);
 
         if (relatedSale && relatedSale.status === "pago") {
+          console.warn('[DELETE PACKAGE] Pacote já foi pago. relatedSale:', relatedSale);
           toast({
             title: "Erro",
             description: "Não é possível excluir um pacote que já foi pago",
@@ -1403,20 +1391,25 @@ export default function ClientPackages() {
         }
 
         const unfinishedSales = await UnfinishedSale.list();
+        console.log('[DELETE PACKAGE] Vendas não finalizadas carregadas:', unfinishedSales);
         const unfinishedSale = unfinishedSales.find(s => s.client_package_id === packageId);
+        console.log('[DELETE PACKAGE] Venda não finalizada relacionada:', unfinishedSale);
 
         if (unfinishedSale) {
           await UnfinishedSale.delete(unfinishedSale.id);
+          console.log('[DELETE PACKAGE] Venda não finalizada excluída. ID:', unfinishedSale.id);
         }
 
         if (relatedSale && relatedSale.status === "pendente") {
           await Sale.delete(relatedSale.id);
+          console.log('[DELETE PACKAGE] Venda pendente excluída. ID:', relatedSale.id);
         }
       } catch (error) {
-        console.error("Erro ao verificar vendas relacionadas:", error);
+        console.error("[DELETE PACKAGE] Erro ao verificar/excluir vendas relacionadas:", error);
       }
 
       await ClientPackage.delete(packageId);
+      console.log('[DELETE PACKAGE] Pacote do cliente removido com sucesso. packageId:', packageId);
 
       toast({
         title: "Sucesso",
@@ -1426,7 +1419,7 @@ export default function ClientPackages() {
       setShowDeleteDialog(false);
       loadData();
     } catch (error) {
-      console.error("Erro ao excluir pacote:", error);
+      console.error("[DELETE PACKAGE] Erro ao excluir pacote:", error);
       toast({
         title: "Erro",
         description: error.message || "Erro ao excluir o pacote. Tente novamente.",
@@ -1435,8 +1428,6 @@ export default function ClientPackages() {
       setShowDeleteDialog(false);
     }
   };
-
-
 
   const handleSearchPackages = (searchTerm) => {
     if (!searchTerm.trim()) {
