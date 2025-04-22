@@ -2375,7 +2375,13 @@ export default function ClientPackages() {
                                           {formatDateSafe(session.date)}
                                         </p>
                                         <p className="text-sm text-gray-500">
-                                          Profissional: {getEmployeeName(session.employee_id)}
+                                          Profissional: {
+                                            session.employee_id && getEmployeeName(session.employee_id)
+                                              ? getEmployeeName(session.employee_id)
+                                              : session.employee_name
+                                                ? session.employee_name
+                                                : 'Profissional não encontrado'
+                                          }
                                         </p>
                                       </div>
                                       <div className="flex items-center gap-2">
@@ -2558,7 +2564,13 @@ export default function ClientPackages() {
                               {formatDateSafe(session.date)}
                             </p>
                             <p className="text-sm text-gray-500">
-                              Profissional: {getEmployeeName(session.employee_id)}
+                              Profissional: {
+                                session.employee_id && getEmployeeName(session.employee_id)
+                                  ? getEmployeeName(session.employee_id)
+                                  : session.employee_name
+                                    ? session.employee_name
+                                    : 'Profissional não encontrado'
+                              }
                             </p>
                           </div>
                           <div className="flex items-center gap-2">
