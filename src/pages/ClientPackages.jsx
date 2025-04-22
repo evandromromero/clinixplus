@@ -2545,49 +2545,52 @@ export default function ClientPackages() {
               <CardContent>
                 {selectedPackage.session_history && selectedPackage.session_history.length > 0 ? (
                   <div className="space-y-4">
-                    {selectedPackage.session_history.map((session, index) => (
-                      <div 
-                        key={index}
-                        className="flex justify-between items-center"
-                      >
-                        <div>
-                          <p className="font-medium">{getServiceName(session.service_id)}</p>
-                          <p className="text-sm text-gray-500">
-                            {formatDateSafe(session.date)}
-                          </p>
-                          <p className="text-sm text-gray-500">
-                            Profissional: {getEmployeeName(session.employee_id)}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge 
-                            variant="outline" 
-                            className={
-                              session.status === 'concluido' ? 'bg-green-50 text-green-700' :
-                              session.status === 'agendado' ? 'bg-blue-50 text-blue-700' :
-                              session.status === 'cancelado' ? 'bg-red-50 text-red-700' :
-                              'bg-gray-50 text-gray-700'
-                            }
-                          >
-                            {session.status === 'concluido' ? 'Concluído' :
-                             session.status === 'agendado' ? 'Agendado' :
-                             session.status === 'cancelado' ? 'Cancelado' :
-                             session.status}
-                          </Badge>
-                          {(
-                            <Button 
-                              variant="ghost" 
-                              size="icon"
-                              className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                              onClick={() => handleRemoveSession(index)}
-                              title="Excluir sessão"
+                    {selectedPackage.session_history.map((session, index) => {
+                      console.log('[HISTÓRICO] Session exibida:', session);
+                      return (
+                        <div 
+                          key={index}
+                          className="flex justify-between items-center"
+                        >
+                          <div>
+                            <p className="font-medium">{getServiceName(session.service_id)}</p>
+                            <p className="text-sm text-gray-500">
+                              {formatDateSafe(session.date)}
+                            </p>
+                            <p className="text-sm text-gray-500">
+                              Profissional: {getEmployeeName(session.employee_id)}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge 
+                              variant="outline" 
+                              className={
+                                session.status === 'concluido' ? 'bg-green-50 text-green-700' :
+                                session.status === 'agendado' ? 'bg-blue-50 text-blue-700' :
+                                session.status === 'cancelado' ? 'bg-red-50 text-red-700' :
+                                'bg-gray-50 text-gray-700'
+                              }
                             >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          )}
+                              {session.status === 'concluido' ? 'Concluído' :
+                               session.status === 'agendado' ? 'Agendado' :
+                               session.status === 'cancelado' ? 'Cancelado' :
+                               session.status}
+                            </Badge>
+                            {(
+                              <Button 
+                                variant="ghost" 
+                                size="icon"
+                                className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                                onClick={() => handleRemoveSession(index)}
+                                title="Excluir sessão"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <p className="text-center py-6 text-gray-500">

@@ -132,6 +132,7 @@ export default function PackageCard({ packages = [], services = [] }) {
                                 </div>
                                 <div className="text-gray-600">
                                   Profissional: {session.employee_name || "Não informado"}
+                                  {console.log('Session exibida no histórico:', session)}
                                 </div>
                               </div>
                             ))}
