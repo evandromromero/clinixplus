@@ -362,6 +362,52 @@ src/
 - **Causa**: Os serviços em pacotes personalizados podem estar armazenados em diferentes formatos: como strings de IDs ou como objetos completos.
 - **Solução**: A função updatePackageSession foi modificada para verificar ambos os formatos e fazer a comparação adequada em cada caso, garantindo que o progresso dos pacotes seja atualizado corretamente.
 
+## Melhorias Recentes em Pacotes e Portal do Cliente (Abril 2025)
+
+### Funcionalidades Implementadas e Corrigidas
+
+1. **Importação e Gestão de Pacotes**
+   - Aprimoramos o formulário de importação de pacotes para garantir a captura correta dos dados durante o processo de importação.
+   - Implementamos a seleção de serviços dentro do modal de importação de pacotes.
+   - Após salvar um pacote importado, o modal agora limpa todos os campos automaticamente, proporcionando uma experiência mais fluida.
+   - O nome do profissional responsável pela sessão é corretamente exibido no histórico de sessões após a importação do pacote.
+
+2. **Histórico de Sessões Utilizadas**
+   - Para cada pacote, o portal do cliente exibe as sessões concluídas, mostrando detalhes como data, hora, serviço realizado e profissional responsável.
+   - Corrigida a exibição dos serviços incluídos nos pacotes, tratando diferentes formatos de dados (arrays e objetos).
+
+3. **Pacotes Personalizados**
+   - Corrigimos o processamento para incluir pacotes personalizados, adicionando a flag `isCustomPackage` para identificação.
+   - O código foi ajustado para processar corretamente os serviços do `package_snapshot`, independentemente de serem arrays ou objetos.
+
+4. **Interface Expansível e Melhorias Visuais**
+   - Implementamos interface de detalhes expansíveis para pacotes, tanto no portal do cliente quanto no painel administrativo e na aba de detalhes do cliente.
+   - Adicionamos barras de progresso para visualização clara das sessões utilizadas.
+   - Botões "Mais detalhes"/"Menos detalhes" com ícones intuitivos.
+   - Organização das informações em seções lógicas (básicas, serviços, histórico).
+   - Mantivemos padrão visual e de interação em todas as áreas, utilizando as mesmas cores e estilos.
+
+5. **Consistência e Usabilidade**
+   - Garantimos que a interface permaneça limpa, organizada e fácil de usar.
+   - Melhoramos o tratamento de erros e mensagens de feedback ao usuário.
+   - Validação de campos obrigatórios antes de submissão dos formulários.
+
+### Como foi feito
+
+- Refatoração das funções de processamento de pacotes e serviços para lidar com múltiplos formatos de dados.
+- Implementação de caches para nomes e serviços de pacotes, otimizando o desempenho.
+- Uso de React hooks para gerenciamento de estado e efeitos.
+- Integração com Firebase para persistência e consulta de dados de pacotes, sessões, clientes e profissionais.
+- Testes manuais em todos os fluxos de importação, exibição e histórico de sessões.
+- Documentação das principais funções e decisões de design diretamente no código.
+- Seguido padrão de nomenclatura e estilo do projeto.
+
+### Resumo das Decisões de Design
+
+- Foco na experiência do usuário: modais limpos após ações, feedback visual imediato, informações organizadas e acessíveis.
+- Consistência visual e de navegação entre todas as áreas do sistema.
+- Flexibilidade para lidar com diferentes tipos de pacotes e estruturas de dados.
+
 ## Atualizações Recentes
 
 ### 25/03/2025
