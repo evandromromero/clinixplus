@@ -161,6 +161,8 @@ export default function ClientPackages() {
   // Estado do formulário de importação de pacote antigo
   const [importPackageForm, setImportPackageForm] = useState({
     client_id: '',
+    purchase_date: format(new Date(), 'yyyy-MM-dd'), // valor padrão: hoje
+    validity_days: 90, // valor padrão sugerido
     services: [], // { service_id: '', total: 1, used: 0, sessions: [{ date: '', obs: '' }] }
     notes: '',
   });
@@ -175,6 +177,9 @@ export default function ClientPackages() {
 
   // Estado para os termos de busca dos serviços no import
   const [serviceSearchTermsImport, setServiceSearchTermsImport] = useState([]);
+
+  // Estado para rastrear qual input de busca de serviço está ativo
+  const [activeServiceSearchIndex, setActiveServiceSearchIndex] = useState(null);
 
   // Funções auxiliares para manipular serviços do pacote importado
   const handleAddServiceToImport = () => {
@@ -1641,7 +1646,7 @@ export default function ClientPackages() {
         packageServices.push({
           service_id: svc.service_id,
           name: serviceDetails?.name || "Serviço não encontrado",
-          quantity: parseInt(svc.quantity) || 0,
+          quantity: parseInt(svc.quantity || 0),
           price: parseFloat(serviceDetails?.price) || 0
         });
       }
@@ -1801,35 +1806,83 @@ export default function ClientPackages() {
 
   // Função para salvar o pacote importado
   async function handleSaveImportPackage() {
+    console.log('[IMPORT] Clique no botão Salvar Pacote Importado');
+    console.log('[IMPORT] importPackageForm:', importPackageForm);
+  
     if (!importPackageForm.client_id || importPackageForm.services.length === 0) {
       toast({ title: 'Preencha todos os campos obrigatórios.' });
       return;
     }
-    // Validação: cada serviço precisa ter id e quantidade
-    for (const svc of importPackageForm.services) {
-      if (!svc.service_id || !svc.total || svc.total < 1) {
-        toast({ title: 'Preencha todos os serviços corretamente.' });
-        return;
-      }
+    if (importPackageForm.services.some(s => !s.service_id || !s.total || s.total < 1)) {
+      toast({ title: 'Preencha todos os serviços corretamente.' });
+      return;
     }
-    const newPackage = {
+  
+    const purchaseDate = new Date(importPackageForm.purchase_date);
+    const validityDays = parseInt(importPackageForm.validity_days);
+    const expirationDate = isNaN(validityDays)
+      ? null
+      : format(addDays(purchaseDate, validityDays), 'yyyy-MM-dd');
+
+    const totalSessions = importPackageForm.services.reduce((sum, s) => sum + (parseInt(s.total || 0)), 0);
+    const sessionsUsed = importPackageForm.services.reduce((sum, s) => sum + (parseInt(s.used || 0)), 0);
+  
+    // Montar o array de histórico de sessões concluídas
+    const session_history = [];
+    importPackageForm.services.forEach(svc => {
+      (svc.sessions || []).forEach(sess => {
+        session_history.push({
+          date: sess.date,
+          service_id: svc.service_id,
+          employee_name: sess.employee_name || '', // ou notes se preferir
+          notes: sess.notes || ''
+        });
+      });
+    });
+
+    const newImportedPackage = {
       client_id: importPackageForm.client_id,
-      services: importPackageForm.services,
-      isImported: true,
-      notes: importPackageForm.notes,
+      package_id: null,
+      purchase_date: format(purchaseDate, 'yyyy-MM-dd'),
+      expiration_date: expirationDate,
+      total_sessions: totalSessions,
+      sessions_used: sessionsUsed,
+      status: 'ativo',
+      session_history, // <-- agora preenchido corretamente
+      is_imported_package: true,
+      import_notes: importPackageForm.notes || "",
       created_at: new Date().toISOString(),
+      package_snapshot: {
+        name: "Pacote Antigo",
+        description: importPackageForm.notes || "",
+        validity_days: validityDays,
+        services: importPackageForm.services.map(s => ({
+          service_id: s.service_id,
+          quantity: parseInt(s.total || 0)
+        })),
+        total_price: null,
+        discount: null,
+        snapshot_date: new Date().toISOString(),
+        is_imported: true
+      }
     };
+  
     try {
-      await ClientPackage.add(newPackage);
+      setLoading(true);
+      console.log('[IMPORT] Objeto montado para salvar:', newImportedPackage);
+      await ClientPackage.create(newImportedPackage);
+      console.log('[IMPORT] Pacote importado salvo com sucesso!');
       toast({ title: 'Pacote importado adicionado com sucesso!', variant: 'success' });
       setShowImportPackageDialog(false);
-      setImportPackageForm({ client_id: '', services: [], notes: '' });
-      // Atualizar lista de pacotes
-      if (typeof loadData === 'function') loadData();
+      await loadData();
     } catch (error) {
+      console.error('[IMPORT] Erro ao salvar pacote importado:', error);
       toast({ title: 'Erro ao importar pacote', description: error.message || 'Tente novamente.', variant: 'destructive' });
+    } finally {
+      setLoading(false);
     }
   }
+
 
   // Estado para busca de cliente/serviço
   
@@ -1854,6 +1907,9 @@ export default function ClientPackages() {
       arr[idx] = serviceName;
       return arr;
     });
+    setActiveServiceSearchIndex(null); // Fecha o dropdown
+    const input = document.getElementById(`import-service-search-${idx}`);
+    if (input) input.blur(); // Remove o foco
   };
 
   const handleServiceSearchChangeImport = (idx, value) => {
@@ -3433,17 +3489,16 @@ export default function ClientPackages() {
                 <div key={idx} className="flex items-center gap-2 mb-2">
                   <div className="relative">
                     <Input
+                      id={`import-service-search-${idx}`}
                       placeholder="Cadastrar serviço..."
                       value={serviceSearchTermsImport[idx] || ""}
                       onChange={(e) => handleServiceSearchChangeImport(idx, e.target.value)}
+                      onFocus={() => setActiveServiceSearchIndex(idx)}
                       className="mb-1 min-w-[140px]"
                       autoComplete="off"
                     />
-                    {serviceSearchTermsImport[idx] && (
+                    {activeServiceSearchIndex === idx && getFilteredServicesImport(idx).length > 0 && (
                       <div className="absolute z-10 bg-white border rounded w-full max-h-40 overflow-y-auto shadow">
-                        {getFilteredServicesImport(idx).length === 0 && (
-                          <div className="p-2 text-gray-500 text-sm">Nenhum serviço encontrado</div>
-                        )}
                         {getFilteredServicesImport(idx).map(s => (
                           <div
                             key={s.id}
@@ -3473,7 +3528,10 @@ export default function ClientPackages() {
             <div>
               <Label>Sessões Concluídas</Label>
               {importPackageForm.services.map((svc, idx) => (
-                <div key={idx} className="mb-2">
+                <div
+                  key={idx}
+                  className="mb-2"
+                >
                   <div className="font-medium mb-1">{services.find(s => s.id === svc.service_id)?.name || 'Serviço'}</div>
                   {(svc.sessions || []).map((sess, sidx) => (
                     <div
@@ -3508,6 +3566,27 @@ export default function ClientPackages() {
                 placeholder="Observações gerais sobre o pacote importado"
               />
             </div>
+            {/* Data de Criação */}
+            <div>
+              <Label>Data de Criação</Label>
+              <Input
+                type="date"
+                value={importPackageForm.purchase_date}
+                onChange={e => setImportPackageForm(prev => ({ ...prev, purchase_date: e.target.value }))}
+                required
+              />
+            </div>
+            {/* Validade */}
+            <div>
+              <Label>Validade (dias)</Label>
+              <Input
+                type="number"
+                min={1}
+                value={importPackageForm.validity_days}
+                onChange={e => setImportPackageForm(prev => ({ ...prev, validity_days: parseInt(e.target.value) }))}
+                required
+              />
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowImportPackageDialog(false)}>Cancelar</Button>
@@ -3515,6 +3594,7 @@ export default function ClientPackages() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
       <RateLimitHandler />
     </div>
   );
