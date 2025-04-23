@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Check, User, Clock, CalendarCheck2 } from 'lucide-react';
 import { Appointment } from '@/firebase/entities';
+import AnamneseActionCard from './AnamneseActionCard'; // Import the AnamneseActionCard component
 
 // Paleta de cores pastel
 const CARD_COLORS = [
@@ -76,6 +77,7 @@ export default function EmployeeAppointmentCard({ appointments, onAction }) {
                 {new Date(app.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
               </div>
             </div>
+            <AnamneseActionCard clientId={app.client_id} clientName={app.client_name} />
             <div className="flex items-center gap-2 mt-4">
               <div className={`text-xs px-3 py-1 rounded-full font-semibold ${app.status === 'concluido' ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-blue-50 text-blue-700 border border-blue-200'}`}>
                 {app.status || 'pendente'}

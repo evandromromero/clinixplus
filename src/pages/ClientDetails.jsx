@@ -1981,14 +1981,64 @@ export default function ClientDetails() {
                     {selectedAnamneseTemplate.fields?.map((field) => (
                       <div key={field.id} className="space-y-2">
                         <Label>{field.label}</Label>
-                        <Input
-                          type="text"
-                          value={anamneseData[field.id] || ''}
-                          onChange={(e) => setAnamneseData(prev => ({
-                            ...prev,
-                            [field.id]: e.target.value
-                          }))}
-                        />
+                        {field.type === 'boolean' ? (
+                          <div className="flex items-center gap-4">
+                            <Select
+                              value={anamneseData[field.id] && anamneseData[field.id].value !== undefined ? anamneseData[field.id].value : ''}
+                              onValueChange={value => {
+                                setAnamneseData(prev => ({
+                                  ...prev,
+                                  [field.id]: { value, optional: value === 'Sim' ? (anamneseData[field.id]?.optional || '') : '' }
+                                }));
+                              }}
+                            >
+                              <SelectTrigger className="w-32">
+                                <SelectValue placeholder="Selecione" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Sim">Sim</SelectItem>
+                                <SelectItem value="Não">Não</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            {field.optionalText && (anamneseData[field.id]?.value === 'Sim') && (
+                              <Input
+                                className="flex-1"
+                                type="text"
+                                placeholder={field.optionalText}
+                                value={anamneseData[field.id]?.optional || ''}
+                                onChange={e => {
+                                  setAnamneseData(prev => ({
+                                    ...prev,
+                                    [field.id]: {
+                                      ...prev[field.id],
+                                      optional: e.target.value
+                                    }
+                                  }));
+                                }}
+                              />
+                            )}
+                          </div>
+                        ) : field.type === 'select' ? (
+                          <Select
+                            value={anamneseData[field.id] || ''}
+                            onValueChange={value => setAnamneseData(prev => ({ ...prev, [field.id]: value }))}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Selecione" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {field.options?.map((option, idx) => (
+                                <SelectItem key={idx} value={option}>{option}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <Input
+                            type="text"
+                            value={anamneseData[field.id] || ''}
+                            onChange={e => setAnamneseData(prev => ({ ...prev, [field.id]: e.target.value }))}
+                          />
+                        )}
                       </div>
                     ))}
                   </CardContent>
