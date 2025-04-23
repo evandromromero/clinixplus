@@ -4,6 +4,7 @@ import { Check, User, Clock, CalendarCheck2 } from 'lucide-react';
 import { Appointment } from '@/firebase/entities';
 import AnamneseActionCard from './AnamneseActionCard';
 import { Client } from '@/firebase/entities';
+import SignatureCanvas from 'react-signature-canvas';
 
 // Paleta de cores pastel
 const CARD_COLORS = [
@@ -31,6 +32,9 @@ export default function EmployeeAppointmentCard({ appointments, onAction, curren
   const [anamneseModal, setAnamneseModal] = useState({ open: false, clientId: null, clientName: null });
   const [lastAnamnese, setLastAnamnese] = useState(null);
   const [showEdit, setShowEdit] = useState(false);
+  const [showSignatureModal, setShowSignatureModal] = useState(false);
+  const [signature, setSignature] = useState(null);
+  const [concludeId, setConcludeId] = useState(null);
   const serviceColorMap = useMemo(() => ({}), []);
 
   useEffect(() => {
@@ -61,6 +65,29 @@ export default function EmployeeAppointmentCard({ appointments, onAction, curren
     }
   }, [anamneseModal.open, lastAnamnese]);
 
+  const handleConclude = async (appointmentId) => {
+    setConcludeId(appointmentId);
+    setShowSignatureModal(true);
+  };
+
+  const handleConfirmSignature = async () => {
+    if (!signature) {
+      alert('Por favor, obtenha a assinatura do cliente.');
+      return;
+    }
+    setLoadingId(concludeId);
+    try {
+      await Appointment.update(concludeId, { status: 'concluido', signature });
+      if (onAction) onAction();
+      setShowSignatureModal(false);
+      setSignature(null);
+      setConcludeId(null);
+    } catch (error) {
+      alert('Erro ao concluir o agendamento.');
+    }
+    setLoadingId(null);
+  };
+
   if (!appointments || appointments.length === 0) {
     return (
       <div className="p-4 bg-white rounded-xl shadow text-center text-gray-400 border border-blue-100">
@@ -68,18 +95,6 @@ export default function EmployeeAppointmentCard({ appointments, onAction, curren
       </div>
     );
   }
-
-  const handleConclude = async (appointmentId) => {
-    if (!window.confirm('Deseja marcar este agendamento como concluído?')) return;
-    setLoadingId(appointmentId);
-    try {
-      await Appointment.update(appointmentId, { status: 'concluido' });
-      if (onAction) onAction();
-    } catch (error) {
-      alert('Erro ao concluir o agendamento.');
-    }
-    setLoadingId(null);
-  };
 
   return (
     <>
@@ -187,6 +202,26 @@ export default function EmployeeAppointmentCard({ appointments, onAction, curren
                 </>
               )}
             </div>
+          </div>
+        </div>
+      )}
+      {showSignatureModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg p-6 max-w-lg w-full relative">
+            <button onClick={() => { setShowSignatureModal(false); setSignature(null); setConcludeId(null); }} className="absolute top-2 right-2 text-gray-400 hover:text-gray-700">X</button>
+            <h2 className="text-xl font-bold text-blue-900 mb-4">Assinatura do Cliente</h2>
+            <div className="border rounded bg-gray-50 flex flex-col items-center p-2 mb-4">
+              <SignatureCanvas
+                penColor="#175EA0"
+                canvasProps={{ width: 320, height: 100, className: 'rounded bg-white border' }}
+                ref={ref => window.signaturePad = ref}
+                onEnd={() => setSignature(window.signaturePad.getCanvas().toDataURL('image/png'))}
+              />
+              <div className="flex gap-2 mt-2">
+                <Button size="sm" variant="outline" onClick={() => { window.signaturePad.clear(); setSignature(null); }}>Limpar</Button>
+              </div>
+            </div>
+            <Button size="md" variant="primary" className="w-full" onClick={handleConfirmSignature} disabled={!signature}>Confirmar</Button>
           </div>
         </div>
       )}

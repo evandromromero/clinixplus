@@ -525,3 +525,52 @@ Essas melhorias garantem que o sistema ClinixPlus continue robusto, flexível e 
 ---
 
 Essas melhorias tornam o Portal do Funcionário mais eficiente, agradável e prático para o dia a dia da equipe clínica.
+
+---
+
+## Melhorias e Ajustes Recentes no Portal do Funcionário (Abril 2025)
+
+### Funcionalidades Implementadas
+
+- **Gerenciamento de Anamneses**
+  - Ao clicar em "Anamnese" em um agendamento, abre-se um modal de gerenciamento, permitindo:
+    - Visualizar a última anamnese cadastrada
+    - Editar a última anamnese cadastrada
+    - Criar uma nova anamnese (mesmo que já exista uma)
+  - Ao editar ou criar uma anamnese, o nome do funcionário responsável é salvo junto ao registro (`employeeName`).
+  - O fluxo garante que nenhuma anamnese é aberta diretamente: sempre aparece o modal de gerenciamento com as opções.
+
+- **Conclusão de Agendamento com Assinatura**
+  - Ao clicar em "Concluir" em um agendamento, abre-se uma modal para capturar a assinatura do cliente.
+  - O status do agendamento só é alterado para "concluído" após a assinatura ser capturada e salva junto ao registro do agendamento.
+  - O botão "Confirmar" da modal só fica habilitado após a assinatura ser preenchida.
+
+### Como foi feito
+
+1. **Componentização e Modais**
+   - As lógicas de visualização, edição e criação de anamnese foram centralizadas no componente `AnamneseActionCard`.
+   - O modal de gerenciamento de anamnese foi implementado no `EmployeeAppointmentCard`, com controle de estado para alternar entre visualizar, editar ou criar nova anamnese.
+   - O nome do funcionário logado é propagado via props e salvo no registro da anamnese.
+
+2. **Assinatura ao Concluir Agendamento**
+   - O botão "Concluir" agora abre uma modal com `SignatureCanvas` para capturar a assinatura do cliente.
+   - A assinatura é salva no campo `signature` do agendamento ao marcar como concluído.
+   - O status só é atualizado após a assinatura ser confirmada.
+
+3. **Padrão para Atualizações Futuras**
+   - Sempre utilizar modais para ações críticas ou que envolvam confirmação/assinatura.
+   - Centralizar lógicas de CRUD em componentes reutilizáveis (como `AnamneseActionCard`).
+   - Manter o padrão de passar informações do funcionário logado via props para rastreabilidade.
+   - Documentar cada melhoria relevante neste README para facilitar manutenção e onboarding.
+
+### Principais Arquivos Alterados
+- `src/components/employee-portal/EmployeeAppointmentCard.jsx`
+- `src/components/employee-portal/AnamneseActionCard.jsx`
+- `src/pages/EmployeePortal.jsx`
+
+### Recomendações para Manutenção
+- Sempre testar os fluxos de anamnese e conclusão de agendamento após alterações.
+- Manter a experiência do usuário clara, exibindo opções de ação em modais antes de qualquer edição direta.
+- Para novas funcionalidades, seguir o padrão de componentização e documentação já adotado.
+
+---
