@@ -1984,119 +1984,7 @@ export default function ClientDetails() {
         </TabsContent>
 
         <TabsContent value="anamnese" className="space-y-6">
-          {/* Aba de Anamnese */}
-          <div className="space-y-4">
-            <div className="flex justify-between items-center">
-              <h2 className="text-2xl font-bold text-[#3475B8]">Anamnese</h2>
-              <Button
-                onClick={handleSaveAnamnese}
-                className="bg-[#3475B8] hover:bg-[#2C64A0]"
-              >
-                <Check className="w-4 h-4 mr-2" />
-                Salvar Alterações
-              </Button>
-            </div>
-
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Selecione o Modelo</Label>
-                <Select
-                  value={selectedAnamneseTemplate?.id || ''}
-                  onValueChange={handleAnamneseTemplateChange}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Escolha um modelo de anamnese" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {anamneseTemplates.map((template) => (
-                      <SelectItem key={template.id} value={template.id}>
-                        {template.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {selectedAnamneseTemplate ? (
-                <Card>
-                  <CardContent className="space-y-4 pt-6">
-                    {selectedAnamneseTemplate.fields?.map((field) => (
-                      <div key={field.id} className="space-y-2">
-                        <Label>{field.label}</Label>
-                        {field.type === 'boolean' ? (
-                          <div className="flex items-center gap-4">
-                            <Select
-                              value={anamneseData[field.id] && anamneseData[field.id].value !== undefined ? anamneseData[field.id].value : ''}
-                              onValueChange={value => {
-                                setAnamneseData(prev => ({
-                                  ...prev,
-                                  [field.id]: { value, optional: value === 'Sim' ? (anamneseData[field.id]?.optional || '') : '' }
-                                }));
-                              }}
-                            >
-                              <SelectTrigger className="w-32">
-                                <SelectValue placeholder="Selecione" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="Sim">Sim</SelectItem>
-                                <SelectItem value="Não">Não</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            {field.optionalText && (anamneseData[field.id]?.value === 'Sim') && (
-                              <Input
-                                className="flex-1"
-                                type="text"
-                                placeholder={field.optionalText}
-                                value={anamneseData[field.id]?.optional || ''}
-                                onChange={e => {
-                                  setAnamneseData(prev => ({
-                                    ...prev,
-                                    [field.id]: {
-                                      ...prev[field.id],
-                                      optional: e.target.value
-                                    }
-                                  }));
-                                }}
-                              />
-                            )}
-                          </div>
-                        ) : field.type === 'select' ? (
-                          <Select
-                            value={anamneseData[field.id] || ''}
-                            onValueChange={value => setAnamneseData(prev => ({ ...prev, [field.id]: value }))}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecione" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {field.options?.map((option, idx) => (
-                                <SelectItem key={idx} value={option}>{option}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          <Input
-                            type="text"
-                            value={anamneseData[field.id] || ''}
-                            onChange={e => setAnamneseData(prev => ({ ...prev, [field.id]: e.target.value }))}
-                          />
-                        )}
-                      </div>
-                    ))}
-                    {renderSignaturePad()}
-                  </CardContent>
-                </Card>
-              ) : (
-                <Card>
-                  <CardContent className="py-8">
-                    <div className="text-center text-gray-500">
-                      Selecione um modelo de anamnese para começar
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-          </div>
+          <AnamneseListCard clientId={client.id} clientName={client.name} />
         </TabsContent>
 
         <TabsContent value="contrato" className="space-y-6">
@@ -2310,6 +2198,7 @@ export default function ClientDetails() {
                         className="text-red-600 hover:text-red-700 transition-colors"
                       >
                         <Trash2 className="w-4 h-4" />
+                        Excluir
                       </button>
                     </div>
                   </div>
@@ -2370,9 +2259,6 @@ export default function ClientDetails() {
               </div>
             )}
           </div>
-        </TabsContent>
-        <TabsContent value="anamnese" className="space-y-6">
-          <AnamneseListCard clientId={client.id} clientName={client.name} />
         </TabsContent>
       </Tabs>
       

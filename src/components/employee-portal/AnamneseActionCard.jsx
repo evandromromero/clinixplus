@@ -10,21 +10,24 @@ export default function AnamneseActionCard({ clientId, clientName, mode = 'card'
   const [loading, setLoading] = useState(false);
   const [anamnese, setAnamnese] = useState(anamneseProp);
   const [templates, setTemplates] = useState([]);
-  const [showForm, setShowForm] = useState(false);
+  const [showForm, setShowForm] = useState(mode === 'edit' || mode === 'create');
   const [selectedTemplate, setSelectedTemplate] = useState(null);
-  const [formData, setFormData] = useState({});
-  const [showViewModal, setShowViewModal] = useState(false);
+  const [formData, setFormData] = useState(anamneseProp?.data || {});
+  const [showViewModal, setShowViewModal] = useState(mode === 'view');
   const [anamneseTemplate, setAnamneseTemplate] = useState(null);
-  const [signature, setSignature] = useState(null);
+  const [signature, setSignature] = useState(anamneseProp?.signature || null);
   const [signatureError, setSignatureError] = useState('');
   const sigCanvasRef = useRef();
 
   useEffect(() => {
-    if (anamneseProp) setAnamnese(anamneseProp);
+    if (anamneseProp) {
+      setAnamnese(anamneseProp);
+      setFormData(anamneseProp.data || {});
+      setSignature(anamneseProp.signature || null);
+    }
   }, [anamneseProp]);
 
   useEffect(() => {
-    if (!anamneseProp) loadAnamnese();
     loadTemplates();
     // eslint-disable-next-line
   }, [clientId]);
@@ -33,6 +36,7 @@ export default function AnamneseActionCard({ clientId, clientName, mode = 'card'
     if (anamnese && anamnese.template_id && templates.length > 0) {
       const tpl = templates.find(t => t.id === anamnese.template_id);
       setAnamneseTemplate(tpl);
+      setSelectedTemplate(tpl);
     }
   }, [anamnese, templates]);
 
@@ -47,26 +51,6 @@ export default function AnamneseActionCard({ clientId, clientName, mode = 'card'
       sigCanvasRef.current.clear();
     }
   }, [signature]);
-
-  useEffect(() => {
-    if (anamnese && anamnese.signature) {
-      setSignature(anamnese.signature);
-    } else {
-      setSignature(null);
-    }
-  }, [anamnese]);
-
-  const loadAnamnese = async () => {
-    try {
-      setLoading(true);
-      const data = await Client.getAnamnese(clientId);
-      setAnamnese(data);
-    } catch (error) {
-      toast.error('Erro ao buscar anamnese.');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const loadTemplates = async () => {
     try {
@@ -88,15 +72,25 @@ export default function AnamneseActionCard({ clientId, clientName, mode = 'card'
     }
     try {
       setLoading(true);
-      await Client.saveAnamnese(clientId, {
-        template_id: selectedTemplate.id,
-        data: formData,
-        signature: signature,
-      });
-      toast.success('Anamnese cadastrada com sucesso!');
+      if (anamnese && anamnese.id) {
+        await Client.saveAnamneseById(clientId, anamnese.id, {
+          template_id: selectedTemplate.id,
+          data: formData,
+          signature: signature,
+        });
+      } else {
+        // Novo cadastro: gerar id automático
+        const newId = String(Date.now());
+        await Client.saveAnamneseById(clientId, newId, {
+          template_id: selectedTemplate.id,
+          data: formData,
+          signature: signature,
+          created_at: new Date().toISOString(),
+        });
+      }
+      toast.success('Anamnese salva com sucesso!');
       setShowForm(false);
       setSignature(null);
-      loadAnamnese();
       if (onClose) onClose();
     } catch (error) {
       toast.error('Erro ao salvar anamnese.');

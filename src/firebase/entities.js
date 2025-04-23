@@ -175,6 +175,20 @@ export const Client = {
     }
   },
 
+  getAnamneseById: async function(clientId, anamneseId) {
+    try {
+      const anamneseRef = doc(db, 'clients', clientId, 'anamnese', anamneseId);
+      const docSnap = await getDoc(anamneseRef);
+      if (docSnap.exists()) {
+        return { id: docSnap.id, ...docSnap.data() };
+      }
+      return null;
+    } catch (error) {
+      console.error('Erro ao buscar anamnese:', error);
+      throw error;
+    }
+  },
+
   saveAnamnese: async function(clientId, data) {
     try {
       const anamneseRef = doc(db, 'clients', clientId, 'anamnese', 'current');
@@ -186,6 +200,20 @@ export const Client = {
       return { success: true };
     } catch (error) {
       console.error('Error saving anamnese:', error);
+      throw error;
+    }
+  },
+
+  saveAnamneseById: async function(clientId, anamneseId, data) {
+    try {
+      const anamneseRef = doc(db, 'clients', clientId, 'anamnese', anamneseId);
+      await setDoc(anamneseRef, {
+        ...data,
+        updated_at: new Date().toISOString()
+      }, { merge: true });
+      return { success: true };
+    } catch (error) {
+      console.error('Erro ao salvar anamnese:', error);
       throw error;
     }
   },
@@ -342,6 +370,19 @@ export const Client = {
         console.warn(`Firestore index missing or not ready for query: ${error.message}. Check the Firestore console for index creation links OR wait for index creation.`);
       }
       return []; // Retorna vazio em caso de erro
+    }
+  },
+  async listAnamneses(clientId) {
+    try {
+      const collectionRef = collection(db, 'clients', clientId, 'anamnese');
+      const snapshot = await getDocs(collectionRef);
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('Erro ao listar anamneses:', error);
+      return [];
     }
   }
 };
