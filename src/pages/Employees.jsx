@@ -146,7 +146,8 @@ export default function Employees() {
     block_start_date: "",
     block_end_date: "",
     block_reason: "",
-    can_manage_cash: false
+    can_manage_cash: false,
+    password: ""
   });
 
   useEffect(() => {
@@ -247,7 +248,8 @@ export default function Employees() {
       block_start_date: employee.block_start_date || "",
       block_end_date: employee.block_end_date || "",
       block_reason: employee.block_reason || "",
-      can_manage_cash: employee.can_manage_cash || false
+      can_manage_cash: employee.can_manage_cash || false,
+      password: employee.password || ""
     });
     setIsEditing(true);
     setShowNewEmployeeDialog(true);
@@ -337,7 +339,8 @@ export default function Employees() {
       block_start_date: "",
       block_end_date: "",
       block_reason: "",
-      can_manage_cash: false
+      can_manage_cash: false,
+      password: ""
     });
     setSelectedEmployee(null);
     setIsEditing(false);
@@ -1318,6 +1321,22 @@ export default function Employees() {
             </TabsContent>
           </Tabs>
 
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="password" className="mb-1">Senha de acesso ao portal</Label>
+              <Input
+                id="password"
+                type="password"
+                value={newEmployee.password || ""}
+                onChange={e => setNewEmployee({ ...newEmployee, password: e.target.value })}
+                placeholder="Defina uma senha para o funcionário"
+                autoComplete="new-password"
+                className="mb-2"
+              />
+              <span className="text-xs text-gray-500">A senha será utilizada para login no Portal do Funcionário.</span>
+            </div>
+          </div>
+
           <DialogFooter className="mt-6 flex justify-end gap-2">
             <Button 
               variant="outline" 
@@ -1331,7 +1350,7 @@ export default function Employees() {
             <Button 
               onClick={handleCreateEmployee}
               className="bg-purple-600 hover:bg-purple-700"
-              disabled={!newEmployee.name || !newEmployee.roleId}
+              disabled={!newEmployee.name || !newEmployee.roleId || !newEmployee.password}
             >
               {isEditing ? "Atualizar" : "Salvar"} Funcionário
             </Button>

@@ -37,6 +37,7 @@ import AnamneseTemplates from './pages/AnamneseTemplates';
 import Users from './pages/Users';
 import Login from './pages/Login';
 import AdminRepair from './pages/AdminRepair';
+import EmployeePortal from './pages/EmployeePortal';
 
 export default function AppRoutes() {
   return (
@@ -45,6 +46,7 @@ export default function AppRoutes() {
       <Route path="/" element={<Public />} />
       <Route path="/login" element={<Login />} />
       <Route path="/client-portal" element={<ClientPortal />} />
+      <Route path="/employee-portal" element={<EmployeePortal />} />
       
       {/* Rotas administrativas com layout comum - protegidas por autenticação */}
       <Route element={
