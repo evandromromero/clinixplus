@@ -1,6 +1,5 @@
 // Utilitários para manipulação de datas no sistema
 import { format, parse, isValid } from 'date-fns';
-import { formatInTimeZone } from 'date-fns-tz';
 import { ptBR } from 'date-fns/locale';
 
 /**
