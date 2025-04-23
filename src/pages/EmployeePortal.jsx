@@ -94,7 +94,7 @@ export default function EmployeePortal() {
           <main className="w-full max-w-6xl mx-auto px-2 sm:px-6 lg:px-8 space-y-6 flex flex-col items-center">
             <h2 className="text-2xl font-bold text-blue-900 mb-4">Agendamentos de Hoje</h2>
             <div className="w-full">
-              <EmployeeAppointmentCard appointments={appointments} onAction={() => loadAppointments(currentEmployee.id)} />
+              <EmployeeAppointmentCard appointments={appointments} onAction={() => loadAppointments(currentEmployee.id)} currentEmployee={currentEmployee} />
             </div>
           </main>
         </>

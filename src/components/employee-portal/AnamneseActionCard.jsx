@@ -6,7 +6,7 @@ import { ClipboardList, Plus, Eye, X, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import SignatureCanvas from 'react-signature-canvas';
 
-export default function AnamneseActionCard({ clientId, clientName, mode = 'card', anamnese: anamneseProp = null, onClose }) {
+export default function AnamneseActionCard({ clientId, clientName, mode = 'card', anamnese: anamneseProp = null, onClose, employeeName }) {
   const [loading, setLoading] = useState(false);
   const [anamnese, setAnamnese] = useState(anamneseProp);
   const [templates, setTemplates] = useState([]);
@@ -72,19 +72,22 @@ export default function AnamneseActionCard({ clientId, clientName, mode = 'card'
     }
     try {
       setLoading(true);
+      const saveData = {
+        template_id: selectedTemplate.id,
+        data: formData,
+        signature: signature,
+      };
+      // Se employeeName for passado, salva o nome do funcionário que editou/criou
+      if (employeeName) {
+        saveData.employeeName = employeeName;
+      }
       if (anamnese && anamnese.id) {
-        await Client.saveAnamneseById(clientId, anamnese.id, {
-          template_id: selectedTemplate.id,
-          data: formData,
-          signature: signature,
-        });
+        await Client.saveAnamneseById(clientId, anamnese.id, saveData);
       } else {
         // Novo cadastro: gerar id automático
         const newId = String(Date.now());
         await Client.saveAnamneseById(clientId, newId, {
-          template_id: selectedTemplate.id,
-          data: formData,
-          signature: signature,
+          ...saveData,
           created_at: new Date().toISOString(),
         });
       }
@@ -254,7 +257,7 @@ export default function AnamneseActionCard({ clientId, clientName, mode = 'card'
               renderSignaturePad()
             )}
             <div className="flex gap-2 justify-end">
-              <Button variant="outline" onClick={() => setShowForm(false)}>Cancelar</Button>
+              <Button variant="outline" onClick={() => { setShowForm(false); if (onClose) onClose(); }}>Cancelar</Button>
               <Button onClick={handleSave} className="bg-green-700 text-white">Salvar Alterações</Button>
             </div>
           </div>
@@ -297,10 +300,7 @@ export default function AnamneseActionCard({ clientId, clientName, mode = 'card'
               renderSignaturePad()
             )}
             <div className="flex gap-2 justify-end">
-              <Button variant="outline" onClick={() => {
-                setShowForm(false);
-                if (onClose) onClose();
-              }}>Cancelar</Button>
+              <Button variant="outline" onClick={() => { setShowForm(false); if (onClose) onClose(); }}>Cancelar</Button>
               <Button onClick={handleSave} className="bg-green-700 text-white">Salvar</Button>
             </div>
           </div>
@@ -375,10 +375,7 @@ export default function AnamneseActionCard({ clientId, clientName, mode = 'card'
                 renderSignaturePad()
               )}
               <div className="flex gap-2 justify-end">
-                <Button variant="outline" onClick={() => {
-                  setShowForm(false);
-                  if (onClose) onClose();
-                }}>Cancelar</Button>
+                <Button variant="outline" onClick={() => { setShowForm(false); if (onClose) onClose(); }}>Cancelar</Button>
                 <Button onClick={handleSave} className="bg-green-700 text-white">Salvar</Button>
               </div>
             </div>
@@ -422,7 +419,7 @@ export default function AnamneseActionCard({ clientId, clientName, mode = 'card'
                 renderSignaturePad()
               )}
               <div className="flex gap-2 justify-end">
-                <Button variant="outline" onClick={() => setShowForm(false)}>Cancelar</Button>
+                <Button variant="outline" onClick={() => { setShowForm(false); if (onClose) onClose(); }}>Cancelar</Button>
                 <Button onClick={handleSave} className="bg-green-700 text-white">Salvar Alterações</Button>
               </div>
             </div>
@@ -502,7 +499,7 @@ export default function AnamneseActionCard({ clientId, clientName, mode = 'card'
             renderSignaturePad()
           )}
           <div className="flex gap-2 justify-end">
-            <Button variant="outline" onClick={() => setShowForm(false)}>Cancelar</Button>
+            <Button variant="outline" onClick={() => { setShowForm(false); if (onClose) onClose(); }}>Cancelar</Button>
             <Button onClick={handleSave} className="bg-green-700 text-white">Salvar</Button>
           </div>
         </CardContent>

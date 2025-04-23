@@ -1,8 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Check, User, Clock, CalendarCheck2 } from 'lucide-react';
 import { Appointment } from '@/firebase/entities';
 import AnamneseActionCard from './AnamneseActionCard';
+import { Client } from '@/firebase/entities';
 
 // Paleta de cores pastel
 const CARD_COLORS = [
@@ -25,10 +26,40 @@ function getServiceColor(serviceName, serviceColorMap, colorList) {
   return serviceColorMap[serviceName];
 }
 
-export default function EmployeeAppointmentCard({ appointments, onAction }) {
+export default function EmployeeAppointmentCard({ appointments, onAction, currentEmployee }) {
   const [loadingId, setLoadingId] = useState(null);
   const [anamneseModal, setAnamneseModal] = useState({ open: false, clientId: null, clientName: null });
+  const [lastAnamnese, setLastAnamnese] = useState(null);
+  const [showEdit, setShowEdit] = useState(false);
   const serviceColorMap = useMemo(() => ({}), []);
+
+  useEffect(() => {
+    const fetchLastAnamnese = async () => {
+      if (anamneseModal.open && anamneseModal.clientId) {
+        try {
+          const anamneses = await Client.listAnamneses(anamneseModal.clientId);
+          if (anamneses && anamneses.length > 0) {
+            // Ordena por data de criação (created_at) decrescente e pega a última
+            const sorted = anamneses.filter(a => a.created_at).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+            setLastAnamnese(sorted[0]);
+          } else {
+            setLastAnamnese(null);
+          }
+        } catch (e) {
+          setLastAnamnese(null);
+        }
+      } else {
+        setLastAnamnese(null);
+      }
+    };
+    fetchLastAnamnese();
+  }, [anamneseModal]);
+
+  useEffect(() => {
+    if (anamneseModal.open && lastAnamnese) {
+      setShowEdit(false);
+    }
+  }, [anamneseModal.open, lastAnamnese]);
 
   if (!appointments || appointments.length === 0) {
     return (
@@ -104,13 +135,58 @@ export default function EmployeeAppointmentCard({ appointments, onAction }) {
       {anamneseModal.open && (
         <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-lg p-4 max-w-xl w-full relative max-h-[90vh] overflow-y-auto">
-            <Button size="sm" variant="ghost" className="absolute top-2 right-2" onClick={() => setAnamneseModal({ open: false, clientId: null, clientName: null })}>Fechar</Button>
-            <AnamneseActionCard
-              clientId={anamneseModal.clientId}
-              clientName={anamneseModal.clientName}
-              mode="modal"
-              onClose={() => setAnamneseModal({ open: false, clientId: null, clientName: null })}
-            />
+            <Button size="sm" variant="ghost" className="absolute top-2 right-2" onClick={() => { setAnamneseModal({ open: false, clientId: null, clientName: null }); setShowEdit(false); }}>Fechar</Button>
+            {/* Modal de opções para anamnese existente ou não */}
+            <div>
+              <h2 className="text-xl font-bold text-blue-900 mb-4">Gerenciar Anamnese</h2>
+              {lastAnamnese ? (
+                <>
+                  <div className="flex gap-2 justify-end mb-4">
+                    <Button size="sm" variant="outline" onClick={() => setShowEdit(false)} disabled={!showEdit}>Visualizar</Button>
+                    <Button size="sm" variant="outline" onClick={() => setShowEdit(true)} disabled={showEdit}>Editar</Button>
+                    <Button size="sm" variant="outline" onClick={() => setShowEdit(false)}>Nova Anamnese</Button>
+                  </div>
+                  {/* Visualização ou edição da última anamnese */}
+                  {!showEdit ? (
+                    <AnamneseActionCard
+                      clientId={anamneseModal.clientId}
+                      clientName={anamneseModal.clientName}
+                      mode="view"
+                      anamneseMode="employee"
+                      anamnese={lastAnamnese}
+                      onClose={() => { setAnamneseModal({ open: false, clientId: null, clientName: null }); setShowEdit(false); }}
+                    />
+                  ) : (
+                    <AnamneseActionCard
+                      clientId={anamneseModal.clientId}
+                      clientName={anamneseModal.clientName}
+                      mode="edit"
+                      anamneseMode="employee"
+                      anamnese={lastAnamnese}
+                      employeeName={currentEmployee?.name || ''}
+                      onClose={() => { setShowEdit(false); setAnamneseModal({ open: false, clientId: null, clientName: null }); }}
+                    />
+                  )}
+                </>
+              ) : (
+                <>
+                  <div className="flex gap-2 justify-end mb-4">
+                    <Button size="sm" variant="outline" onClick={() => setShowEdit(false)} disabled>Visualizar</Button>
+                    <Button size="sm" variant="outline" onClick={() => setShowEdit(true)}>Editar</Button>
+                    <Button size="sm" variant="outline" onClick={() => setShowEdit(false)}>Nova Anamnese</Button>
+                  </div>
+                  <AnamneseActionCard
+                    clientId={anamneseModal.clientId}
+                    clientName={anamneseModal.clientName}
+                    mode="create"
+                    anamneseMode="employee"
+                    anamnese={null}
+                    employeeName={currentEmployee?.name || ''}
+                    onClose={() => setAnamneseModal({ open: false, clientId: null, clientName: null })}
+                  />
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}
