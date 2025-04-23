@@ -91,9 +91,11 @@ export default function EmployeePortal() {
       {isLoggedIn && currentEmployee ? (
         <>
           <EmployeeHeader employee={currentEmployee} onLogout={handleLogout} />
-          <main className="max-w-3xl mx-auto px-4 space-y-6">
+          <main className="w-full max-w-6xl mx-auto px-2 sm:px-6 lg:px-8 space-y-6 flex flex-col items-center">
             <h2 className="text-2xl font-bold text-blue-900 mb-4">Agendamentos de Hoje</h2>
-            <EmployeeAppointmentCard appointments={appointments} />
+            <div className="w-full">
+              <EmployeeAppointmentCard appointments={appointments} onAction={() => loadAppointments(currentEmployee.id)} />
+            </div>
           </main>
         </>
       ) : (
