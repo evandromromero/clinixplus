@@ -6,9 +6,9 @@ import { ClipboardList, Plus, Eye, X, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import SignatureCanvas from 'react-signature-canvas';
 
-export default function AnamneseActionCard({ clientId, clientName, mode = 'card', onClose }) {
+export default function AnamneseActionCard({ clientId, clientName, mode = 'card', anamnese: anamneseProp = null, onClose }) {
   const [loading, setLoading] = useState(false);
-  const [anamnese, setAnamnese] = useState(null);
+  const [anamnese, setAnamnese] = useState(anamneseProp);
   const [templates, setTemplates] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
@@ -20,7 +20,11 @@ export default function AnamneseActionCard({ clientId, clientName, mode = 'card'
   const sigCanvasRef = useRef();
 
   useEffect(() => {
-    loadAnamnese();
+    if (anamneseProp) setAnamnese(anamneseProp);
+  }, [anamneseProp]);
+
+  useEffect(() => {
+    if (!anamneseProp) loadAnamnese();
     loadTemplates();
     // eslint-disable-next-line
   }, [clientId]);
@@ -31,6 +35,26 @@ export default function AnamneseActionCard({ clientId, clientName, mode = 'card'
       setAnamneseTemplate(tpl);
     }
   }, [anamnese, templates]);
+
+  useEffect(() => {
+    if (sigCanvasRef.current && signature) {
+      try {
+        sigCanvasRef.current.fromDataURL(signature);
+      } catch (e) {
+        sigCanvasRef.current.clear();
+      }
+    } else if (sigCanvasRef.current) {
+      sigCanvasRef.current.clear();
+    }
+  }, [signature]);
+
+  useEffect(() => {
+    if (anamnese && anamnese.signature) {
+      setSignature(anamnese.signature);
+    } else {
+      setSignature(null);
+    }
+  }, [anamnese]);
 
   const loadAnamnese = async () => {
     try {
@@ -198,6 +222,99 @@ export default function AnamneseActionCard({ clientId, clientName, mode = 'card'
     </div>
   );
 
+  if (mode === 'view' && anamnese) {
+    return renderViewModal();
+  }
+  if (mode === 'edit' && anamnese) {
+    return (
+      <div className="w-full flex justify-center">
+        <div className="w-full max-w-lg bg-white rounded-lg p-4 shadow space-y-4 max-h-[75vh] overflow-y-auto">
+          <h2 className="text-lg font-bold text-green-900 mb-4 flex items-center gap-2">
+            <Plus className="w-5 h-5 text-green-700" /> Editar Anamnese
+          </h2>
+          <div className="space-y-4">
+            <div>
+              <label className="font-medium text-gray-700">Modelo</label>
+              <select
+                className="border rounded px-2 py-1 w-full"
+                value={selectedTemplate?.id || ''}
+                onChange={e => {
+                  const tpl = templates.find(t => t.id === e.target.value);
+                  setSelectedTemplate(tpl);
+                }}
+                disabled
+              >
+                <option value="">Selecione um modelo</option>
+                {templates.map(tpl => (
+                  <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
+                ))}
+              </select>
+            </div>
+            {renderFormFields()}
+            {(anamnese && anamnese.signature && !showForm) ? (
+              <div className="mt-4">
+                <span className="font-semibold text-gray-700 block mb-1">Assinatura do Cliente:</span>
+                <img src={anamnese.signature} alt="Assinatura do cliente" className="border rounded shadow h-24 bg-gray-50" />
+              </div>
+            ) : (
+              renderSignaturePad()
+            )}
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setShowForm(false)}>Cancelar</Button>
+              <Button onClick={handleSave} className="bg-green-700 text-white">Salvar Alterações</Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  if (mode === 'create') {
+    return (
+      <div className="w-full flex justify-center">
+        <div className="w-full max-w-lg bg-white rounded-lg p-4 shadow space-y-4 max-h-[75vh] overflow-y-auto">
+          <h2 className="text-lg font-bold text-green-900 mb-4 flex items-center gap-2">
+            <Plus className="w-5 h-5 text-green-700" /> Cadastrar Anamnese
+          </h2>
+          <div className="space-y-4">
+            <div>
+              <label className="font-medium text-gray-700">Modelo</label>
+              <select
+                className="border rounded px-2 py-1 w-full"
+                value={selectedTemplate?.id || ''}
+                onChange={e => {
+                  const tpl = templates.find(t => t.id === e.target.value);
+                  setSelectedTemplate(tpl);
+                  setFormData({});
+                }}
+              >
+                <option value="">Selecione um modelo</option>
+                {templates.map(tpl => (
+                  <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
+                ))}
+              </select>
+            </div>
+            {renderFormFields()}
+            {(anamnese && anamnese.signature && !showForm) ? (
+              <div className="mt-4">
+                <span className="font-semibold text-gray-700 block mb-1">Assinatura do Cliente:</span>
+                <img src={anamnese.signature} alt="Assinatura do cliente" className="border rounded shadow h-24 bg-gray-50" />
+              </div>
+            ) : (
+              renderSignaturePad()
+            )}
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => {
+                setShowForm(false);
+                if (onClose) onClose();
+              }}>Cancelar</Button>
+              <Button onClick={handleSave} className="bg-green-700 text-white">Salvar</Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
     return <div className="text-blue-700">Carregando...</div>;
   }
@@ -255,7 +372,14 @@ export default function AnamneseActionCard({ clientId, clientName, mode = 'card'
                 </select>
               </div>
               {renderFormFields()}
-              {renderSignaturePad()}
+              {(anamnese && anamnese.signature && !showForm) ? (
+                <div className="mt-4">
+                  <span className="font-semibold text-gray-700 block mb-1">Assinatura do Cliente:</span>
+                  <img src={anamnese.signature} alt="Assinatura do cliente" className="border rounded shadow h-24 bg-gray-50" />
+                </div>
+              ) : (
+                renderSignaturePad()
+              )}
               <div className="flex gap-2 justify-end">
                 <Button variant="outline" onClick={() => {
                   setShowForm(false);
@@ -295,7 +419,14 @@ export default function AnamneseActionCard({ clientId, clientName, mode = 'card'
                 </select>
               </div>
               {renderFormFields()}
-              {renderSignaturePad()}
+              {(anamnese && anamnese.signature && !showForm) ? (
+                <div className="mt-4">
+                  <span className="font-semibold text-gray-700 block mb-1">Assinatura do Cliente:</span>
+                  <img src={anamnese.signature} alt="Assinatura do cliente" className="border rounded shadow h-24 bg-gray-50" />
+                </div>
+              ) : (
+                renderSignaturePad()
+              )}
               <div className="flex gap-2 justify-end">
                 <Button variant="outline" onClick={() => setShowForm(false)}>Cancelar</Button>
                 <Button onClick={handleSave} className="bg-green-700 text-white">Salvar Alterações</Button>
@@ -368,7 +499,14 @@ export default function AnamneseActionCard({ clientId, clientName, mode = 'card'
             </select>
           </div>
           {renderFormFields()}
-          {renderSignaturePad()}
+          {(anamnese && anamnese.signature && !showForm) ? (
+            <div className="mt-4">
+              <span className="font-semibold text-gray-700 block mb-1">Assinatura do Cliente:</span>
+              <img src={anamnese.signature} alt="Assinatura do cliente" className="border rounded shadow h-24 bg-gray-50" />
+            </div>
+          ) : (
+            renderSignaturePad()
+          )}
           <div className="flex gap-2 justify-end">
             <Button variant="outline" onClick={() => setShowForm(false)}>Cancelar</Button>
             <Button onClick={handleSave} className="bg-green-700 text-white">Salvar</Button>

@@ -56,6 +56,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import SignatureCanvas from 'react-signature-canvas';
+import AnamneseListCard from '../components/employee-portal/AnamneseListCard';
 
 export default function ClientDetails() {
   const [client, setClient] = useState(null);
@@ -108,6 +110,8 @@ export default function ClientDetails() {
   const [selectedSubscription, setSelectedSubscription] = useState(null);
   const [showPaymentHistoryDialog, setShowPaymentHistoryDialog] = useState(false);
   const [expandedPackages, setExpandedPackages] = useState({});
+  const [signature, setSignature] = useState(null);
+  const sigCanvasRef = useRef();
   const urlParams = new URLSearchParams(window.location.search);
   const clientId = urlParams.get('id');
 
@@ -270,9 +274,20 @@ export default function ClientDetails() {
             setSelectedAnamneseTemplate(template);
           }
         }
+        // Restaurar assinatura salva, se existir
+        if (clientAnamnese.signature) {
+          setSignature(clientAnamnese.signature);
+          toast.success('Assinatura carregada: ' + clientAnamnese.signature.substring(0, 30) + '...');
+          console.log('Assinatura restaurada:', clientAnamnese.signature);
+        } else {
+          setSignature(null);
+          toast('Nenhuma assinatura encontrada na anamnese.');
+          console.log('Nenhuma assinatura encontrada na anamnese.');
+        }
       }
     } catch (error) {
       console.error('Error loading anamnese:', error);
+      toast.error('Erro ao carregar anamnese: ' + error.message);
     }
   };
 
@@ -546,6 +561,7 @@ export default function ClientDetails() {
         template_id: selectedAnamneseTemplate.id,
         template_name: selectedAnamneseTemplate.name,
         data: anamneseData,
+        signature: signature || null,
         created_at: new Date().toISOString()
       });
 
@@ -793,6 +809,32 @@ export default function ClientDetails() {
     };
     return methods[method] || method;
   };
+
+  const renderSignaturePad = () => (
+    <div className="mt-4">
+      <label className="font-medium text-gray-700 block mb-1">
+        Assinatura do Cliente <span className="text-gray-500 text-xs">(opcional)</span>
+      </label>
+      <div className="border rounded bg-gray-50 flex flex-col items-center p-2">
+        <SignatureCanvas
+          ref={sigCanvasRef}
+          penColor="#175EA0"
+          canvasProps={{ width: 320, height: 100, className: 'rounded bg-white border' }}
+          onEnd={() => {
+            setSignature(sigCanvasRef.current.getCanvas().toDataURL('image/png'));
+          }}
+        />
+        <div className="flex gap-2 mt-2">
+          <Button size="sm" variant="outline" onClick={() => {
+            sigCanvasRef.current.clear();
+            setSignature(null);
+          }}>
+            Limpar
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="space-y-6">
@@ -1155,7 +1197,7 @@ export default function ClientDetails() {
                       <div className="mt-4 flex justify-end">
                         <Link to={createPageUrl("Appointments", { client_id: clientId, pending_service_id: service.id })}>
                           <Button variant="outline" size="sm" className="bg-[#8BBAFF]/10 border-[#6EA3E7] text-[#175EA0] hover:bg-[#8BBAFF]/20">
-                            <CalendarPlus className="w-4 h-4 mr-2" />
+                            <CalendarPlus className="w-4 h-4" />
                             Agendar
                           </Button>
                         </Link>
@@ -2041,6 +2083,7 @@ export default function ClientDetails() {
                         )}
                       </div>
                     ))}
+                    {renderSignaturePad()}
                   </CardContent>
                 </Card>
               ) : (
@@ -2327,6 +2370,9 @@ export default function ClientDetails() {
               </div>
             )}
           </div>
+        </TabsContent>
+        <TabsContent value="anamnese" className="space-y-6">
+          <AnamneseListCard clientId={client.id} clientName={client.name} />
         </TabsContent>
       </Tabs>
       
