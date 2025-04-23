@@ -35,7 +35,8 @@ export default function AnamneseTemplates() {
   const [newField, setNewField] = useState({
     label: '',
     type: 'text',
-    options: ''
+    options: '',
+    optionalText: ''
   });
 
   useEffect(() => {
@@ -105,7 +106,8 @@ export default function AnamneseTemplates() {
     setNewField({
       label: '',
       type: 'text',
-      options: ''
+      options: '',
+      optionalText: ''
     });
   };
 
@@ -115,16 +117,19 @@ export default function AnamneseTemplates() {
       return;
     }
 
-    const field = {
-      id: newField.label.toLowerCase().replace(/\s+/g, '_'),
+    let field = {
+      id: newField.label.toLowerCase().replace(/\s+/g, '_') + '_' + Date.now(),
       label: newField.label,
       type: newField.type,
       value: ''
     };
 
-    // Se for do tipo select, adiciona as opções
     if (newField.type === 'select' && newField.options) {
       field.options = newField.options.split(',').map(opt => opt.trim());
+    }
+
+    if (newField.type === 'boolean' && newField.optionalText) {
+      field.optionalText = newField.optionalText;
     }
 
     setFormData({
@@ -135,7 +140,8 @@ export default function AnamneseTemplates() {
     setNewField({
       label: '',
       type: 'text',
-      options: ''
+      options: '',
+      optionalText: ''
     });
   };
 
@@ -295,7 +301,7 @@ export default function AnamneseTemplates() {
                         <SelectContent>
                           <SelectItem value="text">Texto</SelectItem>
                           <SelectItem value="select">Seleção</SelectItem>
-                          <SelectItem value="boolean">Sim/Não</SelectItem>
+                          <SelectItem value="boolean">Sim/Não (com resposta opcional)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -310,33 +316,21 @@ export default function AnamneseTemplates() {
                         />
                       </div>
                     )}
+                    {newField.type === 'boolean' && (
+                      <div className="space-y-2">
+                        <Label htmlFor="fieldOptionalText">Texto para resposta opcional (ex: Resp. Corrida Diária)</Label>
+                        <Input
+                          id="fieldOptionalText"
+                          value={newField.optionalText || ''}
+                          onChange={(e) => setNewField({ ...newField, optionalText: e.target.value })}
+                          placeholder="Ex: Resp. Corrida Diária"
+                        />
+                        <span className="text-xs text-gray-500">Se preenchido, ao marcar "Sim" aparecerá um campo para resposta opcional.</span>
+                      </div>
+                    )}
                     <Button
                       type="button"
-                      onClick={() => {
-                        if (!newField.label) {
-                          toast.error('Digite o nome do campo');
-                          return;
-                        }
-                        if (newField.type === 'select' && !newField.options) {
-                          toast.error('Digite as opções do campo');
-                          return;
-                        }
-                        const field = {
-                          id: Date.now().toString(),
-                          label: newField.label,
-                          type: newField.type,
-                          options: newField.type === 'select' ? newField.options.split(',').map(o => o.trim()) : []
-                        };
-                        setFormData({
-                          ...formData,
-                          fields: [...formData.fields, field]
-                        });
-                        setNewField({
-                          label: '',
-                          type: 'text',
-                          options: ''
-                        });
-                      }}
+                      onClick={addField}
                       className="w-full"
                     >
                       <Plus className="h-4 w-4 mr-2" />
