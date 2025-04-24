@@ -309,9 +309,6 @@ export default function SalesRegister() {
   const [isLoading, setIsLoading] = useState(true);
   const [retryCount, setRetryCount] = useState(0);
   
-  const [pendingSales, setPendingSales] = useState([]);
-  const [isLoadingPendingSales, setIsLoadingPendingSales] = useState(false);
-
   const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
   
   const fetchWithRetry = async (fn, maxRetries = 3, initialDelay = 1000) => {
@@ -995,7 +992,7 @@ export default function SalesRegister() {
           installments: parseInt(pm.installments) || 1
         })),
         installments: paymentMethods.reduce((total, pm) => total + (pm.installments > 1 ? parseInt(pm.installments) : 0), 0),
-        status: "pago",
+        status: "pago", // Garante que a venda já nasce como paga!
         date: normalizeDate(saleDate), // Usa a data formatada sem conversão de fuso horário
         notes: ""
       };
@@ -1031,7 +1028,7 @@ export default function SalesRegister() {
           description: `Venda #${createdSale.id} - ${saleType}`,
           amount: parseFloat(payment.amount) || 0,
           payment_method: payment.methodId,
-          status: isPaid ? "pago" : "pendente",
+          status: isPaid ? "pago" : "pendente", // Aqui é o ponto!
           due_date: paymentDate,
           payment_date: isPaid ? paymentDate : null,
           sale_id: createdSale.id,
@@ -1265,9 +1262,12 @@ export default function SalesRegister() {
         if (amount && clientPackageId) {
           const packageData = await ClientPackage.get(clientPackageId);
           if (packageData) {
-            // Busca o pacote original para ter os detalhes completos
-            const originalPackage = await Package.get(packageData.package_id);
-            
+            let originalPackage = null;
+            if (packageData.package_id) {
+              // Pacote padrão
+              originalPackage = await Package.get(packageData.package_id);
+            }
+            // Para pacotes personalizados, use apenas o snapshot
             const cartItem = {
               item_id: packageData.id,
               type: 'pacote',
@@ -1277,8 +1277,6 @@ export default function SalesRegister() {
               discount: 0
             };
             setCartItems([cartItem]);
-
-            // Atualiza o método de pagamento com o valor do pacote
             setPaymentMethods([{
               methodId: "",
               amount: parseFloat(amount),
@@ -1408,25 +1406,21 @@ export default function SalesRegister() {
     initializeData();
   }, []);
 
-  useEffect(() => {
-    const loadPendingSales = async () => {
-      setIsLoadingPendingSales(true);
-      try {
-        const result = await UnfinishedSale.filter({ status: 'pendente' });
-        setPendingSales(Array.isArray(result) ? result : []);
-      } catch (error) {
-        console.error('[SalesRegister] Erro ao carregar vendas pendentes:', error);
-        setPendingSales([]);
-      } finally {
-        setIsLoadingPendingSales(false);
-      }
-    };
-
-    loadPendingSales();
-  }, []);
+  // Função para finalizar uma venda pendente (atualiza status para 'finalizada')
+  const handleCompletePendingSale = async (sale) => {
+    try {
+      await UnfinishedSale.update(sale.id, { status: 'finalizada', date_completed: new Date().toISOString() });
+      toast({ title: 'Venda finalizada', description: 'A venda pendente foi finalizada com sucesso.', variant: 'success' });
+    } catch (error) {
+      toast({ title: 'Erro', description: 'Erro ao finalizar venda pendente.', variant: 'destructive' });
+    }
+  };
 
   const handleFinalizePendingSale = (sale) => {
-    navigate(createPageUrl('SalesRegister', { unfinished_sale_id: sale.id, client_id: sale.client_id, type: sale.type }));
+    // Primeiro atualiza o status para 'finalizada', depois redireciona para a tela de finalização
+    handleCompletePendingSale(sale).then(() => {
+      navigate(createPageUrl('SalesRegister', { unfinished_sale_id: sale.id, client_id: sale.client_id, type: sale.type }));
+    });
   };
 
   const handleCancelPendingSale = async (saleId) => {
@@ -1434,54 +1428,10 @@ export default function SalesRegister() {
     try {
       await UnfinishedSale.update(saleId, { status: 'cancelado' });
       toast({ title: 'Venda cancelada', description: 'A venda pendente foi cancelada com sucesso.', variant: 'success' });
-      loadPendingSales();
     } catch (error) {
       toast({ title: 'Erro', description: 'Erro ao cancelar venda pendente.', variant: 'destructive' });
     }
   };
-
-  const PendingSalesSection = () => (
-    <div className="bg-white rounded-lg shadow-sm p-4 mt-6">
-      <h3 className="font-bold text-lg mb-4 flex items-center">
-        <Clock className="w-5 h-5 mr-2 text-amber-500" /> Vendas Pendentes
-      </h3>
-      {isLoadingPendingSales ? (
-        <div className="flex items-center gap-2 text-gray-500"><Loader2 className="animate-spin w-5 h-5" /> Carregando...</div>
-      ) : pendingSales.length === 0 ? (
-        <div className="text-gray-500">Nenhuma venda pendente encontrada.</div>
-      ) : (
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Cliente</TableHead>
-                <TableHead>Data</TableHead>
-                <TableHead>Valor</TableHead>
-                <TableHead>Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {pendingSales.map((sale) => (
-                <TableRow key={sale.id}>
-                  <TableCell>{sale.client_name || '-'}</TableCell>
-                  <TableCell>{sale.updated_date ? format(new Date(sale.updated_date), 'dd/MM/yyyy', { locale: ptBR }) : '-'}</TableCell>
-                  <TableCell>{formatCurrency(sale.total_amount || 0)}</TableCell>
-                  <TableCell>
-                    <Button size="sm" className="mr-2 bg-green-600 hover:bg-green-700 text-white" onClick={() => handleFinalizePendingSale(sale)}>
-                      <Check className="w-4 h-4 mr-1" /> Finalizar Pagamento
-                    </Button>
-                    <Button size="sm" variant="destructive" onClick={() => handleCancelPendingSale(sale.id)}>
-                      <X className="w-4 h-4 mr-1" /> Cancelar
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
-    </div>
-  );
 
   // Renderização condicional para caixa fechado
   if (!cashIsOpen) {
@@ -1804,9 +1754,6 @@ export default function SalesRegister() {
                     </Table>
                   )}
                 </div>
-
-                <PendingSalesSection />
-
               </div>
             </CardContent>
             {renderPaymentMethodsSection()}

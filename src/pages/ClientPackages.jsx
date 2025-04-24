@@ -429,7 +429,7 @@ export default function ClientPackages() {
       // Cria o objeto do pacote que será salvo no Firestore para o cliente
       const newClientPackage = {
         client_id: sellForm.client_id,
-        package_id: packageSnapshot.id, // Use the snapshot ID
+        // NÃO incluir package_id em pacotes personalizados!
         purchase_date: format(purchaseDate, 'yyyy-MM-dd'),
         expiration_date: format(expirationDate, 'yyyy-MM-dd'),
         total_sessions: totalSessions,
@@ -455,7 +455,7 @@ export default function ClientPackages() {
         type: 'pacote',
         items: [
           {
-            item_id: packageSnapshot.id, // Link to the package
+            item_id: clientPackageRef.id, // Agora referencia o pacote do cliente criado
             name: packageSnapshot.name,
             quantity: 1,
             price: calculateCustomPackageTotal(), // Final price of the package
