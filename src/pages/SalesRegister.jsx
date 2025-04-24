@@ -309,6 +309,9 @@ export default function SalesRegister() {
   const [isLoading, setIsLoading] = useState(true);
   const [retryCount, setRetryCount] = useState(0);
   
+  const [pendingSales, setPendingSales] = useState([]);
+  const [isLoadingPendingSales, setIsLoadingPendingSales] = useState(false);
+
   const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
   
   const fetchWithRetry = async (fn, maxRetries = 3, initialDelay = 1000) => {
@@ -1405,6 +1408,81 @@ export default function SalesRegister() {
     initializeData();
   }, []);
 
+  useEffect(() => {
+    const loadPendingSales = async () => {
+      setIsLoadingPendingSales(true);
+      try {
+        const result = await UnfinishedSale.filter({ status: 'pendente' });
+        setPendingSales(Array.isArray(result) ? result : []);
+      } catch (error) {
+        console.error('[SalesRegister] Erro ao carregar vendas pendentes:', error);
+        setPendingSales([]);
+      } finally {
+        setIsLoadingPendingSales(false);
+      }
+    };
+
+    loadPendingSales();
+  }, []);
+
+  const handleFinalizePendingSale = (sale) => {
+    navigate(createPageUrl('SalesRegister', { unfinished_sale_id: sale.id, client_id: sale.client_id, type: sale.type }));
+  };
+
+  const handleCancelPendingSale = async (saleId) => {
+    if (!window.confirm('Tem certeza que deseja cancelar esta venda pendente?')) return;
+    try {
+      await UnfinishedSale.update(saleId, { status: 'cancelado' });
+      toast({ title: 'Venda cancelada', description: 'A venda pendente foi cancelada com sucesso.', variant: 'success' });
+      loadPendingSales();
+    } catch (error) {
+      toast({ title: 'Erro', description: 'Erro ao cancelar venda pendente.', variant: 'destructive' });
+    }
+  };
+
+  const PendingSalesSection = () => (
+    <div className="bg-white rounded-lg shadow-sm p-4 mt-6">
+      <h3 className="font-bold text-lg mb-4 flex items-center">
+        <Clock className="w-5 h-5 mr-2 text-amber-500" /> Vendas Pendentes
+      </h3>
+      {isLoadingPendingSales ? (
+        <div className="flex items-center gap-2 text-gray-500"><Loader2 className="animate-spin w-5 h-5" /> Carregando...</div>
+      ) : pendingSales.length === 0 ? (
+        <div className="text-gray-500">Nenhuma venda pendente encontrada.</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Cliente</TableHead>
+                <TableHead>Data</TableHead>
+                <TableHead>Valor</TableHead>
+                <TableHead>Ações</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {pendingSales.map((sale) => (
+                <TableRow key={sale.id}>
+                  <TableCell>{sale.client_name || '-'}</TableCell>
+                  <TableCell>{sale.updated_date ? format(new Date(sale.updated_date), 'dd/MM/yyyy', { locale: ptBR }) : '-'}</TableCell>
+                  <TableCell>{formatCurrency(sale.total_amount || 0)}</TableCell>
+                  <TableCell>
+                    <Button size="sm" className="mr-2 bg-green-600 hover:bg-green-700 text-white" onClick={() => handleFinalizePendingSale(sale)}>
+                      <Check className="w-4 h-4 mr-1" /> Finalizar Pagamento
+                    </Button>
+                    <Button size="sm" variant="destructive" onClick={() => handleCancelPendingSale(sale.id)}>
+                      <X className="w-4 h-4 mr-1" /> Cancelar
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+    </div>
+  );
+
   // Renderização condicional para caixa fechado
   if (!cashIsOpen) {
     return (
@@ -1629,8 +1707,13 @@ export default function SalesRegister() {
                                     : formatCurrency(item.price)}
                                 </div>
                               </div>
-                              <Button size="sm" variant="ghost">
-                                <Plus className="h-4 w-4" />
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-red-500"
+                                onClick={() => handleRemoveFromCart(index)}
+                              >
+                                <X className="h-4 w-4" />
                               </Button>
                             </div>
                           ))}
@@ -1641,7 +1724,7 @@ export default function SalesRegister() {
                 </Tabs>
 
                 <div className="mt-6">
-                  <h3 className="text-lg font-medium mb-3">Itens no Carrinho</h3>
+                  <h3 className="text-lg font-medium mb-4">Itens no Carrinho</h3>
                   {cartItems.length === 0 ? (
                     <div className="text-center py-8 bg-gray-50 rounded-lg border">
                       <ShoppingBag className="h-8 w-8 mx-auto text-gray-400" />
@@ -1721,6 +1804,9 @@ export default function SalesRegister() {
                     </Table>
                   )}
                 </div>
+
+                <PendingSalesSection />
+
               </div>
             </CardContent>
             {renderPaymentMethodsSection()}
@@ -1860,18 +1946,15 @@ export default function SalesRegister() {
                   <div className="pt-2 space-y-2">
                     <p className="font-medium">Formas de pagamento:</p>
                     <ul className="space-y-1">
-                      {paymentMethods.map((payment, index) => {
-                        const method = availablePaymentMethods.find(m => m.id === payment.methodId);
-                        return (
-                          <li key={index} className="flex justify-between text-sm">
-                            <span>
-                              {method ? method.name : 'Método não selecionado'}
-                              {payment.installments > 1 ? ` (${payment.installments}x)` : ''}
-                            </span>
-                            <span>{formatCurrency(payment.amount)}</span>
-                          </li>
-                        );
-                      })}
+                      {paymentMethods.map((payment, index) => (
+                        <li key={index} className="flex justify-between text-sm">
+                          <span>
+                            {payment.methodId ? availablePaymentMethods.find(m => m.id === payment.methodId)?.name : 'Método não selecionado'}
+                            {payment.installments > 1 ? ` (${payment.installments}x)` : ''}
+                          </span>
+                          <span>{formatCurrency(payment.amount)}</span>
+                        </li>
+                      ))}
                     </ul>
                   </div>
                 </div>
