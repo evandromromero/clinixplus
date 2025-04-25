@@ -237,24 +237,34 @@ export default function MultiAppointmentModal({
     agendamentoLinhas.length > 0 &&
     agendamentoLinhas.every(linha => linha.servico && linha.profissional && linha.data && linha.hora);
 
+  // Função para confirmar múltiplos agendamentos
   function handleConfirm() {
-    if (!podeConfirmar) return;
+    console.log('[DEBUG][MultiAppointmentModal] handleConfirm chamado');
+    console.log('[DEBUG][MultiAppointmentModal] Estado atual:', {
+      multiClientId,
+      multiSelectedPackageId,
+      tipoAgendamento,
+      agendamentoLinhas,
+      multiClientPackages
+    });
     let packageIdToSend = multiSelectedPackageId;
     if (tipoAgendamento === 'pacote' && !multiSelectedPackageId && multiClientPackages.length > 0) {
       packageIdToSend = multiClientPackages[0].id;
     }
-    // LOG: Exibir dados que serão enviados para salvar
-    console.log('[SALVAR] Dados enviados para onConfirm:', {
+    // Força o tipo correto em todas as linhas antes de enviar
+    const linhasCorrigidas = agendamentoLinhas.map(linha => ({
+      ...linha,
+      tipo: tipoAgendamento
+    }));
+    console.log('[DEBUG][MultiAppointmentModal] handleConfirm - Linhas corrigidas:', linhasCorrigidas);
+    const dadosParaSalvar = {
       client_id: multiClientId,
       package_id: tipoAgendamento === 'pacote' ? packageIdToSend : undefined,
-      agendamentos: agendamentoLinhas
-    });
+      agendamentos: linhasCorrigidas
+    };
+    console.log('[DEBUG][MultiAppointmentModal] handleConfirm - Dados enviados para onConfirm:', dadosParaSalvar);
     if (onConfirm) {
-      onConfirm({
-        client_id: multiClientId,
-        package_id: tipoAgendamento === 'pacote' ? packageIdToSend : undefined,
-        agendamentos: agendamentoLinhas // Envia todas as linhas preenchidas
-      });
+      onConfirm(dadosParaSalvar);
     }
     setMultiClientId("");
     setMultiSelectedPackageId("");

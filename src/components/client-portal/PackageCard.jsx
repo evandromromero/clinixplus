@@ -87,6 +87,14 @@ export default function PackageCard({ packages = [], services = [] }) {
                     <span>{Math.round((packageData.sessions_used / packageData.total_sessions) * 100)}%</span>
                   </div>
                   <Progress value={(packageData.sessions_used / packageData.total_sessions) * 100} className="h-2" />
+                  {/* DEBUG: Log session_history e sessões usadas */}
+                  {console && (
+                    <>
+                      {console.log('[DEBUG][BARRA][PackageCard] session_history:', packageData.session_history)}
+                      {packageData.session_history && packageData.session_history.forEach((s, i) => console.log(`[DEBUG][BARRA][PackageCard] session ${i}:`, s))}
+                      {console.log('[DEBUG][BARRA][PackageCard] sessions_used:', packageData.sessions_used, 'total_sessions:', packageData.total_sessions)}
+                    </>
+                  )}
                 </div>
 
                 {/* Botão para expandir/minimizar detalhes */}

@@ -268,7 +268,11 @@ export default function Appointments() {
         Service.list(),
         Package.list()
       ]);
-      
+      console.log("[Agenda] Agendamentos carregados:", appointmentsData);
+      // Removido: logs detalhados de cada agendamento
+      // appointmentsData.forEach(a => {
+      //   console.log(`[Agenda][DEBUG] Agendamento: id=${a.id}, date=${a.date}, status=${a.status}, client_id=${a.client_id}, employee_id=${a.employee_id}, service_id=${a.service_id}, package_id=${a.package_id}`);
+      // });
       console.log("[Agenda] Pacotes carregados:", packagesData);
 
       // Atualizar estados
@@ -853,7 +857,7 @@ export default function Appointments() {
       const allAppointments = await Appointment.filter({ client_id: appointment.client_id });
       const sortedAppointments = allAppointments.sort((a, b) => new Date(b.date) - new Date(a.date));
       
-      const clientPkgs = await ClientPackage.filter({ client_id: appointment.client_id });
+      const clientPkgs = await ClientPackage.filter({ client_id: appointment.client_id, status: 'ativo' });
       
       const payments = await FinancialTransaction.filter({ 
         client_id: appointment.client_id,
@@ -1215,35 +1219,28 @@ export default function Appointments() {
 
   const updatePackageSession = async (appointment, newStatus) => {
     try {
-      console.log("[DEBUG] Iniciando atualização de sessão do pacote para agendamento:", appointment.id);
-      console.log("[DEBUG] Serviço do agendamento:", appointment.service_id);
-      
+      console.log("[updatePackageSession][START] appointment:", appointment);
+      console.log("[updatePackageSession][START] newStatus:", newStatus);
       const clientPackages = await ClientPackage.filter({ 
         client_id: appointment.client_id,
         status: 'ativo'
       });
-      
-      console.log("[DEBUG] Pacotes do cliente encontrados:", clientPackages.length);
-      
+      console.log("[updatePackageSession] Pacotes ativos encontrados:", clientPackages);
       // Novo: buscar pacote relevante por id OU package_id OU serviços incluídos
       const relevantPackage = clientPackages.find(pkg => {
         // 1. Se não tem package_id (personalizado), verifica serviços e snapshot
         if (!pkg.package_id) {
-          // Verifica se o serviço está em services
           if (pkg.services && pkg.services.some(s => (typeof s === 'object' ? (s.service_id || s.id) : s) === appointment.service_id)) {
             return true;
           }
-          // Verifica se o serviço está em package_snapshot.services
           if (pkg.package_snapshot && pkg.package_snapshot.services && pkg.package_snapshot.services.some(s => (typeof s === 'object' ? (s.service_id || s.id) : s) === appointment.service_id)) {
             return true;
           }
-          // Verifica se o serviço está em services_included
           if (pkg.services_included && pkg.services_included.some(s => (typeof s === 'object' ? (s.service_id || s.id) : s) === appointment.service_id)) {
             return true;
           }
           return false;
         }
-        // 2. Pacote regular: busca pelo package_id
         const packageData = packages.find(p => p.id === pkg.package_id);
         if (!packageData) return false;
         if (packageData.services && packageData.services.some(s => (typeof s === 'object' ? (s.service_id || s.id) : s) === appointment.service_id)) {
@@ -1251,37 +1248,35 @@ export default function Appointments() {
         }
         return false;
       });
-
+      console.log("[updatePackageSession] relevantPackage:", relevantPackage);
       if (relevantPackage) {
-        console.log("[DEBUG] Pacote relevante encontrado:", relevantPackage.id);
+        console.log("[updatePackageSession] Pacote relevante encontrado:", relevantPackage.id);
         const serviceData = services.find(s => s.id === appointment.service_id);
         const employeeData = employees.find(e => e.id === appointment.employee_id);
-
-        // Atualiza o status da sessão no histórico
         const currentSessionHistory = Array.isArray(relevantPackage.session_history) 
           ? relevantPackage.session_history 
           : [];
-
         let updatedSessionHistory;
         const sessionIndex = currentSessionHistory.findIndex(
           s => s.appointment_id === appointment.id
         );
-
-        console.log("[DEBUG] Histórico de sessões atual:", {
-          total: currentSessionHistory.length,
-          encontrado: sessionIndex >= 0
-        });
-
+        console.log("[updatePackageSession] sessionIndex:", sessionIndex, "currentSessionHistory:", currentSessionHistory);
         if (sessionIndex >= 0) {
-          // Atualiza a sessão existente
-          updatedSessionHistory = currentSessionHistory.map((session, index) => 
-            index === sessionIndex 
-              ? { ...session, status: newStatus }
-              : session
-          );
-          console.log("[DEBUG] Atualizando sessão existente no histórico");
+          // Atualiza a sessão existente e remove duplicatas para este appointment_id
+          updatedSessionHistory = currentSessionHistory
+            .filter((session, index) => session.appointment_id !== appointment.id || index === sessionIndex)
+            .map((session, index) =>
+              index === sessionIndex
+                ? { ...session, status: newStatus }
+                : session
+            );
+          console.log("[updatePackageSession][Ajuste] Atualizando sessão existente e removendo duplicatas:", updatedSessionHistory);
+          await ClientPackage.update(relevantPackage.id, {
+            session_history: updatedSessionHistory
+          });
         } else {
-          // Cria uma nova entrada no histórico
+          // Antes de adicionar uma nova, remove qualquer sessão duplicada para este appointment_id
+          let updatedSessionHistory = [...(currentSessionHistory || [])].filter(session => session.appointment_id !== appointment.id);
           const sessionHistoryEntry = {
             service_id: appointment.service_id,
             service_name: serviceData?.name || "Serviço não encontrado",
@@ -1292,42 +1287,24 @@ export default function Appointments() {
             status: newStatus,
             notes: appointment.notes || ""
           };
-
-          // Se for reagendamento, remove a entrada antiga do histórico
-          let updatedSessionHistory = [...(currentSessionHistory || [])];
-          if (appointment.original_appointment_id) {
-            updatedSessionHistory = updatedSessionHistory.filter(
-              entry => entry.appointment_id !== appointment.original_appointment_id
-            );
-          }
-          
-          // Adiciona a nova entrada
           updatedSessionHistory.push(sessionHistoryEntry);
-
+          console.log("[updatePackageSession][Ajuste] Adicionando nova sessão sem duplicidade:", sessionHistoryEntry);
           await ClientPackage.update(relevantPackage.id, {
             session_history: updatedSessionHistory
           });
         }
-
-        // Se houver um serviço pendente associado, atualizar seu status
         if (appointment.pending_service_id) {
+          console.log("[updatePackageSession] Atualizando serviço pendente:", appointment.pending_service_id);
           await PendingService.update(appointment.pending_service_id, {
             status: newStatus === 'concluido' ? 'concluido' : 'agendado'
           });
         }
-
-        // Recarrega os dados
         await loadData();
-        
-        // Se for reagendamento, atualiza a modal
         if (appointment.original_appointment_id && selectedAppointmentDetails?.appointment?.id === appointment.original_appointment_id) {
           await handleSelectAppointment(appointment);
         }
-        
-        // Limpa o formulário e fecha a modal de novo agendamento
         setShowNewAppointmentDialog(false);
         clearNewAppointmentForm();
-
         toast({
           title: "Sucesso",
           description: appointment.original_appointment_id
@@ -1336,10 +1313,10 @@ export default function Appointments() {
           variant: "success"
         });
       } else {
-        console.log("[DEBUG] Nenhum pacote relevante encontrado para o agendamento:", appointment.id);
+        console.log("[updatePackageSession] Nenhum pacote relevante encontrado para o agendamento:", appointment.id, appointment);
       }
     } catch (error) {
-      console.error("Erro ao atualizar sessão do pacote:", error);
+      console.error("[updatePackageSession][ERROR] Erro ao atualizar sessão do pacote:", error, appointment);
     }
   };
 
@@ -1431,17 +1408,18 @@ export default function Appointments() {
     });
   };
 
-  const handleMultiAppointmentConfirm = async () => {
-    // Aqui você pode implementar a lógica de criar múltiplos agendamentos
-    // Exemplo básico:
-    if (!multiClientId || multiSelectedItems.length === 0 || !multiDateTime) return;
-    for (const item of multiSelectedItems) {
-      // Adapte conforme necessário para diferenciar serviço/pacote
+  const handleMultiAppointmentConfirm = async (dados) => {
+    // Espera-se: { client_id, package_id, agendamentos: [{ tipo, servico, profissional, data, hora }] }
+    if (!dados || !dados.client_id || !Array.isArray(dados.agendamentos) || dados.agendamentos.length === 0) return;
+    const { client_id, package_id, agendamentos } = dados;
+    for (const item of agendamentos) {
       await handleCreateAppointmentMulti({
-        client_id: multiClientId,
-        service_or_package_id: item.id,
-        date: multiDateTime,
-        type: item.type
+        client_id,
+        service_or_package_id: item.servico,
+        date: item.data,
+        type: item.tipo,
+        employee_id: item.profissional,
+        package_id: item.tipo === 'pacote' ? package_id : undefined
       });
     }
     setShowMultiAppointmentDialog(false);
@@ -1450,11 +1428,26 @@ export default function Appointments() {
     setMultiDateTime("");
   };
 
-  const handleCreateAppointmentMulti = async ({ client_id, service_or_package_id, date, type }) => {
-    // Exemplo: adapte para criar agendamento de serviço ou pacote
-    // Aqui só um log, implemente conforme sua lógica real
-    console.log("Criando agendamento múltiplo:", { client_id, service_or_package_id, date, type });
-    // Chame sua função de criação de agendamento aqui
+  const handleCreateAppointmentMulti = async ({ client_id, service_or_package_id, date, type, employee_id, package_id }) => {
+    try {
+      console.log("[DEBUG][handleCreateAppointmentMulti] Dados recebidos:", { client_id, service_or_package_id, date, type, employee_id, package_id });
+      // Adapta para criar agendamento de serviço ou pacote
+      const appointmentData = {
+        client_id,
+        employee_id,
+        service_id: service_or_package_id,
+        date,
+        package_id: type === 'pacote' ? package_id : undefined,
+        status: 'agendado'
+      };
+      console.log("[DEBUG][handleCreateAppointmentMulti] Dados enviados para Appointment.create:", appointmentData);
+      const result = await Appointment.create(appointmentData);
+      console.log("[DEBUG][handleCreateAppointmentMulti] Resultado da criação:", result);
+      // Opcional: recarregar dados após criar
+      await loadData();
+    } catch (error) {
+      console.error("[ERROR][handleCreateAppointmentMulti] Falha ao criar agendamento múltiplo:", error);
+    }
   };
 
   const filteredMultiItems = services.concat(packages).filter(item => {
@@ -1486,7 +1479,7 @@ export default function Appointments() {
         <div className="space-y-1">
           {multiClientPackages.map(pkg => (
             <div key={pkg.id} className="border rounded p-2 bg-gray-50">
-              <div className="font-semibold text-green-800">{pkg.title || pkg.name || 'Pacote'}</div>
+              <div className="font-semibold text-green-800">{pkg.title || pkg.name || "Pacote"}</div>
               <div className="text-xs text-gray-600">Sessões restantes: {pkg.sessions_left ?? '-'}</div>
               {pkg.services && Array.isArray(pkg.services) && (
                 <div className="text-xs mt-1 text-gray-700">

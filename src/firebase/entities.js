@@ -1837,6 +1837,7 @@ export const Appointment = {
   
   create: async function(data) {
     try {
+      console.log('[DEBUG][Appointment.create] Dados recebidos:', data);
       // Gerar um ID único se não fornecido
       const id = data.id || doc(collection(db, 'appointments')).id;
       
@@ -1848,12 +1849,14 @@ export const Appointment = {
         created_date: data.created_date || now,
         updated_date: now
       };
+      console.log('[DEBUG][Appointment.create] Dados finais para salvar:', appointmentData);
 
       // Salvar no Firestore
       await setDoc(doc(db, 'appointments', id), appointmentData);
+      console.log('[DEBUG][Appointment.create] Sucesso ao salvar agendamento:', id);
       return appointmentData;
     } catch (error) {
-      console.error('Error creating appointment:', error);
+      console.error('[DEBUG][Appointment.create] ERRO ao criar agendamento:', error);
       throw error;
     }
   },

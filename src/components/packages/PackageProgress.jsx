@@ -23,6 +23,17 @@ export default function PackageProgress({ clientPackageId }) {
     }
   }, [clientPackageId]);
 
+  useEffect(() => {
+    if (packageData) {
+      console.log('[DEBUG][BARRA] session_history:', packageData.session_history);
+      if (Array.isArray(packageData.session_history)) {
+        packageData.session_history.forEach((s, idx) =>
+          console.log(`[DEBUG][BARRA] Sessão #${idx}:`, s)
+        );
+      }
+    }
+  }, [packageData]);
+
   const loadPackageData = async () => {
     try {
       setLoading(true);
@@ -49,10 +60,22 @@ export default function PackageProgress({ clientPackageId }) {
   const getUsedSessions = () => {
     if (!packageData?.session_history) return 0;
 
-    // Conta apenas sessões com status 'concluido'
-    return packageData.session_history.filter(session => 
-      session.status === 'concluido'
-    ).length;
+    // Normaliza status para minúsculo e sem acento
+    const normalizeStatus = (status) => {
+      return (status || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    };
+
+    // LOG: Exibir todo o session_history para debug
+    console.log('[PackageProgress] session_history:', packageData.session_history);
+    const used = packageData.session_history.filter(session => {
+      const status = normalizeStatus(session.status);
+      // LOG: Exibir status normalizado de cada sessão
+      console.log(`[PackageProgress] Sessão id: ${session.id || ''}, status original: '${session.status}', status normalizado: '${status}'`);
+      return status === 'concluido';
+    }).length;
+    // LOG: Exibir total de sessões concluídas
+    console.log(`[PackageProgress] Total de sessões concluídas (barra de progresso): ${used}`);
+    return used;
   };
 
   const usedSessions = getUsedSessions();
@@ -161,47 +184,60 @@ export default function PackageProgress({ clientPackageId }) {
           <h3 className="font-medium mb-3">Histórico de sessões</h3>
           {packageData.session_history && packageData.session_history.length > 0 ? (
             <div className="space-y-3">
-              {packageData.session_history.map((session, index) => (
-                <div 
-                  key={index} 
-                  className="p-3 bg-gray-50 rounded-lg border border-gray-200"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start gap-2">
-                      <CheckCircle2 className="w-5 h-5 text-green-500 mt-0.5" />
-                      <div>
-                        <p className="font-medium">{getServiceName(session.service_id)}</p>
-                        <div className="mt-1 space-y-1">
-                          <div className="flex items-center text-gray-600 text-sm">
-                            <CalendarDays className="w-3.5 h-3.5 mr-1.5" />
-                            <span>
-                              {format(new Date(session.date), "dd/MM/yyyy", { locale: ptBR })}
-                            </span>
-                          </div>
-                          <div className="flex items-center text-gray-600 text-sm">
-                            <Clock className="w-3.5 h-3.5 mr-1.5" />
-                            <span>
-                              {format(new Date(session.date), "HH:mm", { locale: ptBR })}
-                            </span>
-                          </div>
-                          <div className="flex items-center text-gray-600 text-sm">
-                            <User className="w-3.5 h-3.5 mr-1.5" />
-                            <span>{getEmployeeName(session.employee_id)}</span>
+              {packageData.session_history.map((session, index) => {
+                // Normaliza status para exibição
+                const normalizeStatus = (status) => {
+                  return (status || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                };
+                const isConcluido = normalizeStatus(session.status) === 'concluido';
+                return (
+                  <div 
+                    key={index} 
+                    className="p-3 bg-gray-50 rounded-lg border border-gray-200"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-start gap-2">
+                        <CheckCircle2 className="w-5 h-5 text-green-500 mt-0.5" />
+                        <div>
+                          <p className="font-medium">{getServiceName(session.service_id)}</p>
+                          <div className="mt-1 space-y-1">
+                            <div className="flex items-center text-gray-600 text-sm">
+                              <CalendarDays className="w-3.5 h-3.5 mr-1.5" />
+                              <span>
+                                {format(new Date(session.date), "dd/MM/yyyy", { locale: ptBR })}
+                              </span>
+                            </div>
+                            <div className="flex items-center text-gray-600 text-sm">
+                              <Clock className="w-3.5 h-3.5 mr-1.5" />
+                              <span>
+                                {format(new Date(session.date), "HH:mm", { locale: ptBR })}
+                              </span>
+                            </div>
+                            <div className="flex items-center text-gray-600 text-sm">
+                              <User className="w-3.5 h-3.5 mr-1.5" />
+                              <span>{getEmployeeName(session.employee_id)}</span>
+                            </div>
                           </div>
                         </div>
                       </div>
+                      <Badge className={`bg-blue-100 text-blue-800 border-none ${isConcluido ? '' : 'opacity-50'}`}>
+                        Sessão {index + 1}
+                      </Badge>
                     </div>
-                    <Badge className="bg-blue-100 text-blue-800 border-none">
-                      Sessão {index + 1}
-                    </Badge>
+                    {session.notes && (
+                      <p className="mt-2 text-sm text-gray-600 italic border-t border-gray-200 pt-2">
+                        "{session.notes}"
+                      </p>
+                    )}
+                    {/* Exibir status da sessão se não for concluído */}
+                    {!isConcluido && (
+                      <div className="mt-2 text-xs text-amber-600">
+                        Status: {session.status}
+                      </div>
+                    )}
                   </div>
-                  {session.notes && (
-                    <p className="mt-2 text-sm text-gray-600 italic border-t border-gray-200 pt-2">
-                      "{session.notes}"
-                    </p>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <p className="text-gray-500 text-center py-4">
