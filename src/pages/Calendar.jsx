@@ -46,10 +46,19 @@ export default function CalendarView() {
         Service.list()
       ]);
 
+      // Normalizar datas dos agendamentos (garantir string ISO)
+      const normalizedAppointments = appointmentsData.map(app => ({
+        ...app,
+        date: typeof app.date === 'string' ? app.date : (app.date instanceof Date ? app.date.toISOString() : String(app.date))
+      }));
+
+      // Log para depuração
+      console.log("[Calendário] Agendamentos carregados:", normalizedAppointments.map(a => ({id: a.id, date: a.date, status: a.status, employee_id: a.employee_id})));
+
       // Atualizar estados
       setEmployees(providersData);
       setSelectedEmployees(providersData.map(emp => emp.id));
-      setAppointments(appointmentsData);
+      setAppointments(normalizedAppointments);
       setClients(clientsData);
       setServices(servicesData);
 
@@ -79,10 +88,19 @@ export default function CalendarView() {
 
   const getAppointmentsForDate = (date) => {
     const formattedDate = format(date, 'yyyy-MM-dd');
-    return getFilteredAppointments().filter(app => {
+    const filtered = getFilteredAppointments().filter(app => {
+      // Log para depuração de cada comparação
       const appDate = format(new Date(app.date), 'yyyy-MM-dd');
-      return appDate === formattedDate;
+      const match = appDate === formattedDate;
+      if (match) {
+        console.log(`[Calendário][DEBUG] Agendamento encontrado para o dia ${formattedDate}:`, app);
+      }
+      return match;
     });
+    if (filtered.length === 0) {
+      console.log(`[Calendário][DEBUG] Nenhum agendamento para o dia ${formattedDate}`);
+    }
+    return filtered;
   };
 
   const handlePrevious = () => {

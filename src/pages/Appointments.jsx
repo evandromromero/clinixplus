@@ -57,6 +57,7 @@ import {
   CommandGroup,
   CommandItem,
 } from "@/components/ui/command";
+import MultiAppointmentModal from '@/components/appointments/MultiAppointmentModal';
 
 export default function Appointments() {
   const { toast } = useToast(); // Get the toast function from the hook
@@ -136,6 +137,17 @@ export default function Appointments() {
   const [showProfessionalPopover, setShowProfessionalPopover] = useState(false);
   const [showServicePopover, setShowServicePopover] = useState(false);
   const [showPendingPopover, setShowPendingPopover] = useState(false);
+
+  // Estados para modal de agendamento múltiplo
+  const [showMultiAppointmentDialog, setShowMultiAppointmentDialog] = useState(false);
+
+  // Estados para modal de agendamento múltiplo
+  const [multiClientId, setMultiClientId] = useState("");
+  const [multiSelectedItems, setMultiSelectedItems] = useState([]); // [{id, name/title, type}]
+  const [multiDateTime, setMultiDateTime] = useState("");
+  const [multiSearch, setMultiSearch] = useState("");
+  const [multiClientSearch, setMultiClientSearch] = useState("");
+  const [multiClientPackages, setMultiClientPackages] = useState([]);
 
   // Helpers para valores selecionados
   const selectedProfessional = employees.find(e => e.id === newAppointment.employee_id);
@@ -1280,33 +1292,49 @@ export default function Appointments() {
             status: newStatus,
             notes: appointment.notes || ""
           };
-          updatedSessionHistory = [...currentSessionHistory, sessionHistoryEntry];
-          console.log("[DEBUG] Adicionando nova sessão ao histórico");
+
+          // Se for reagendamento, remove a entrada antiga do histórico
+          let updatedSessionHistory = [...(currentSessionHistory || [])];
+          if (appointment.original_appointment_id) {
+            updatedSessionHistory = updatedSessionHistory.filter(
+              entry => entry.appointment_id !== appointment.original_appointment_id
+            );
+          }
+          
+          // Adiciona a nova entrada
+          updatedSessionHistory.push(sessionHistoryEntry);
+
+          await ClientPackage.update(relevantPackage.id, {
+            session_history: updatedSessionHistory
+          });
         }
 
-        // Recalcular o número de sessões concluídas com base no histórico atualizado
-        const completedSessions = updatedSessionHistory.filter(
-          s => s.status === 'concluido'
-        ).length;
+        // Se houver um serviço pendente associado, atualizar seu status
+        if (appointment.pending_service_id) {
+          await PendingService.update(appointment.pending_service_id, {
+            status: newStatus === 'concluido' ? 'concluido' : 'agendado'
+          });
+        }
 
-        console.log("[DEBUG] Atualizando pacote:", {
-          id: relevantPackage.id,
-          pacote: relevantPackage.package_id,
-          sessõesConcluídas: completedSessions,
-          totalSessões: relevantPackage.total_sessions
+        // Recarrega os dados
+        await loadData();
+        
+        // Se for reagendamento, atualiza a modal
+        if (appointment.original_appointment_id && selectedAppointmentDetails?.appointment?.id === appointment.original_appointment_id) {
+          await handleSelectAppointment(appointment);
+        }
+        
+        // Limpa o formulário e fecha a modal de novo agendamento
+        setShowNewAppointmentDialog(false);
+        clearNewAppointmentForm();
+
+        toast({
+          title: "Sucesso",
+          description: appointment.original_appointment_id
+            ? "Agendamento atualizado com sucesso!"
+            : "Agendamento criado com sucesso!",
+          variant: "success"
         });
-
-        await ClientPackage.update(relevantPackage.id, {
-          session_history: updatedSessionHistory,
-          sessions_used: completedSessions,
-          status: completedSessions >= relevantPackage.total_sessions ? 'finalizado' : 'ativo'
-        });
-
-        console.log("[DEBUG] Pacote atualizado com sucesso");
-
-        // Recarregar os pacotes do cliente para atualizar a UI
-        const updatedClientPackages = await ClientPackage.filter({ client_id: appointment.client_id });
-        setClientPackages(updatedClientPackages);
       } else {
         console.log("[DEBUG] Nenhum pacote relevante encontrado para o agendamento:", appointment.id);
       }
@@ -1394,6 +1422,87 @@ export default function Appointments() {
     }
   };
 
+  const handleToggleMultiSelectedItem = (item) => {
+    setMultiSelectedItems(prev => {
+      if (prev.some(sel => sel.id === item.id)) {
+        return prev.filter(sel => sel.id !== item.id);
+      }
+      return [...prev, item];
+    });
+  };
+
+  const handleMultiAppointmentConfirm = async () => {
+    // Aqui você pode implementar a lógica de criar múltiplos agendamentos
+    // Exemplo básico:
+    if (!multiClientId || multiSelectedItems.length === 0 || !multiDateTime) return;
+    for (const item of multiSelectedItems) {
+      // Adapte conforme necessário para diferenciar serviço/pacote
+      await handleCreateAppointmentMulti({
+        client_id: multiClientId,
+        service_or_package_id: item.id,
+        date: multiDateTime,
+        type: item.type
+      });
+    }
+    setShowMultiAppointmentDialog(false);
+    setMultiClientId("");
+    setMultiSelectedItems([]);
+    setMultiDateTime("");
+  };
+
+  const handleCreateAppointmentMulti = async ({ client_id, service_or_package_id, date, type }) => {
+    // Exemplo: adapte para criar agendamento de serviço ou pacote
+    // Aqui só um log, implemente conforme sua lógica real
+    console.log("Criando agendamento múltiplo:", { client_id, service_or_package_id, date, type });
+    // Chame sua função de criação de agendamento aqui
+  };
+
+  const filteredMultiItems = services.concat(packages).filter(item => {
+    const term = multiSearch.toLowerCase();
+    const name = (item.name || item.title || "").toLowerCase();
+    return name.includes(term);
+  });
+
+  const filteredClients = clients.filter(client =>
+    client.name.toLowerCase().includes(multiClientSearch.toLowerCase())
+  );
+
+  useEffect(() => {
+    if (!multiClientId) {
+      setMultiClientPackages([]);
+      return;
+    }
+    (async () => {
+      const pkgs = await ClientPackage.filter({ client_id: multiClientId, status: 'ativo' });
+      setMultiClientPackages(pkgs);
+    })();
+  }, [multiClientId]);
+
+  function renderClientPackages() {
+    if (!multiClientId || multiClientPackages.length === 0) return null;
+    return (
+      <div className="mt-2 space-y-2">
+        <Label>Pacotes ativos do cliente</Label>
+        <div className="space-y-1">
+          {multiClientPackages.map(pkg => (
+            <div key={pkg.id} className="border rounded p-2 bg-gray-50">
+              <div className="font-semibold text-green-800">{pkg.title || pkg.name || 'Pacote'}</div>
+              <div className="text-xs text-gray-600">Sessões restantes: {pkg.sessions_left ?? '-'}</div>
+              {pkg.services && Array.isArray(pkg.services) && (
+                <div className="text-xs mt-1 text-gray-700">
+                  Procedimentos: {pkg.services.map(sid => {
+                    const svc = services.find(s => s.id === (sid.id || sid));
+                    return svc ? svc.name : sid.name || sid;
+                  }).join(', ')}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -1418,13 +1527,20 @@ export default function Appointments() {
             )}
           </Button>
         </div>
-        <Button 
-          onClick={() => handleOpenNewAppointmentDialog()}
-          className="bg-purple-600 hover:bg-purple-700"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Novo Agendamento
-        </Button>
+        <div className="flex gap-2 mb-4">
+          <Button
+            className="bg-purple-700 hover:bg-purple-800"
+            onClick={() => setShowNewAppointmentDialog(true)}
+          >
+            + Novo Agendamento
+          </Button>
+          <Button
+            className="bg-green-700 hover:bg-green-800"
+            onClick={() => setShowMultiAppointmentDialog(true)}
+          >
+            + Agendamento Múltiplo
+          </Button>
+        </div>
       </div>
 
       <div className={`grid ${showFilters ? 'md:grid-cols-[300px,1fr]' : 'md:grid-cols-[0fr,1fr]'} gap-6`}>
@@ -1955,6 +2071,11 @@ export default function Appointments() {
 
             <div className="space-y-2">
               <Label>Serviço</Label>
+              {filteredServices.length === 0 && newAppointment.employee_id && (
+                <div className="text-sm text-yellow-600 bg-yellow-50 border border-yellow-200 rounded p-2 mb-2">
+                  Nenhum serviço disponível para o profissional selecionado. Verifique as especialidades cadastradas ou selecione outro profissional.
+                </div>
+              )}
               <Popover open={showServicePopover} onOpenChange={setShowServicePopover}>
                 <PopoverTrigger asChild>
                   <Button
@@ -1982,16 +2103,19 @@ export default function Appointments() {
                             key={service.id}
                             value={service.displayName || service.name}
                             onSelect={() => {
-                              if (serviceSessionsLeft[service.id] > 0) {
+                              if (
+                                procedimentoTipo === "avulso" ||
+                                (serviceSessionsLeft[service.id] > 0)
+                              ) {
                                 setNewAppointment({ ...newAppointment, service_id: service.id });
                                 setShowServicePopover(false);
                               }
                             }}
-                            disabled={serviceSessionsLeft[service.id] <= 0}
-                            style={serviceSessionsLeft[service.id] <= 0 ? { opacity: 0.5, pointerEvents: 'none', color: '#aaa' } : {}}
+                            disabled={procedimentoTipo !== "avulso" && serviceSessionsLeft[service.id] <= 0}
+                            style={procedimentoTipo !== "avulso" && serviceSessionsLeft[service.id] <= 0 ? { opacity: 0.5, pointerEvents: 'none', color: '#aaa' } : {}}
                           >
                             {service.displayName || service.name} ({service.duration}min)
-                            {serviceSessionsLeft[service.id] <= 0 && (
+                            {procedimentoTipo !== "avulso" && serviceSessionsLeft[service.id] <= 0 && (
                               <span style={{ marginLeft: 8, color: '#e74c3c', fontWeight: 'bold' }}>
                                 Esgotado
                               </span>
@@ -2047,7 +2171,7 @@ export default function Appointments() {
                   </SelectTrigger>
                   <SelectContent>
                     {availableHours.map((hour) => {
-                      const { available, appointments: conflictingApps } = 
+                      const { available, appointments: conflictingAppointments } = 
                         checkTimeSlotAvailability(newAppointment.employee_id, newAppointment.date, hour);
                       
                       return (
@@ -2059,7 +2183,7 @@ export default function Appointments() {
                           {formatHour(hour)}
                           {!available && (
                             <span className="ml-2 text-xs">
-                              ({conflictingApps.length} agendamento{conflictingApps.length > 1 ? 's' : ''})
+                              ({conflictingAppointments.length} agendamento{conflictingAppointments.length > 1 ? 's' : ''})
                             </span>
                           )}
                         </SelectItem>
@@ -2168,7 +2292,7 @@ export default function Appointments() {
                   </Select>
                 </div>
               </div>
-            </div>
+            </div>  
           )}
           
           <DialogFooter>
@@ -2712,6 +2836,16 @@ export default function Appointments() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <MultiAppointmentModal
+        open={showMultiAppointmentDialog}
+        onOpenChange={setShowMultiAppointmentDialog}
+        clients={clients}
+        services={services}
+        ClientPackage={ClientPackage}
+        employees={employees}
+        onConfirm={handleMultiAppointmentConfirm}
+      />
     </div>
   );
 }
