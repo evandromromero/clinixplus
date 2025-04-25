@@ -20,26 +20,25 @@ export default function MultiAppointmentModal({
   const [multiClientSearch, setMultiClientSearch] = useState("");
   const [multiClientPackages, setMultiClientPackages] = useState([]);
   const [multiSelectedPackageId, setMultiSelectedPackageId] = useState("");
-  const [multiSelectedItems, setMultiSelectedItems] = useState([]); // [{ id, name, professional_id }]
-  const [multiDateTime, setMultiDateTime] = useState("");
-  const [avulsoSearch, setAvulsoSearch] = useState("");
-  const [tipoAgendamento, setTipoAgendamento] = useState('');
+  const [agendamentoLinhas, setAgendamentoLinhas] = useState([
+    { tipo: '', servico: '', profissional: '', data: '', hora: '' }
+  ]);
 
   // Estados para procedimentos avulsos e pendentes
   const [avulsos, setAvulsos] = useState([]); // Serviços avulsos disponíveis
   const [pendentes, setPendentes] = useState([]); // Serviços pendentes do cliente
 
-  // Novo estado: linhas dinâmicas de agendamento
-  const [agendamentoLinhas, setAgendamentoLinhas] = useState([
-    { tipo: '', servico: '', profissional: '', data: '', hora: '' }
-  ]);
+  // Corrigir: garantir que tipoAgendamento está definido como estado
+  const [tipoAgendamento, setTipoAgendamento] = useState('');
+
+  // Corrigir: garantir que avulsoSearch está definido como estado
+  const [avulsoSearch, setAvulsoSearch] = useState("");
 
   // Buscar pacotes ativos do cliente ao selecionar
   useEffect(() => {
     if (!multiClientId) {
       setMultiClientPackages([]);
       setMultiSelectedPackageId("");
-      setMultiSelectedItems([]);
       return;
     }
     (async () => {
@@ -118,6 +117,50 @@ export default function MultiAppointmentModal({
     };
   }
 
+  // Função utilitária para calcular sessões restantes por serviço do pacote
+  function getSessionsLeft(pkg, serviceId) {
+    if (!pkg || !pkg.session_history || !pkg.services) return null;
+    // Encontrar objeto do serviço no pacote (pode ser string ou objeto)
+    let serviceObj = null;
+    if (Array.isArray(pkg.services)) {
+      for (const s of pkg.services) {
+        if (
+          (typeof s === 'string' && s === serviceId) ||
+          (typeof s === 'object' && (s.id === serviceId || s.service_id === serviceId))
+        ) {
+          serviceObj = s;
+          break;
+        }
+      }
+    }
+    // Buscar quantidade total (quantity ou total, senão fallback 1)
+    let total = 1;
+    if (serviceObj) {
+      total = serviceObj.quantity || serviceObj.total || 1;
+    }
+    // Contar sessões usadas
+    let used = 0;
+    if (Array.isArray(pkg.session_history)) {
+      used = pkg.session_history.filter(h => {
+        // Normaliza para comparar corretamente
+        return (
+          h.status === 'concluido' &&
+          (h.service_id === serviceId || h.service_id === (serviceObj?.id || serviceObj?.service_id))
+        );
+      }).length;
+    }
+    return { total, used, left: Math.max(0, total - used) };
+  }
+
+  // Função utilitária para calcular sessões reagendáveis (não concluídas)
+  function getReagendaveis(pkg, serviceId) {
+    if (!pkg || !pkg.session_history) return [];
+    // Sessões não concluídas (ex: faltou, cancelada, etc)
+    return pkg.session_history.filter(h =>
+      h.service_id === serviceId && h.status !== 'concluido'
+    );
+  }
+
   // Serviços do pacote selecionado
   const selectedPackage = multiClientPackages.find(pkg => pkg.id === multiSelectedPackageId);
   let selectedPackageServices = [];
@@ -174,7 +217,6 @@ export default function MultiAppointmentModal({
     console.log('[LOG] handleSelectPackage chamado com packageId:', packageId);
     setMultiSelectedPackageId(packageId);
     setTipoAgendamento('pacote'); // Atualiza o tipo de agendamento
-    setMultiSelectedItems([]);
     // Log para ajudar a depurar o estado dos pacotes
     const pacoteSelecionado = multiClientPackages.find(pkg => pkg.id === packageId);
     console.log('[LOG] Pacote selecionado:', pacoteSelecionado);
@@ -188,39 +230,35 @@ export default function MultiAppointmentModal({
     }
   }
 
-  function handleToggleMultiSelectedItem(item) {
-    setMultiSelectedItems(prev => {
-      if (prev.some(sel => sel.id === item.id)) {
-        return prev.filter(sel => sel.id !== item.id);
-      }
-      // Adiciona com professional_id vazio
-      return [...prev, { ...item, professional_id: '' }];
-    });
-  }
-
-  function handleProfessionalChange(serviceId, professionalId) {
-    setMultiSelectedItems(prev =>
-      prev.map(sel =>
-        sel.id === serviceId ? { ...sel, professional_id: professionalId } : sel
-      )
-    );
-  }
+  // Nova lógica: permitir confirmar se todas as linhas de agendamento têm serviço, profissional, data e hora preenchidos
+  const podeConfirmar =
+    multiClientId &&
+    multiSelectedPackageId &&
+    agendamentoLinhas.length > 0 &&
+    agendamentoLinhas.every(linha => linha.servico && linha.profissional && linha.data && linha.hora);
 
   function handleConfirm() {
-    // Agora exige professional_id preenchido para cada procedimento
-    if (!multiClientId || !multiSelectedPackageId || multiSelectedItems.length === 0 || !multiDateTime || multiSelectedItems.some(item => !item.professional_id)) return;
+    if (!podeConfirmar) return;
+    let packageIdToSend = multiSelectedPackageId;
+    if (tipoAgendamento === 'pacote' && !multiSelectedPackageId && multiClientPackages.length > 0) {
+      packageIdToSend = multiClientPackages[0].id;
+    }
+    // LOG: Exibir dados que serão enviados para salvar
+    console.log('[SALVAR] Dados enviados para onConfirm:', {
+      client_id: multiClientId,
+      package_id: tipoAgendamento === 'pacote' ? packageIdToSend : undefined,
+      agendamentos: agendamentoLinhas
+    });
     if (onConfirm) {
       onConfirm({
         client_id: multiClientId,
-        package_id: multiSelectedPackageId,
-        services: multiSelectedItems,
-        date: multiDateTime
+        package_id: tipoAgendamento === 'pacote' ? packageIdToSend : undefined,
+        agendamentos: agendamentoLinhas // Envia todas as linhas preenchidas
       });
     }
     setMultiClientId("");
     setMultiSelectedPackageId("");
-    setMultiSelectedItems([]);
-    setMultiDateTime("");
+    setAgendamentoLinhas([{ tipo: '', servico: '', profissional: '', data: '', hora: '' }]);
     setMultiClientSearch("");
     setMultiClientPackages([]);
   }
@@ -288,6 +326,22 @@ export default function MultiAppointmentModal({
       }
     });
   }, [agendamentoLinhas]);
+
+  // Função de ação para reagendamento
+  function handleReagendarSessao(pkg, serviceId) {
+    // Aqui você pode abrir uma modal, adicionar uma linha de agendamento já preenchida, etc.
+    // Exemplo: adicionar uma linha pré-preenchida para reagendar
+    setAgendamentoLinhas(prev => [
+      ...prev,
+      {
+        tipo: 'pacote',
+        servico: serviceId,
+        profissional: '',
+        data: '',
+        hora: ''
+      }
+    ]);
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -361,17 +415,32 @@ export default function MultiAppointmentModal({
                     <div className="text-xs text-gray-600">Sessões restantes: {pkg.sessions_left ?? '-'}</div>
                     {pkg.services && Array.isArray(pkg.services) && pkg.services.length > 0 && (
                       <div className="text-xs mt-1 text-gray-700">
-                        Procedimentos: {pkg.services.map(sid => {
-                          // sid pode ser string (id) ou objeto
-                          let nome = '';
-                          if (typeof sid === 'string') {
-                            const svc = services.find(s => s.id === sid);
-                            nome = svc ? svc.name : sid;
-                          } else if (typeof sid === 'object') {
-                            nome = sid.name || (sid.id && (services.find(s => s.id === sid.id)?.name)) || sid.id || '[objeto]';
-                          }
-                          return nome;
-                        }).join(', ')}
+                        Procedimentos:
+                        <ul className="ml-2 list-disc">
+                          {pkg.services.map(sid => {
+                            let serviceId = typeof sid === 'string' ? sid : sid.id || sid.service_id;
+                            const svc = services.find(s => s.id === serviceId || s.service_id === serviceId);
+                            let nome = svc ? svc.name : (sid.name || serviceId);
+                            const sess = getSessionsLeft(pkg, serviceId);
+                            const reagendaveis = getReagendaveis(pkg, serviceId);
+                            return (
+                              <li key={serviceId} className="flex items-center gap-2">
+                                <span>{nome} {sess && `(${sess.left}/${sess.total} sessões)`}</span>
+                                {reagendaveis.length > 0 && (
+                                  <Button
+                                    size="xs"
+                                    variant="outline"
+                                    className="ml-2 text-orange-600 border-orange-300 hover:bg-orange-50"
+                                    onClick={() => handleReagendarSessao(pkg, serviceId)}
+                                    title="Reagendar sessão não concluída"
+                                  >
+                                    Reagendar sessão
+                                  </Button>
+                                )}
+                              </li>
+                            );
+                          })}
+                        </ul>
                       </div>
                     )}
                   </div>
@@ -386,7 +455,13 @@ export default function MultiAppointmentModal({
           <div>
             <Label className="flex items-center gap-2 text-base font-semibold text-primary">Linhas de Agendamento</Label>
             {agendamentoLinhas.map((linha, idx) => {
-              const servicosDisponiveis = getServicosDisponiveis();
+              const servicosDisponiveis = getServicosDisponiveis().filter(s => {
+                if (tipoAgendamento === 'pacote' && selectedPackage) {
+                  const sess = getSessionsLeft(selectedPackage, s.id);
+                  return !sess || sess.left > 0;
+                }
+                return true;
+              });
               return (
                 <div key={idx} className="flex flex-row gap-2 items-center mb-2">
                   {/* Serviço */}
@@ -440,21 +515,11 @@ export default function MultiAppointmentModal({
             })}
             <Button onClick={adicionarLinhaAgendamento}>Adicionar Linha</Button>
           </div>
-          {/* Seleção de Horários */}
-          <div>
-            <Label className="flex items-center gap-2 text-base font-semibold text-primary"><Clock className="w-4 h-4 mr-1 text-primary" /> Horário</Label>
-            <Input
-              type="datetime-local"
-              value={multiDateTime}
-              onChange={e => setMultiDateTime(e.target.value)}
-              className="mt-1 bg-white border-primary/20 focus:border-primary/60"
-            />
-          </div>
           <DialogFooter className="flex gap-2 mt-4">
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>
-            <Button className="bg-primary hover:bg-primary/90 text-white" onClick={handleConfirm} disabled={!multiClientId || !multiSelectedPackageId || multiSelectedItems.length === 0 || !multiDateTime || multiSelectedItems.some(item => !item.professional_id)}>
+            <Button className="bg-primary hover:bg-primary/90 text-white" onClick={handleConfirm} disabled={!podeConfirmar}>
               Confirmar
             </Button>
           </DialogFooter>
