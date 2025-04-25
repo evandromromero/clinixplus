@@ -371,7 +371,7 @@ src/
    - O nome do profissional responsável pela sessão é corretamente exibido no histórico de sessões após a importação do pacote.
 
 2. **Histórico de Sessões Utilizadas**
-   - Para cada pacote, o portal do cliente exibe as sessões concluídas, mostrando detalhes como data, hora, serviço realizado e profissional responsável.
+   - Para cada pacote, o portal do cliente exibe as sessões concluídas, mostrando detalhes como data, hora, serviço e profissional que realizou o atendimento.
    - Corrigida a exibição dos serviços incluídos nos pacotes, tratando diferentes formatos de dados (arrays e objetos).
 
 3. **Pacotes Personalizados**
@@ -491,45 +491,6 @@ Essas melhorias garantem que o sistema ClinixPlus continue robusto, flexível e 
 
 ## Melhorias Recentes no Portal do Funcionário (Abril 2025)
 
-### O que foi feito
-
-- Implementamos a possibilidade do funcionário concluir seus próprios agendamentos diretamente pelo Portal do Funcionário, de forma moderna e intuitiva.
-- Os agendamentos do dia são exibidos em um grid responsivo, com visual de cards coloridos, onde cada procedimento (serviço) recebe sempre a mesma cor, facilitando a identificação visual.
-- O botão "Concluir" aparece apenas para agendamentos não concluídos, e ao clicar o status é atualizado automaticamente, com feedback visual.
-- O layout foi aprimorado para ocupar melhor o espaço em telas grandes (notebooks/desktops), mantendo ótima usabilidade no celular.
-
-### Como foi feito
-
-1. **Ação de Concluir Agendamento:**
-   - Adicionamos um botão de ação em cada card de agendamento, permitindo ao funcionário marcar como concluído diretamente do portal.
-   - O botão dispara a atualização do status via `Appointment.update` e recarrega a lista automaticamente.
-
-2. **Grid Responsivo e Visual Moderno:**
-   - Os agendamentos são exibidos em um grid flexível: 1 coluna no mobile, 2 no tablet e 3 no desktop, ocupando toda a largura disponível.
-   - Cards possuem bordas arredondadas, sombra suave, ícones para cliente, serviço e horário, e badges de status coloridas.
-   - Cada serviço recebe sempre a mesma cor de fundo (pastel), tornando fácil identificar procedimentos iguais.
-
-3. **Aprimoramento do Container:**
-   - O container principal do portal foi ampliado para `max-w-6xl`, com paddings laterais reduzidos, melhorando o aproveitamento do espaço em telas grandes.
-
-4. **Código e Componentização:**
-   - Alterações principais em:
-     - `src/pages/EmployeePortal.jsx` (estrutura, container, integração dos componentes)
-     - `src/components/employee-portal/EmployeeAppointmentCard.jsx` (cards, ações, grid, cores)
-   - Lógica de atualização e estilos feitos com React, Tailwind CSS e componentes próprios do sistema.
-
-5. **Testes e Feedback:**
-   - Testes realizados em diferentes tamanhos de tela para garantir responsividade e usabilidade.
-   - Ajustes feitos conforme feedback visual e de experiência do usuário.
-
----
-
-Essas melhorias tornam o Portal do Funcionário mais eficiente, agradável e prático para o dia a dia da equipe clínica.
-
----
-
-## Melhorias e Ajustes Recentes no Portal do Funcionário (Abril 2025)
-
 ### Funcionalidades Implementadas
 
 - **Gerenciamento de Anamneses**
@@ -572,5 +533,19 @@ Essas melhorias tornam o Portal do Funcionário mais eficiente, agradável e pr�
 - Sempre testar os fluxos de anamnese e conclusão de agendamento após alterações.
 - Manter a experiência do usuário clara, exibindo opções de ação em modais antes de qualquer edição direta.
 - Para novas funcionalidades, seguir o padrão de componentização e documentação já adotado.
+
+---
+## Histórico de Navegação entre Commits (25/04/2025)
+
+Durante o processo de desenvolvimento, foram realizadas operações de navegação entre commits para testes e restauração de versões anteriores do projeto. Segue o registro:
+
+- O usuário solicitou o retorno ao commit `d7710f7` utilizando o comando `git reset --hard d7710f7`. Todas as alterações e commits posteriores a esse ponto foram descartados temporariamente.
+- Em seguida, foi solicitado o retorno ao commit `8273d11` (commit "merda") utilizando o comando `git reset --hard 8273d11`, restaurando o projeto ao estado desse commit.
+- Antes de trocar de commit, foi necessário realizar commit das alterações locais para evitar perda de trabalho, seguindo as recomendações do Git.
+- Todo o processo foi concluído com sucesso, sem impedimentos técnicos relevantes.
+
+### Observações
+- Não houve funcionalidades que não conseguimos realizar neste processo. Todas as operações de navegação entre commits e restauração de versões foram bem-sucedidas.
+- Caso haja necessidade de restaurar versões intermediárias, basta utilizar o comando `git reset --hard <hash_do_commit>` conforme exemplificado acima.
 
 ---
