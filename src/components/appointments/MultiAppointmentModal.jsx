@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { User, Package as PackageIcon, Scissors, Clock, PlusCircle, AlertTriangle } from "lucide-react";
+import { User, Package as PackageIcon, Scissors, Clock, PlusCircle, AlertTriangle, ChevronDown, X } from "lucide-react";
 
 export default function MultiAppointmentModal({
   open,
@@ -355,17 +355,14 @@ export default function MultiAppointmentModal({
     const reagendaveis = getReagendaveis(pkg, serviceId);
     const sessaoParaReagendar = reagendaveis.length > 0 ? reagendaveis[0] : null;
     
-    // Adicionar uma linha pré-preenchida para reagendar
-    setAgendamentoLinhas(prev => [
-      ...prev,
-      {
-        tipo: 'pacote',
-        servico: serviceId,
-        profissional: sessaoParaReagendar?.employee_id || '',
-        data: '',
-        hora: ''
-      }
-    ]);
+    // Limpar todas as linhas existentes e criar apenas uma linha com os dados da sessão
+    setAgendamentoLinhas([{
+      tipo: 'pacote',
+      servico: serviceId,
+      profissional: sessaoParaReagendar?.employee_id || '',
+      data: '',
+      hora: ''
+    }]);
     
     // Rolar para a área de agendamento
     setTimeout(() => {
@@ -380,17 +377,14 @@ export default function MultiAppointmentModal({
   function handleReagendarSessaoEspecifica(sessao) {
     if (!sessao) return;
     
-    // Adicionar uma linha pré-preenchida com os dados da sessão específica
-    setAgendamentoLinhas(prev => [
-      ...prev,
-      {
-        tipo: 'pacote',
-        servico: sessao.service_id,
-        profissional: sessao.employee_id || '',
-        data: '',
-        hora: ''
-      }
-    ]);
+    // Limpar todas as linhas existentes e criar apenas uma linha com os dados da sessão
+    setAgendamentoLinhas([{
+      tipo: 'pacote',
+      servico: sessao.service_id,
+      profissional: sessao.employee_id || '',
+      data: '',
+      hora: ''
+    }]);
     
     // Rolar para a área de agendamento
     setTimeout(() => {
@@ -401,102 +395,164 @@ export default function MultiAppointmentModal({
     }, 100);
   }
 
+  // Função para validar o formulário antes de habilitar o botão de confirmar
+  function isFormValid() {
+    // Verificar se cliente e tipo foram selecionados
+    if (!multiClientId || !tipoAgendamento) return false;
+    
+    // Verificar se todas as linhas estão preenchidas
+    return agendamentoLinhas.every(linha => 
+      linha.servico && linha.profissional && linha.data && linha.hora
+    );
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent 
         style={{
           maxWidth: 1200, 
           minWidth: 800,  
-          minHeight: 500, 
+          height: 'calc(100vh - 80px)', // Altura máxima com margem
           display: 'flex',
           flexDirection: 'row',
           gap: 0,
           borderRadius: 18,
-          boxShadow: '0 6px 32px #0002',
+          boxShadow: '0 6px 32px rgba(0, 0, 0, 0.12)',
           padding: 0,
           background: '#fff',
-          overflow: 'auto'
+          overflow: 'hidden'
         }}
       >
         {/* Coluna 1: Título, Cliente e Pacotes */}
-        <div className="flex flex-col flex-1 min-w-[270px] max-w-[340px] px-8 py-8 border-r h-full justify-start bg-white">
-          <DialogHeader className="mb-6">
+        <div className="flex flex-col flex-1 min-w-[270px] max-w-[340px] px-8 py-8 border-r h-full justify-start bg-gradient-to-b from-blue-50 to-white">
+          <DialogHeader className="mb-6 p-0">
             <DialogTitle className="flex items-center gap-2 text-2xl font-bold text-primary">
               <PlusCircle className="w-6 h-6 text-primary" /> Novo Agendamento Múltiplo
             </DialogTitle>
+            <p className="text-sm text-gray-500 mt-1">Agende múltiplos serviços para um cliente</p>
           </DialogHeader>
           {/* Cliente */}
-          <div className="mb-4">
-            <Label htmlFor="multi-client" className="flex items-center gap-2 text-base font-semibold text-primary"><User className="w-4 h-4 mr-1 text-primary" /> Cliente</Label>
-            <Input
-              placeholder="Buscar cliente..."
-              value={multiClientSearch}
-              onChange={e => setMultiClientSearch(e.target.value)}
-              className="mb-2 mt-1 bg-white border-primary/20 focus:border-primary/60"
-            />
-            <select
-              id="multi-client"
-              className="w-full border rounded px-2 py-1 bg-white border-primary/20 focus:border-primary/60"
-              value={multiClientId || ''}
-              onChange={e => { setMultiClientId(e.target.value); }}
-            >
-              <option value="">Selecione um cliente</option>
-              {filteredClients.map(client => (
-                <option key={client.id} value={client.id}>{client.name}</option>
-              ))}
-            </select>
+          <div className="mb-6">
+            <Label htmlFor="multi-client" className="flex items-center gap-2 text-base font-semibold text-primary mb-2">
+              <User className="w-4 h-4 mr-1 text-primary" /> Cliente
+            </Label>
+            <div className="relative mb-2">
+              <Input
+                placeholder="Buscar cliente..."
+                value={multiClientSearch}
+                onChange={e => setMultiClientSearch(e.target.value)}
+                className="mb-2 mt-1 bg-white border-primary/20 focus:border-primary/60 pl-8"
+              />
+              <User className="w-4 h-4 text-gray-400 absolute left-2 top-[13px]" />
+            </div>
+            <div className="relative">
+              <select
+                id="multi-client"
+                className="w-full border rounded-md px-3 py-2 bg-white border-primary/20 focus:border-primary/60 appearance-none text-gray-700"
+                value={multiClientId || ''}
+                onChange={e => { setMultiClientId(e.target.value); }}
+              >
+                <option value="">Selecione um cliente</option>
+                {filteredClients.map(client => (
+                  <option key={client.id} value={client.id}>{client.name}</option>
+                ))}
+              </select>
+              <ChevronDown className="w-4 h-4 text-gray-400 absolute right-3 top-[10px] pointer-events-none" />
+            </div>
           </div>
           {/* Seletor de tipo de agendamento */}
-          <div className="mt-2 space-y-2">
-            <Label>Tipo de Agendamento</Label>
-            <select
-              className="w-full border rounded px-2 py-1 bg-white border-primary/20 focus:border-primary/60"
-              value={tipoAgendamento}
-              onChange={e => setTipoAgendamento(e.target.value)}
-            >
-              <option value="">Selecione um tipo</option>
-              <option value="pacote">Pacote</option>
-              <option value="avulso">Avulso</option>
-              <option value="pendente">Pendente</option>
-            </select>
+          <div className="mb-6">
+            <Label className="flex items-center gap-2 text-base font-semibold text-primary mb-2">Tipo de Agendamento</Label>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => setTipoAgendamento('pacote')}
+                className={`flex flex-col items-center justify-center p-3 rounded-md border transition-all ${
+                  tipoAgendamento === 'pacote' 
+                    ? 'bg-primary/10 border-primary text-primary' 
+                    : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                <PackageIcon className="w-5 h-5 mb-1" />
+                <span className="text-xs font-medium">Pacote</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setTipoAgendamento('avulso')}
+                className={`flex flex-col items-center justify-center p-3 rounded-md border transition-all ${
+                  tipoAgendamento === 'avulso' 
+                    ? 'bg-primary/10 border-primary text-primary' 
+                    : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                <Scissors className="w-5 h-5 mb-1" />
+                <span className="text-xs font-medium">Avulso</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setTipoAgendamento('pendente')}
+                className={`flex flex-col items-center justify-center p-3 rounded-md border transition-all ${
+                  tipoAgendamento === 'pendente' 
+                    ? 'bg-primary/10 border-primary text-primary' 
+                    : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                <Clock className="w-5 h-5 mb-1" />
+                <span className="text-xs font-medium">Pendente</span>
+              </button>
+            </div>
           </div>
           {/* Lista de pacotes do cliente */}
           {tipoAgendamento === 'pacote' && (
-            <div className="mt-2 space-y-2">
-              <Label>Pacotes ativos do cliente</Label>
-              <div className="space-y-1">
+            <div className="mt-2 space-y-2 overflow-auto flex-grow">
+              <Label className="flex items-center gap-2 text-base font-semibold text-primary mb-2">
+                <PackageIcon className="w-4 h-4 mr-1 text-primary" /> Pacotes ativos
+              </Label>
+              <div className="space-y-3 pr-1 max-h-[calc(100vh-450px)] overflow-auto">
                 {multiClientPackages.map(pkg => (
-                  <div key={pkg.id} className={`border rounded p-2 bg-gray-50 cursor-pointer ${multiSelectedPackageId === pkg.id ? 'ring-2 ring-blue-400' : ''}`}
+                  <div 
+                    key={pkg.id} 
+                    className={`border rounded-lg p-3 cursor-pointer transition-all hover:shadow-sm ${
+                      multiSelectedPackageId === pkg.id 
+                        ? 'ring-2 ring-primary bg-primary/5 border-primary/30' 
+                        : 'bg-white border-gray-200'
+                    }`}
                     onClick={() => handleSelectPackage(pkg.id)}
                   >
-                    <div className="font-semibold text-green-800">{pkg.name}</div>
-                    <div className="text-xs text-gray-600">Sessões restantes: {pkg.sessions_left ?? '-'}</div>
+                    <div className="font-semibold text-primary">{pkg.name}</div>
+                    <div className="text-xs text-gray-600 mt-1">Sessões restantes: {pkg.sessions_left ?? '-'}</div>
                     {pkg.services && Array.isArray(pkg.services) && pkg.services.length > 0 && (
-                      <div className="text-xs mt-1 text-gray-700">
-                        Procedimentos:
-                        <ul className="ml-2 list-disc">
+                      <div className="text-xs mt-2 text-gray-700">
+                        <div className="font-medium mb-1">Procedimentos:</div>
+                        <ul className="ml-1 space-y-1.5">
                           {pkg.services.map(sid => {
                             let serviceId = typeof sid === 'string' ? sid : sid.id || sid.service_id;
-                            const svc = services.find(s => s.id === serviceId || s.service_id === serviceId);
+                            const svc = services.find(s => s.id === serviceId);
                             let nome = svc ? svc.name : (sid.name || serviceId);
                             const sess = getSessionsLeft(pkg, serviceId);
                             const reagendaveis = getReagendaveis(pkg, serviceId);
                             return (
                               <li key={serviceId} className="flex flex-col gap-1">
                                 <div className="flex items-center justify-between">
-                                  <span>{nome} {sess && `(${sess.left}/${sess.total} sessões)`}</span>
-                                  {reagendaveis.length > 0 && (
-                                    <Button
-                                      size="xs"
-                                      variant="outline"
-                                      className="ml-2 text-orange-600 border-orange-300 hover:bg-orange-50"
-                                      onClick={() => handleReagendarSessao(pkg, serviceId)}
-                                      title="Reagendar sessão não concluída"
-                                    >
-                                      Reagendar sessão
-                                    </Button>
-                                  )}
+                                  <span className="flex items-center">
+                                    <Scissors className="w-3 h-3 text-gray-500 mr-1" />
+                                    <span>{nome}</span>
+                                  </span>
+                                  <span className="text-xs px-1.5 py-0.5 rounded-full bg-gray-100">
+                                    {sess && `${sess.left}/${sess.total}`}
+                                  </span>
                                 </div>
+                                {reagendaveis.length > 0 && (
+                                  <Button
+                                    size="xs"
+                                    variant="outline"
+                                    className="mt-1 text-orange-600 border-orange-300 hover:bg-orange-50 py-0 h-6 text-xs"
+                                    onClick={() => handleReagendarSessao(pkg, serviceId)}
+                                    title="Reagendar sessão não concluída"
+                                  >
+                                    <Clock className="w-3 h-3 mr-1" /> Reagendar sessão
+                                  </Button>
+                                )}
                               </li>
                             );
                           })}
@@ -505,12 +561,18 @@ export default function MultiAppointmentModal({
                     )}
                   </div>
                 ))}
+                {multiClientPackages.length === 0 && multiClientId && (
+                  <div className="text-center py-6 text-gray-500 bg-gray-50 rounded-lg border border-dashed">
+                    <PackageIcon className="w-8 h-8 mx-auto text-gray-400 mb-2" />
+                    <p className="text-sm">Este cliente não possui pacotes ativos</p>
+                  </div>
+                )}
               </div>
             </div>
           )}
         </div>
         {/* Coluna 2: Procedimentos e Horário */}
-        <div className="flex-1 min-w-[240px] space-y-6 pl-8 pr-8 py-8 bg-white">
+        <div className="flex-1 min-w-[240px] space-y-6 pl-8 pr-8 py-8 bg-white overflow-auto">
           {/* Área de sessões para reagendar */}
           {multiSelectedPackageId && (() => {
             // Buscar todas as sessões reagendáveis do pacote selecionado
@@ -523,45 +585,45 @@ export default function MultiAppointmentModal({
             if (todasSessoesReagendaveis.length === 0) return null;
             
             return (
-              <div className="mb-6">
-                <div className="flex items-center gap-2 mb-2">
-                  <AlertTriangle className="h-4 w-4 text-orange-500" />
-                  <h3 className="text-sm font-medium text-gray-700">Sessões pendentes para reagendar:</h3>
+              <div className="mb-6 bg-orange-50 p-4 rounded-lg border border-orange-100">
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertTriangle className="h-5 w-5 text-orange-500" />
+                  <h3 className="text-sm font-medium text-gray-800">Sessões pendentes para reagendar</h3>
                 </div>
-                <div className="flex flex-wrap gap-2 mb-4">
+                <div className="flex flex-wrap gap-3 mb-2">
                   {todasSessoesReagendaveis.map((sessao, idx) => {
                     const servicoInfo = services.find(s => s.id === sessao.service_id);
                     return (
                       <div 
                         key={idx} 
-                        className="bg-orange-50 border border-orange-200 rounded-md p-2 text-xs flex-1 min-w-[200px] max-w-[250px]"
+                        className="bg-white border border-orange-200 rounded-md p-3 text-xs flex-1 min-w-[200px] max-w-[250px] shadow-sm"
                       >
-                        <div className="flex items-center gap-1">
-                          <Clock className="h-3 w-3 text-orange-500" />
+                        <div className="flex items-center gap-1 text-orange-700">
+                          <Clock className="h-3.5 w-3.5 text-orange-500" />
                           <span className="font-medium">{formatDateTime(sessao.date)}</span>
                         </div>
-                        <div className="mt-1 flex items-center gap-1">
-                          <User className="h-3 w-3 text-gray-500" />
+                        <div className="mt-2 flex items-center gap-1">
+                          <User className="h-3.5 w-3.5 text-gray-500" />
                           <span>{sessao.employee_name || 'Profissional não informado'}</span>
                         </div>
                         <div className="mt-1 flex items-center gap-1">
-                          <Scissors className="h-3 w-3 text-gray-500" />
+                          <Scissors className="h-3.5 w-3.5 text-gray-500" />
                           <span>{sessao.service_name || servicoInfo?.name || 'Serviço não informado'}</span>
                         </div>
                         {sessao.status && (
-                          <div className="mt-1">
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                          <div className="mt-2">
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
                               {sessao.status === 'cancelado' ? 'Cancelado' : sessao.status === 'faltou' ? 'Faltou' : 'Não concluído'}
                             </span>
                           </div>
                         )}
                         <Button
-                          size="xs"
+                          size="sm"
                           variant="outline"
-                          className="mt-2 w-full text-orange-600 border-orange-300 hover:bg-orange-100"
+                          className="mt-2 w-full text-orange-600 border-orange-300 hover:bg-orange-100 h-8"
                           onClick={() => handleReagendarSessaoEspecifica(sessao)}
                         >
-                          Reagendar esta sessão
+                          <Clock className="w-3.5 h-3.5 mr-1" /> Reagendar esta sessão
                         </Button>
                       </div>
                     );
@@ -573,7 +635,20 @@ export default function MultiAppointmentModal({
           
           {/* Linhas dinâmicas de agendamento */}
           <div className="agendamento-linhas">
-            <Label className="flex items-center gap-2 text-base font-semibold text-primary">Linhas de Agendamento</Label>
+            <div className="flex items-center justify-between mb-4">
+              <Label className="flex items-center gap-2 text-base font-semibold text-primary">
+                <PlusCircle className="w-4 h-4 text-primary" /> Linhas de Agendamento
+              </Label>
+              <Button 
+                type="button" 
+                onClick={adicionarLinhaAgendamento} 
+                className="h-8 px-3 bg-primary/10 hover:bg-primary/20 text-primary border-none"
+                disabled={!multiClientId || !tipoAgendamento}
+              >
+                <PlusCircle className="w-4 h-4 mr-1" /> Adicionar Linha
+              </Button>
+            </div>
+            
             {agendamentoLinhas.map((linha, idx) => {
               const servicosDisponiveis = getServicosDisponiveis().filter(s => {
                 if (tipoAgendamento === 'pacote' && selectedPackage) {
@@ -583,66 +658,126 @@ export default function MultiAppointmentModal({
                 return true;
               });
               return (
-                <div key={idx} className="flex flex-row gap-2 items-center mb-2">
-                  {/* Serviço */}
-                  <select
-                    className="border rounded px-2 py-1 bg-white border-primary/20 focus:border-primary/60"
-                    value={linha.servico}
-                    onChange={e => atualizarLinhaAgendamento(idx, 'servico', e.target.value)}
-                  >
-                    <option value="">Serviço...</option>
-                    {servicosDisponiveis.map(s => (
-                      <option key={s.id} value={s.id}>{s.name}</option>
-                    ))}
-                  </select>
-                  {/* Profissional */}
-                  <select
-                    className="border rounded px-2 py-1 bg-white border-primary/20 focus:border-primary/60"
-                    value={linha.profissional}
-                    onChange={e => atualizarLinhaAgendamento(idx, 'profissional', e.target.value)}
-                  >
-                    <option value="">Profissional...</option>
-                    {employees && employees.length > 0 && employees.map(emp => (
-                      <option key={emp.id} value={emp.id}>{emp.name}</option>
-                    ))}
-                  </select>
-                  {/* Data */}
-                  <input
-                    type="date"
-                    className="border rounded px-2 py-1 bg-white border-primary/20 focus:border-primary/60"
-                    value={linha.data}
-                    onChange={e => atualizarLinhaAgendamento(idx, 'data', e.target.value)}
-                  />
-                  {/* Hora */}
-                  <select
-                    className="border rounded px-2 py-1 bg-white border-primary/20 focus:border-primary/60"
-                    value={linha.hora}
-                    onChange={e => atualizarLinhaAgendamento(idx, 'hora', e.target.value)}
-                  >
-                    <option value="">Horário...</option>
-                    {linha.profissional && linha.data && getAvailableHours(linha.profissional).map(horario => {
-                      const agendamentos = countAppointments(linha.profissional, linha.data, horario);
-                      return (
-                        <option key={horario} value={horario} style={agendamentos > 0 ? { color: 'red', fontWeight: 'bold' } : {}}>
-                          {horario} {agendamentos > 0 ? `(${agendamentos} agendamento${agendamentos > 1 ? 's' : ''})` : ''}
-                        </option>
-                      );
-                    })}
-                  </select>
-                  <button type="button" className="text-red-600 ml-2" onClick={() => removerLinhaAgendamento(idx)}>Remover</button>
+                <div key={idx} className="bg-gray-50 p-4 rounded-lg mb-3 border border-gray-200">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-700">Agendamento #{idx + 1}</span>
+                    {idx > 0 && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 w-7 p-0 text-gray-500 hover:text-red-500 hover:bg-red-50"
+                        onClick={() => removerLinhaAgendamento(idx)}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 mb-3">
+                    {/* Serviço */}
+                    <div className="space-y-1">
+                      <Label className="text-xs text-gray-500">Serviço</Label>
+                      <div className="relative">
+                        <select
+                          className="w-full border rounded-md px-3 py-2 bg-white border-gray-200 focus:border-primary/60 appearance-none text-gray-700"
+                          value={linha.servico}
+                          onChange={e => atualizarLinhaAgendamento(idx, 'servico', e.target.value)}
+                        >
+                          <option value="">Selecione...</option>
+                          {servicosDisponiveis.map(s => (
+                            <option key={s.id} value={s.id}>{s.name}</option>
+                          ))}
+                        </select>
+                        <ChevronDown className="w-4 h-4 text-gray-400 absolute right-3 top-[10px] pointer-events-none" />
+                      </div>
+                    </div>
+                    {/* Profissional */}
+                    <div className="space-y-1">
+                      <Label className="text-xs text-gray-500">Profissional</Label>
+                      <div className="relative">
+                        <select
+                          className="w-full border rounded-md px-3 py-2 bg-white border-gray-200 focus:border-primary/60 appearance-none text-gray-700"
+                          value={linha.profissional}
+                          onChange={e => atualizarLinhaAgendamento(idx, 'profissional', e.target.value)}
+                        >
+                          <option value="">Selecione...</option>
+                          {employees && employees.length > 0 && employees.map(emp => (
+                            <option key={emp.id} value={emp.id}>{emp.name}</option>
+                          ))}
+                        </select>
+                        <ChevronDown className="w-4 h-4 text-gray-400 absolute right-3 top-[10px] pointer-events-none" />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    {/* Data */}
+                    <div className="space-y-1">
+                      <Label className="text-xs text-gray-500">Data</Label>
+                      <div className="relative">
+                        <input
+                          type="date"
+                          className="w-full border rounded-md px-3 py-2 bg-white border-gray-200 focus:border-primary/60 text-gray-700"
+                          value={linha.data}
+                          onChange={e => atualizarLinhaAgendamento(idx, 'data', e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    {/* Hora */}
+                    <div className="space-y-1">
+                      <Label className="text-xs text-gray-500">Horário</Label>
+                      <div className="relative">
+                        <select
+                          className="w-full border rounded-md px-3 py-2 bg-white border-gray-200 focus:border-primary/60 appearance-none text-gray-700"
+                          value={linha.hora}
+                          onChange={e => atualizarLinhaAgendamento(idx, 'hora', e.target.value)}
+                        >
+                          <option value="">Selecione...</option>
+                          {linha.profissional && linha.data && getAvailableHours(linha.profissional).map(horario => {
+                            const agendamentos = countAppointments(linha.profissional, linha.data, horario);
+                            return (
+                              <option 
+                                key={horario} 
+                                value={horario} 
+                                className={agendamentos > 0 ? "text-red-500 font-semibold" : ""}
+                              >
+                                {horario} {agendamentos > 0 ? `(${agendamentos} agendamento${agendamentos > 1 ? 's' : ''})` : ''}
+                              </option>
+                            );
+                          })}
+                        </select>
+                        <ChevronDown className="w-4 h-4 text-gray-400 absolute right-3 top-[10px] pointer-events-none" />
+                      </div>
+                    </div>
+                  </div>
                 </div>
               );
             })}
-            <Button onClick={adicionarLinhaAgendamento}>Adicionar Linha</Button>
+            
+            {agendamentoLinhas.length === 0 && (
+              <div className="text-center py-10 bg-gray-50 rounded-lg border border-dashed border-gray-200">
+                <PlusCircle className="w-10 h-10 mx-auto text-gray-400 mb-2" />
+                <p className="text-gray-500">Selecione um cliente e tipo de agendamento para começar</p>
+              </div>
+            )}
           </div>
-          <DialogFooter className="flex gap-2 mt-4">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
+          
+          <div className="flex justify-end gap-3 pt-4 mt-4 border-t">
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={() => onOpenChange(false)}
+              className="border-gray-300 text-gray-700"
+            >
               Cancelar
             </Button>
-            <Button className="bg-primary hover:bg-primary/90 text-white" onClick={handleConfirm} disabled={!podeConfirmar}>
-              Confirmar
+            <Button 
+              type="button" 
+              onClick={handleConfirm} 
+              disabled={!isFormValid()}
+              className="bg-primary hover:bg-primary/90"
+            >
+              Confirmar Agendamentos
             </Button>
-          </DialogFooter>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

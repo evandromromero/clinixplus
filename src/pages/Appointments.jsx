@@ -926,10 +926,15 @@ export default function Appointments() {
       // Recarrega os dados
       await loadData();
       
-      // Limpa os detalhes e fecha as modais
-      setSelectedAppointmentDetails(null);
-      setShowAppointmentDetails(false);
+      // Apenas fecha o diálogo de confirmação, mas mantém a modal de detalhes aberta
       setConfirmationDialog({ isOpen: false, type: null, appointmentId: null });
+      
+      // Atualiza os dados do cliente para refletir a exclusão
+      if (selectedAppointmentDetails?.client) {
+        const updatedAppointments = await Appointment.filter({ client_id: selectedAppointmentDetails.client.id });
+        const sortedAppointments = updatedAppointments.sort((a, b) => new Date(b.date) - new Date(a.date));
+        setClientAppointments(sortedAppointments);
+      }
       
       // Mostra mensagem de sucesso
       toast({
@@ -947,9 +952,7 @@ export default function Appointments() {
         variant: "destructive"
       });
       
-      // Mesmo em caso de erro, fecha as modais
-      setSelectedAppointmentDetails(null);
-      setShowAppointmentDetails(false);
+      // Apenas fecha o diálogo de confirmação em caso de erro
       setConfirmationDialog({ isOpen: false, type: null, appointmentId: null });
     }
   };
