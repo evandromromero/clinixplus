@@ -79,16 +79,25 @@ export default function CalendarView() {
   };
 
   const getFilteredAppointments = () => {
-    return appointments.filter(app => {
+    // [DEBUG] Logar todos os agendamentos antes de filtrar
+    console.log('[Calendário][DEBUG] Todos os agendamentos recebidos:', appointments);
+    const filtrados = appointments.filter(app => {
       const employeeMatch = selectedEmployees.includes(app.employee_id);
       const statusMatch = !hideCancelled || app.status !== 'cancelado';
+      // [DEBUG] Logar cada agendamento e o resultado do filtro
+      console.log('[Calendário][DEBUG] Avaliando agendamento:', app, 'employeeMatch:', employeeMatch, 'statusMatch:', statusMatch);
       return employeeMatch && statusMatch;
     });
+    console.log('[Calendário][DEBUG] Agendamentos após filtro:', filtrados);
+    return filtrados;
   };
 
   const getAppointmentsForDate = (date) => {
     const formattedDate = format(date, 'yyyy-MM-dd');
-    const filtered = getFilteredAppointments().filter(app => {
+    const ags = getFilteredAppointments();
+    // [DEBUG] Logar todos os agendamentos filtrados para a data
+    console.log(`[Calendário][DEBUG] getAppointmentsForDate - Data: ${formattedDate}, Agendamentos filtrados:`, ags);
+    const filtered = ags.filter(app => {
       // Log para depuração de cada comparação
       const appDate = format(new Date(app.date), 'yyyy-MM-dd');
       const match = appDate === formattedDate;

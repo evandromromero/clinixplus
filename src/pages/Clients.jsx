@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { format } from "date-fns";
+import { format, isValid, parseISO } from "date-fns";
 import { Plus, Search, UserPlus, Phone, Mail, Edit, FileText, Trash2 } from "lucide-react";
 import { Client } from "@/firebase/entities";
 import { Link } from "react-router-dom";
@@ -314,6 +314,27 @@ export default function Clients() {
     }
   };
 
+  // Função utilitária para formatar datas com segurança
+  function safeFormat(date, dateFormat) {
+    if (!date) return "-";
+    let d = date;
+    if (typeof date === "string") {
+      // Tenta parsear ISO ou data simples
+      d = parseISO(date);
+      if (!isValid(d)) {
+        d = new Date(date);
+      }
+    } else {
+      d = new Date(date);
+    }
+    if (!isValid(d) || isNaN(d.getTime())) return "-";
+    try {
+      return format(d, dateFormat);
+    } catch {
+      return "-";
+    }
+  }
+
   return (
     <div className="space-y-6">
       {alert && (
@@ -428,7 +449,7 @@ export default function Clients() {
                       <span className="capitalize">{client.skin_type || "Não definido"}</span>
                     </TableCell>
                     <TableCell>
-                      {format(new Date(client.created_date), "dd/MM/yyyy")}
+                      {client.created_date ? safeFormat(client.created_date, "dd/MM/yyyy") : "N/A"}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
@@ -700,7 +721,7 @@ export default function Clients() {
                           <TableCell>{client.phone}</TableCell>
                           <TableCell>{client.email}</TableCell>
                           <TableCell>
-                            {client.created_date ? format(new Date(client.created_date), "dd/MM/yyyy") : "N/A"}
+                            {client.created_date ? safeFormat(client.created_date, "dd/MM/yyyy") : "N/A"}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -742,7 +763,7 @@ export default function Clients() {
                           <TableCell>{client.phone}</TableCell>
                           <TableCell>{client.email}</TableCell>
                           <TableCell>
-                            {client.created_date ? format(new Date(client.created_date), "dd/MM/yyyy") : "N/A"}
+                            {client.created_date ? safeFormat(client.created_date, "dd/MM/yyyy") : "N/A"}
                           </TableCell>
                         </TableRow>
                       ))}
