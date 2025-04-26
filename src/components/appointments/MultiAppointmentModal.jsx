@@ -161,6 +161,18 @@ export default function MultiAppointmentModal({
     );
   }
 
+  // Função para formatar data e hora para exibição
+  function formatDateTime(dateString) {
+    if (!dateString) return 'Data não disponível';
+    try {
+      const date = new Date(dateString);
+      return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()} às ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+    } catch (error) {
+      console.error("Erro ao formatar data:", error);
+      return 'Data inválida';
+    }
+  }
+
   // Serviços do pacote selecionado
   const selectedPackage = multiClientPackages.find(pkg => pkg.id === multiSelectedPackageId);
   let selectedPackageServices = [];
@@ -339,18 +351,54 @@ export default function MultiAppointmentModal({
 
   // Função de ação para reagendamento
   function handleReagendarSessao(pkg, serviceId) {
-    // Aqui você pode abrir uma modal, adicionar uma linha de agendamento já preenchida, etc.
-    // Exemplo: adicionar uma linha pré-preenchida para reagendar
+    // Encontrar a primeira sessão não concluída para este serviço
+    const reagendaveis = getReagendaveis(pkg, serviceId);
+    const sessaoParaReagendar = reagendaveis.length > 0 ? reagendaveis[0] : null;
+    
+    // Adicionar uma linha pré-preenchida para reagendar
     setAgendamentoLinhas(prev => [
       ...prev,
       {
         tipo: 'pacote',
         servico: serviceId,
-        profissional: '',
+        profissional: sessaoParaReagendar?.employee_id || '',
         data: '',
         hora: ''
       }
     ]);
+    
+    // Rolar para a área de agendamento
+    setTimeout(() => {
+      const agendamentoArea = document.querySelector('.agendamento-linhas');
+      if (agendamentoArea) {
+        agendamentoArea.scrollIntoView({ behavior: 'smooth' });
+      }
+    }, 100);
+  }
+
+  // Nova função para reagendar uma sessão específica
+  function handleReagendarSessaoEspecifica(sessao) {
+    if (!sessao) return;
+    
+    // Adicionar uma linha pré-preenchida com os dados da sessão específica
+    setAgendamentoLinhas(prev => [
+      ...prev,
+      {
+        tipo: 'pacote',
+        servico: sessao.service_id,
+        profissional: sessao.employee_id || '',
+        data: '',
+        hora: ''
+      }
+    ]);
+    
+    // Rolar para a área de agendamento
+    setTimeout(() => {
+      const agendamentoArea = document.querySelector('.agendamento-linhas');
+      if (agendamentoArea) {
+        agendamentoArea.scrollIntoView({ behavior: 'smooth' });
+      }
+    }, 100);
   }
 
   return (
@@ -434,19 +482,21 @@ export default function MultiAppointmentModal({
                             const sess = getSessionsLeft(pkg, serviceId);
                             const reagendaveis = getReagendaveis(pkg, serviceId);
                             return (
-                              <li key={serviceId} className="flex items-center gap-2">
-                                <span>{nome} {sess && `(${sess.left}/${sess.total} sessões)`}</span>
-                                {reagendaveis.length > 0 && (
-                                  <Button
-                                    size="xs"
-                                    variant="outline"
-                                    className="ml-2 text-orange-600 border-orange-300 hover:bg-orange-50"
-                                    onClick={() => handleReagendarSessao(pkg, serviceId)}
-                                    title="Reagendar sessão não concluída"
-                                  >
-                                    Reagendar sessão
-                                  </Button>
-                                )}
+                              <li key={serviceId} className="flex flex-col gap-1">
+                                <div className="flex items-center justify-between">
+                                  <span>{nome} {sess && `(${sess.left}/${sess.total} sessões)`}</span>
+                                  {reagendaveis.length > 0 && (
+                                    <Button
+                                      size="xs"
+                                      variant="outline"
+                                      className="ml-2 text-orange-600 border-orange-300 hover:bg-orange-50"
+                                      onClick={() => handleReagendarSessao(pkg, serviceId)}
+                                      title="Reagendar sessão não concluída"
+                                    >
+                                      Reagendar sessão
+                                    </Button>
+                                  )}
+                                </div>
                               </li>
                             );
                           })}
@@ -461,8 +511,68 @@ export default function MultiAppointmentModal({
         </div>
         {/* Coluna 2: Procedimentos e Horário */}
         <div className="flex-1 min-w-[240px] space-y-6 pl-8 pr-8 py-8 bg-white">
+          {/* Área de sessões para reagendar */}
+          {multiSelectedPackageId && (() => {
+            // Buscar todas as sessões reagendáveis do pacote selecionado
+            const pacote = multiClientPackages.find(pkg => pkg.id === multiSelectedPackageId);
+            if (!pacote || !pacote.session_history) return null;
+            
+            // Filtrar todas as sessões não concluídas
+            const todasSessoesReagendaveis = pacote.session_history.filter(h => h.status !== 'concluido');
+            
+            if (todasSessoesReagendaveis.length === 0) return null;
+            
+            return (
+              <div className="mb-6">
+                <div className="flex items-center gap-2 mb-2">
+                  <AlertTriangle className="h-4 w-4 text-orange-500" />
+                  <h3 className="text-sm font-medium text-gray-700">Sessões pendentes para reagendar:</h3>
+                </div>
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {todasSessoesReagendaveis.map((sessao, idx) => {
+                    const servicoInfo = services.find(s => s.id === sessao.service_id);
+                    return (
+                      <div 
+                        key={idx} 
+                        className="bg-orange-50 border border-orange-200 rounded-md p-2 text-xs flex-1 min-w-[200px] max-w-[250px]"
+                      >
+                        <div className="flex items-center gap-1">
+                          <Clock className="h-3 w-3 text-orange-500" />
+                          <span className="font-medium">{formatDateTime(sessao.date)}</span>
+                        </div>
+                        <div className="mt-1 flex items-center gap-1">
+                          <User className="h-3 w-3 text-gray-500" />
+                          <span>{sessao.employee_name || 'Profissional não informado'}</span>
+                        </div>
+                        <div className="mt-1 flex items-center gap-1">
+                          <Scissors className="h-3 w-3 text-gray-500" />
+                          <span>{sessao.service_name || servicoInfo?.name || 'Serviço não informado'}</span>
+                        </div>
+                        {sessao.status && (
+                          <div className="mt-1">
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                              {sessao.status === 'cancelado' ? 'Cancelado' : sessao.status === 'faltou' ? 'Faltou' : 'Não concluído'}
+                            </span>
+                          </div>
+                        )}
+                        <Button
+                          size="xs"
+                          variant="outline"
+                          className="mt-2 w-full text-orange-600 border-orange-300 hover:bg-orange-100"
+                          onClick={() => handleReagendarSessaoEspecifica(sessao)}
+                        >
+                          Reagendar esta sessão
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
+          
           {/* Linhas dinâmicas de agendamento */}
-          <div>
+          <div className="agendamento-linhas">
             <Label className="flex items-center gap-2 text-base font-semibold text-primary">Linhas de Agendamento</Label>
             {agendamentoLinhas.map((linha, idx) => {
               const servicosDisponiveis = getServicosDisponiveis().filter(s => {
