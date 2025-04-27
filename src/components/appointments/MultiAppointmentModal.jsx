@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { User, Package as PackageIcon, Scissors, Clock, PlusCircle, AlertTriangle, ChevronDown, X } from "lucide-react";
+import "./MultiAppointmentModal.mobile.css"; // Importação do CSS apenas para mobile
 
 export default function MultiAppointmentModal({
   open,
@@ -456,6 +457,7 @@ export default function MultiAppointmentModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent 
+        className="dialog-content-mobile"
         style={{
           maxWidth: 1200, 
           minWidth: 800,  
@@ -471,7 +473,7 @@ export default function MultiAppointmentModal({
         }}
       >
         {/* Coluna 1: Título, Cliente e Pacotes */}
-        <div className="flex flex-col flex-1 min-w-[270px] max-w-[340px] px-8 py-8 border-r h-full justify-start bg-gradient-to-b from-blue-50 to-white">
+        <div className="flex flex-col flex-1 min-w-[270px] max-w-[340px] px-8 py-8 border-r h-full justify-start bg-gradient-to-b from-blue-50 to-white column-1-mobile">
           <DialogHeader className="mb-6 p-0">
             <DialogTitle className="flex items-center gap-2 text-2xl font-bold text-primary">
               <PlusCircle className="w-6 h-6 text-primary" /> Novo Agendamento Múltiplo
@@ -704,7 +706,7 @@ export default function MultiAppointmentModal({
           )}
         </div>
         {/* Coluna 2: Procedimentos e Horário */}
-        <div className="flex-1 min-w-[240px] space-y-6 pl-8 pr-8 py-8 bg-white overflow-auto">
+        <div className="flex-1 min-w-[240px] space-y-6 pl-8 pr-8 py-8 bg-white overflow-auto column-2-mobile">
           {/* Área de sessões para reagendar */}
           {tipoAgendamento === 'pacote' && multiSelectedPackageId && getTodasSessoesReagendaveis().length > 0 && (
             <div className="bg-orange-50 p-4 rounded-lg border border-orange-100 mb-6">
@@ -793,7 +795,7 @@ export default function MultiAppointmentModal({
                       </Button>
                     )}
                   </div>
-                  <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div className="grid grid-cols-2 gap-3 mb-3 grid-mobile">
                     {/* Serviço */}
                     <div className="space-y-1">
                       <Label className="text-xs text-gray-500">Serviço</Label>
@@ -829,7 +831,7 @@ export default function MultiAppointmentModal({
                       </div>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-3 grid-mobile">
                     {/* Data */}
                     <div className="space-y-1">
                       <Label className="text-xs text-gray-500">Data</Label>
@@ -881,12 +883,12 @@ export default function MultiAppointmentModal({
             )}
           </div>
           
-          <div className="flex justify-end gap-3 pt-4 mt-4 border-t">
+          <div className="flex justify-end gap-3 pt-4 mt-4 border-t buttons-mobile">
             <Button 
               type="button" 
               variant="outline" 
               onClick={() => onOpenChange(false)}
-              className="border-gray-300 text-gray-700"
+              className="border-gray-300 text-gray-700 button-mobile"
             >
               Cancelar
             </Button>
@@ -894,7 +896,7 @@ export default function MultiAppointmentModal({
               type="button" 
               onClick={handleConfirm} 
               disabled={!isFormValid()}
-              className="bg-primary hover:bg-primary/90"
+              className="bg-primary hover:bg-primary/90 button-mobile"
             >
               Confirmar Agendamentos
             </Button>

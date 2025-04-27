@@ -416,6 +416,130 @@ src/
   - Melhorado o feedback ao usuário usando toast ao invés de alerts
   - Mantida a compatibilidade com a integração Firebase
 
+## Melhorias no Modal de Múltiplos Agendamentos (Mobile) — Abril 2025
+
+### Objetivo
+Adaptar o componente `MultiAppointmentModal` para funcionar perfeitamente em dispositivos móveis, garantindo que todas as informações (pacotes ativos, serviços pendentes, etc.) sejam exibidas corretamente, sem alterar a experiência no desktop.
+
+### Alterações Realizadas
+
+1. **Responsividade e Layout Mobile**
+   - Implementação de design responsivo utilizando Tailwind CSS.
+   - Criação de um arquivo CSS exclusivo para mobile: `MultiAppointmentModal.mobile.css`.
+   - O modal ocupa toda a tela em dispositivos móveis, com colunas reorganizadas verticalmente para melhor usabilidade.
+   - Botões de ação (Cancelar/Confirmar) fixos na parte inferior do modal no mobile, facilitando a interação.
+
+2. **Exibição de Pacotes e Serviços**
+   - Correção na renderização de pacotes ativos e serviços pendentes, garantindo que sejam exibidos corretamente ao abrir o modal no mobile.
+   - Ajuste para que a seleção de cliente atualize imediatamente os serviços exibidos, tanto no mobile quanto no desktop.
+
+3. **Correções de Bugs**
+   - Ajuste das propriedades de overflow no CSS para permitir rolagem adequada no modal mobile.
+   - Correção de um problema onde pacotes e serviços só apareciam corretamente após abrir o modal no desktop primeiro.
+
+4. **Tratamento de Dados de Pacotes**
+   - Padronização do processamento dos serviços dos pacotes, considerando que podem vir como array ou objeto, evitando bugs de exibição.
+   - Ajuste na função de atualização de progresso dos pacotes para aceitar tanto IDs em string quanto objetos completos, garantindo atualização correta do progresso ao concluir agendamentos.
+
+### Decisões Técnicas
+
+- **Tailwind CSS** foi utilizado para garantir um código de estilos limpo, reutilizável e fácil de manter.
+- O arquivo `MultiAppointmentModal.mobile.css` concentra as regras específicas para mobile, separando responsabilidades e facilitando futuras manutenções.
+- Todo o ajuste foi feito de modo a não impactar o layout e a experiência do usuário no desktop.
+
+### Recomendações para Manutenção
+
+- Testar sempre em diferentes tamanhos de tela após alterações no modal.
+- Manter a separação dos estilos mobile e desktop para evitar regressões.
+- Documentar futuras mudanças na lógica de exibição de pacotes/serviços, especialmente se houver alterações no formato dos dados recebidos do backend.
+
+### Resumo das Funções Modificadas
+
+- `MultiAppointmentModal.jsx`: componente principal ajustado para suportar responsividade e lógica de exibição dinâmica.
+- `MultiAppointmentModal.mobile.css`: novo arquivo com regras de layout e overflow específicas para mobile.
+- Funções de processamento de pacotes e serviços: agora tratam corretamente diferentes formatos de dados.
+
+---
+## Melhorias Recentes
+
+### Correções de Bugs
+
+#### Busca de Clientes na Modal de Venda de Pacotes
+- **Problema**: Ao selecionar um cliente na busca da modal de venda de pacotes, aparecia "Cliente não encontrado" no botão ao lado, mesmo tendo encontrado e selecionado o cliente corretamente.
+- **Causa**: O sistema usava um cache de nomes de clientes (`clientNamesCache`) que era criado apenas a partir da lista de clientes já carregados inicialmente. Quando um cliente era buscado e selecionado na modal, mas não estava na lista original, o nome não era adicionado ao cache.
+- **Solução**: Modificamos o código para adicionar o cliente selecionado à lista geral de clientes quando ele é selecionado na busca, garantindo que seja incluído no cache de nomes e apareça corretamente no botão.
+
+#### Exibição de Pacotes Personalizados
+- **Problema**: Pacotes personalizados não estavam sendo exibidos corretamente no portal do cliente.
+- **Causa**: O filtro `.filter(cp => cp.packageData)` excluía pacotes sem packageData, que são justamente os pacotes personalizados.
+- **Solução**: Modificamos o código para incluir todos os pacotes, independentemente de serem regulares ou personalizados, e adicionamos uma flag isCustomPackage para identificar pacotes personalizados.
+
+#### Processamento de Serviços em Pacotes
+- **Problema**: Serviços em pacotes personalizados não estavam sendo processados corretamente.
+- **Causa**: A função que processa os serviços do package_snapshot assumia que services era sempre um objeto, quando na verdade poderia ser um array.
+- **Solução**: Modificamos o código para verificar o tipo de dados e processar adequadamente tanto arrays quanto objetos.
+
+#### Atualização de Progresso em Pacotes
+- **Problema**: O progresso dos pacotes não era atualizado corretamente quando um agendamento era concluído.
+- **Causa**: Os serviços em pacotes personalizados podem estar armazenados em diferentes formatos: como strings de IDs ou como objetos completos.
+- **Solução**: A função updatePackageSession foi modificada para verificar ambos os formatos e fazer a comparação adequada em cada caso, garantindo que o progresso dos pacotes seja atualizado corretamente.
+
+## Melhorias Recentes em Pacotes e Portal do Cliente (Abril 2025)
+
+### Funcionalidades Implementadas e Corrigidas
+
+1. **Importação e Gestão de Pacotes**
+   - Aprimoramos o formulário de importação de pacotes para garantir a captura correta dos dados durante o processo de importação.
+   - Implementamos a seleção de serviços dentro do modal de importação de pacotes.
+   - Após salvar um pacote importado, o modal agora limpa todos os campos automaticamente, proporcionando uma experiência mais fluida.
+   - O nome do profissional responsável pela sessão é corretamente exibido no histórico de sessões após a importação do pacote.
+
+2. **Histórico de Sessões Utilizadas**
+   - Para cada pacote, o portal do cliente exibe as sessões concluídas, mostrando detalhes como data, hora, serviço e profissional que realizou o atendimento.
+   - Corrigida a exibição dos serviços incluídos nos pacotes, tratando diferentes formatos de dados (arrays e objetos).
+
+3. **Pacotes Personalizados**
+   - Corrigimos o processamento para incluir pacotes personalizados, adicionando a flag `isCustomPackage` para identificação.
+   - O código foi ajustado para processar corretamente os serviços do `package_snapshot`, independentemente de serem arrays ou objetos.
+
+4. **Interface Expansível e Melhorias Visuais**
+   - Implementamos interface de detalhes expansíveis para pacotes, tanto no portal do cliente quanto no painel administrativo e na aba de detalhes do cliente.
+   - Adicionamos barras de progresso para visualização clara das sessões utilizadas.
+   - Botões "Mais detalhes"/"Menos detalhes" com ícones intuitivos.
+   - Organização das informações em seções lógicas (básicas, serviços, histórico).
+   - Mantivemos padrão visual e de interação em todas as áreas, utilizando as mesmas cores e estilos.
+
+5. **Consistência e Usabilidade**
+   - Garantimos que a interface permaneça limpa, organizada e fácil de usar.
+   - Melhoramos o tratamento de erros e mensagens de feedback ao usuário.
+   - Validação de campos obrigatórios antes de submissão dos formulários.
+
+### Como foi feito
+
+- Refatoração das funções de processamento de pacotes e serviços para lidar com múltiplos formatos de dados.
+- Implementação de caches para nomes e serviços de pacotes, otimizando o desempenho.
+- Uso de React hooks para gerenciamento de estado e efeitos.
+- Integração com Firebase para persistência e consulta de dados de pacotes, sessões, clientes e profissionais.
+- Testes manuais em todos os fluxos de importação, exibição e histórico de sessões.
+- Documentação das principais funções e decisões de design diretamente no código.
+- Seguido padrão de nomenclatura e estilo do projeto.
+
+### Resumo das Decisões de Design
+
+- Foco na experiência do usuário: modais limpos após ações, feedback visual imediato, informações organizadas e acessíveis.
+- Consistência visual e de navegação entre todas as áreas do sistema.
+- Flexibilidade para lidar com diferentes tipos de pacotes e estruturas de dados.
+
+## Melhorias Recentes
+
+### 25/03/2025
+- **Correção do Módulo de Caixa**
+  - Corrigido o diálogo de abertura de caixa mantendo a seleção de funcionários autorizados
+  - Restauradas funções importantes de manipulação de transações
+  - Restauradas funções de geração e download de relatórios
+  - Melhorado o feedback ao usuário usando toast ao invés de alerts
+  - Mantida a compatibilidade com a integração Firebase
+
 ## Sistema de Controle de Acesso e Permissões
 
 ### Controle de Acesso Baseado em Permissões
@@ -468,78 +592,31 @@ Para mais informações e suporte, please contact Base44 support at app@base44.c
    - Adicionamos logs (console.log) para inspecionar os dados reais exibidos na interface.
    - Testamos a exibição tanto para pacotes personalizados quanto importados, garantindo cobertura total dos casos.
 
-2. **Refatoração de Código**
-   - Ajustamos funções para processar corretamente tanto arrays quanto objetos de serviços.
-   - Refatoramos a exibição do profissional para considerar tanto `employee_id` (busca pelo ID) quanto `employee_name` (nome salvo direto), garantindo sempre mostrar o nome correto.
-   - Implementamos fallback inteligente para evitar mensagens genéricas quando o dado está disponível.
+2. **Componentização e Modais**
+   - As lógicas de visualização, edição e criação de anamnese foram centralizadas no componente `AnamneseActionCard`.
+   - O modal de gerenciamento de anamnese foi implementado no `EmployeeAppointmentCard`, com controle de estado para alternar entre visualizar, editar ou criar nova anamnese.
+   - O nome do funcionário logado é propagado via props e salvo no registro da anamnese.
 
-3. **Validação de Dados e Testes**
-   - Testamos manualmente todos os fluxos: venda, importação, exibição e histórico de sessões.
-   - Corrigimos problemas de exibição e inconsistência nos dados históricos.
-   - Garantimos que o sistema lida com dados antigos e novos sem perder informações.
+3. **Assinatura ao Concluir Agendamento**
+   - O botão "Concluir" agora abre uma modal com `SignatureCanvas` para capturar a assinatura do cliente.
+   - A assinatura é salva no campo `signature` do agendamento ao marcar como concluído.
+   - O status só é atualizado após a assinatura ser confirmada.
 
-4. **Documentação e Melhoria Contínua**
-   - Registramos todas as decisões e melhorias neste README para referência futura.
-   - Mantivemos o padrão de escrita e lógica do projeto.
-   - Priorizamos a clareza na exibição das informações para o usuário final.
-
-### Melhorias na Exibição de Serviços Pendentes e Notificações (Abril 2025)
-
-### Funcionalidades Implementadas
-
-#### 1. Exibição de Serviços Pendentes na Modal de Agendamento Múltiplo
-- **Problema**: A modal de agendamento múltiplo não estava exibindo corretamente os serviços pendentes para um cliente selecionado.
-- **Solução**: Implementamos uma busca direta ao Firebase para carregar os serviços pendentes quando um cliente é selecionado.
-- **Benefícios**: 
-  - Agora os serviços pendentes são exibidos corretamente quando o tipo de agendamento "Pendente" é selecionado
-  - Melhor experiência do usuário ao agendar serviços pendentes
-  - Consistência com a funcionalidade já existente na modal de agendamento simples
-
-#### 2. Atualização do Status de Serviços Pendentes
-- **Problema**: Após agendar um serviço pendente, seu status não era atualizado para "agendado", fazendo com que continuasse aparecendo como pendente.
-- **Solução**: Implementamos a atualização automática do status do serviço pendente para "agendado" após a criação do agendamento.
-- **Benefícios**:
-  - Evita duplicação de agendamentos para o mesmo serviço pendente
-  - Mantém a lista de serviços pendentes sempre atualizada
-  - Melhora a organização e controle dos serviços
-
-#### 3. Notificações Elegantes para Ações do Usuário
-- **Problema**: Não havia feedback visual claro quando um agendamento era criado com sucesso ou quando ocorria um erro.
-- **Solução**: Implementamos um sistema de notificações moderno e elegante usando react-hot-toast.
-- **Benefícios**:
-  - Feedback visual imediato para o usuário após cada ação
-  - Notificações estilizadas por tipo (sucesso, erro, aviso)
-  - Animações suaves para melhor experiência do usuário
-  - Desaparecimento automático após 5 segundos
-
-### Como foi feito
-
-1. **Carregamento de Serviços Pendentes**
-   - Modificamos o componente `MultiAppointmentModal.jsx` para receber a entidade `PendingService`
-   - Implementamos uma função assíncrona `carregarServicosPendentes` que busca os serviços pendentes diretamente do Firebase
-   - Adicionamos tratamento para diferentes formatos de dados, garantindo compatibilidade com o código existente
-
-2. **Atualização de Status de Serviços Pendentes**
-   - Atualizamos a função `handleCreateAppointmentMulti` em `Appointments.jsx` para incluir a atualização do status do serviço pendente
-   - Adicionamos o campo `pending_service_id` ao objeto de agendamento para rastrear a origem do agendamento
-   - Implementamos a chamada à API `PendingService.update` para atualizar o status para "agendado"
-
-3. **Sistema de Notificações**
-   - Criamos um utilitário personalizado `toast.js` que encapsula a biblioteca react-hot-toast
-   - Adicionamos o componente `<Toaster />` ao arquivo principal `main.jsx`
-   - Implementamos quatro tipos de notificações: success, error, warning e info
-   - Estilizamos as notificações com cores, ícones e animações adequadas
+4. **Padrão para Atualizações Futuras**
+   - Sempre utilizar modais para ações críticas ou que envolvam confirmação/assinatura.
+   - Centralizar lógicas de CRUD em componentes reutilizáveis (como `AnamneseActionCard`).
+   - Manter o padrão de passar informações do funcionário logado via props para rastreabilidade.
+   - Documentar cada melhoria relevante neste README para facilitar manutenção e onboarding.
 
 ### Principais Arquivos Alterados
-- `src/components/appointments/MultiAppointmentModal.jsx`
-- `src/pages/Appointments.jsx`
-- `src/utils/toast.js` (novo)
-- `src/main.jsx`
+- `src/components/employee-portal/EmployeeAppointmentCard.jsx`
+- `src/components/employee-portal/AnamneseActionCard.jsx`
+- `src/pages/EmployeePortal.jsx`
 
 ### Recomendações para Manutenção
-- Utilizar o utilitário `showToast` para exibir notificações em todas as partes do sistema
-- Manter a consistência na atualização de status de serviços pendentes
-- Ao adicionar novos tipos de serviços ou agendamentos, garantir que o fluxo de atualização de status seja mantido
+- Sempre testar os fluxos de anamnese e conclusão de agendamento após alterações.
+- Manter a experiência do usuário clara, exibindo opções de ação em modais antes de qualquer edição direta.
+- Para novas funcionalidades, seguir o padrão de componentização e documentação já adotado.
 
 ---
 ## Melhorias Recentes no Portal do Funcionário (Abril 2025)
