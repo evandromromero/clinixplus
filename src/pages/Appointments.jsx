@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Clock, Plus, Check, X, Filter, ArrowRight, User, DollarSign, History, Phone, Mail, FileText, Package as PackageIcon, Scissors, CalendarPlus, Trash2, AlertTriangle } from "lucide-react";
-import { format, parseISO, isToday, isTomorrow, isThisWeek, isAfter, getDay } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { format, parseISO, addDays, isAfter, isBefore, isEqual, getDay, addMonths, setHours, setMinutes } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import showToast from '@/utils/toast';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -60,10 +61,28 @@ import {
 import MultiAppointmentModal from '@/components/appointments/MultiAppointmentModal';
 
 export default function Appointments() {
-  const { toast } = useToast(); // Get the toast function from the hook
+  const navigate = useNavigate();
+
+  // Estados para popovers dos campos digitáveis
+  const [showProfessionalPopover, setShowProfessionalPopover] = useState(false);
+  const [showServicePopover, setShowServicePopover] = useState(false);
+  const [showPendingPopover, setShowPendingPopover] = useState(false);
+
+  // Estados para modal de agendamento múltiplo
+  const [showMultiAppointmentDialog, setShowMultiAppointmentDialog] = useState(false);
+  const [showNewAppointmentDialog, setShowNewAppointmentDialog] = useState(false);
+
+  // Estados para modal de agendamento múltiplo
+  const [multiClientId, setMultiClientId] = useState("");
+  const [multiSelectedItems, setMultiSelectedItems] = useState([]); // [{id, name/title, type}]
+  const [multiDateTime, setMultiDateTime] = useState("");
+  const [multiSearch, setMultiSearch] = useState("");
+  const [multiClientSearch, setMultiClientSearch] = useState("");
+  const [multiClientPackages, setMultiClientPackages] = useState([]);
+
+  // Helpers para valores selecionados
   const [date, setDate] = useState(new Date());
   const [appointments, setAppointments] = useState([]);
-  const [showNewAppointmentDialog, setShowNewAppointmentDialog] = useState(false);
   const [clients, setClients] = useState([]);
   const [services, setServices] = useState([]);
   const [employees, setEmployees] = useState([]);
@@ -131,34 +150,6 @@ export default function Appointments() {
   const [bulkSelectedAppointments, setBulkSelectedAppointments] = useState([]);
   const [bulkActionsDate, setBulkActionsDate] = useState(date);
 
-  const navigate = useNavigate();
-
-  // Estados para popovers dos campos digitáveis
-  const [showProfessionalPopover, setShowProfessionalPopover] = useState(false);
-  const [showServicePopover, setShowServicePopover] = useState(false);
-  const [showPendingPopover, setShowPendingPopover] = useState(false);
-
-  // Estados para modal de agendamento múltiplo
-  const [showMultiAppointmentDialog, setShowMultiAppointmentDialog] = useState(false);
-
-  // Estados para modal de agendamento múltiplo
-  const [multiClientId, setMultiClientId] = useState("");
-  const [multiSelectedItems, setMultiSelectedItems] = useState([]); // [{id, name/title, type}]
-  const [multiDateTime, setMultiDateTime] = useState("");
-  const [multiSearch, setMultiSearch] = useState("");
-  const [multiClientSearch, setMultiClientSearch] = useState("");
-  const [multiClientPackages, setMultiClientPackages] = useState([]);
-
-  // Helpers para valores selecionados
-  const selectedProfessional = employees.find(e => e.id === newAppointment.employee_id);
-  const selectedService = services.find(s => s.id === newAppointment.service_id);
-  const selectedPendingService = pendingServices.find(ps => ps.service_id === newAppointment.service_id);
-
-  const handleViewClientDetails = (clientId) => {
-    navigate(`/client-details?id=${clientId}`);
-    setShowAppointmentDetails(false);
-  };
-
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
     const clientId = searchParams.get('client_id');
@@ -190,11 +181,7 @@ export default function Appointments() {
           }
         } catch (error) {
           console.error('Erro ao carregar dados do serviço pendente:', error);
-          toast({
-            title: "Erro",
-            description: "Não foi possível carregar os dados do serviço pendente",
-            variant: "destructive"
-          });
+          showToast.error("Não foi possível carregar os dados do serviço pendente");
         }
       };
       
@@ -316,11 +303,7 @@ export default function Appointments() {
     try {
       // Validações...
       if (!newAppointment.client_id || !newAppointment.employee_id || !newAppointment.service_id) {
-        toast({
-          title: "Campos obrigatórios",
-          description: "Por favor, preencha todos os campos obrigatórios",
-          variant: "destructive"
-        });
+        showToast.error("Por favor, preencha todos os campos obrigatórios");
         return;
       }
 
@@ -403,20 +386,12 @@ export default function Appointments() {
       setShowNewAppointmentDialog(false);
       clearNewAppointmentForm();
 
-      toast({
-        title: "Sucesso",
-        description: newAppointment.original_appointment_id
-          ? "Agendamento atualizado com sucesso!"
-          : "Agendamento criado com sucesso!",
-        variant: "success"
-      });
+      showToast.success(newAppointment.original_appointment_id
+        ? "Agendamento atualizado com sucesso!"
+        : "Agendamento criado com sucesso!");
     } catch (error) {
       console.error("[Appointments] Erro ao ", newAppointment.original_appointment_id ? "atualizar" : "criar", " agendamento:", error);
-      toast({
-        title: "Erro",
-        description: `Erro ao ${newAppointment.original_appointment_id ? 'atualizar' : 'criar'} agendamento`,
-        variant: "destructive"
-      });
+      showToast.error(`Erro ao ${newAppointment.original_appointment_id ? 'atualizar' : 'criar'} agendamento`);
     }
   };
 
@@ -636,11 +611,7 @@ export default function Appointments() {
           } else {
             // Se não encontrarmos serviços em nenhum lugar, mostrar uma mensagem de aviso
             console.log("[DEBUG] Nenhum serviço encontrado no pacote personalizado");
-            toast({
-              title: "Aviso",
-              description: "Este pacote não possui serviços definidos. Entre em contato com o administrador.",
-              variant: "warning"
-            });
+            showToast.warning("Este pacote não possui serviços definidos. Entre em contato com o administrador.");
             availableServices = [];
           }
         }
@@ -743,11 +714,7 @@ export default function Appointments() {
       setSelectedClientPackage(null);
     } catch (error) {
       console.error("[Appointments] Erro ao carregar dados do cliente:", error);
-      toast({
-        title: "Erro",
-        description: "Erro ao carregar dados do cliente",
-        variant: "destructive"
-      });
+      showToast.error("Erro ao carregar dados do cliente");
     }
   };
 
@@ -903,18 +870,10 @@ export default function Appointments() {
       // Atualizar a lista de agendamentos
       await loadData();
 
-      toast({
-        title: "Status atualizado",
-        description: "O status do agendamento foi atualizado com sucesso!",
-        variant: "success"
-      });
+      showToast.success("O status do agendamento foi atualizado com sucesso!");
     } catch (error) {
       console.error('Erro ao atualizar status:', error);
-      toast({
-        title: "Erro",
-        description: "Não foi possível atualizar o status do agendamento",
-        variant: "destructive"
-      });
+      showToast.error("Não foi possível atualizar o status do agendamento");
     }
   };
 
@@ -937,20 +896,12 @@ export default function Appointments() {
       }
       
       // Mostra mensagem de sucesso
-      toast({
-        title: "Sucesso",
-        description: "Agendamento excluído com sucesso",
-        variant: "success"
-      });
+      showToast.success("Agendamento excluído com sucesso");
     } catch (error) {
       console.error("Erro ao excluir agendamento:", error);
       
       // Mostra mensagem de erro
-      toast({
-        title: "Erro",
-        description: "Ocorreu um erro ao excluir o agendamento",
-        variant: "destructive"
-      });
+      showToast.error("Ocorreu um erro ao excluir o agendamento");
       
       // Apenas fecha o diálogo de confirmação em caso de erro
       setConfirmationDialog({ isOpen: false, type: null, appointmentId: null });
@@ -1054,11 +1005,7 @@ export default function Appointments() {
       }
     } catch (error) {
       console.error("Erro ao executar ação:", error);
-      toast({
-        title: "Erro",
-        description: "Ocorreu um erro ao executar a ação",
-        variant: "destructive"
-      });
+      showToast.error("Ocorreu um erro ao executar a ação");
       setConfirmationDialog({ isOpen: false, type: null, appointmentId: null });
     }
   };
@@ -1158,7 +1105,7 @@ export default function Appointments() {
         setPendingServices(uniquePendingServices);
       } catch (error) {
         console.error("[Appointments] Erro ao carregar serviços pendentes:", error);
-        toast.error("Erro ao carregar serviços pendentes");
+        showToast.error("Erro ao carregar serviços pendentes");
       }
     };
 
@@ -1207,11 +1154,7 @@ export default function Appointments() {
         setPackages(packagesData);
       } catch (error) {
         console.error("[Agenda] Erro ao carregar pacotes:", error);
-        toast({
-          title: "Erro",
-          description: "Erro ao carregar pacotes. Tente novamente.",
-          variant: "destructive"
-        });
+        showToast.error("Erro ao carregar pacotes. Tente novamente.");
       }
     }
     
@@ -1318,13 +1261,7 @@ export default function Appointments() {
         }
         setShowNewAppointmentDialog(false);
         clearNewAppointmentForm();
-        toast({
-          title: "Sucesso",
-          description: appointment.original_appointment_id
-            ? "Agendamento atualizado com sucesso!"
-            : "Agendamento criado com sucesso!",
-          variant: "success"
-        });
+        showToast.success("Agendamento criado com sucesso!");
       } else {
         console.log("[updatePackageSession] Nenhum pacote relevante encontrado para o agendamento:", appointment.id, appointment);
       }
@@ -1397,18 +1334,10 @@ export default function Appointments() {
         }
       }
       await loadData();
-      toast({
-        title: 'Sucesso',
-        description: `Agendamentos ${newStatus === 'concluido' ? 'confirmados' : 'cancelados'} com sucesso!`,
-        variant: 'success'
-      });
+      showToast.success(`Agendamentos ${newStatus === 'concluido' ? 'confirmados' : 'cancelados'} com sucesso!`);
       closeBulkActionsModal();
     } catch (error) {
-      toast({
-        title: 'Erro',
-        description: 'Não foi possível atualizar os agendamentos em massa',
-        variant: 'destructive'
-      });
+      showToast.error("Não foi possível atualizar os agendamentos em massa");
     }
   };
 
@@ -1422,28 +1351,50 @@ export default function Appointments() {
   };
 
   const handleMultiAppointmentConfirm = async (dados) => {
-    // Espera-se: { client_id, package_id, agendamentos: [{ tipo, servico, profissional, data, hora, original_appointment_id }] }
+    // Espera-se: { client_id, package_id, agendamentos: [{ tipo, servico, profissional, data, hora, original_appointment_id, pending_service_id }] }
     if (!dados || !dados.client_id || !Array.isArray(dados.agendamentos) || dados.agendamentos.length === 0) return;
     const { client_id, package_id, agendamentos } = dados;
-    for (const item of agendamentos) {
-      await handleCreateAppointmentMulti({
-        client_id,
-        service_or_package_id: item.servico,
-        date: item.data,
-        type: item.tipo,
-        employee_id: item.profissional,
-        package_id: item.tipo === 'pacote' ? package_id : undefined,
-        hora: item.hora, // Passa hora explicitamente
-        original_appointment_id: item.original_appointment_id // Passa o ID do agendamento original
-      });
+    
+    try {
+      // Contador para agendamentos bem-sucedidos
+      let sucessCount = 0;
+      
+      for (const item of agendamentos) {
+        await handleCreateAppointmentMulti({
+          client_id,
+          service_or_package_id: item.servico,
+          date: item.data,
+          type: item.tipo,
+          employee_id: item.profissional,
+          package_id: item.tipo === 'pacote' ? package_id : null,
+          hora: item.hora, // Passa hora explicitamente
+          original_appointment_id: item.original_appointment_id, // Passa o ID do agendamento original
+          pending_service_id: item.pending_service_id // Passa o ID do serviço pendente
+        });
+        
+        sucessCount++;
+      }
+      
+      // Mostrar notificação de sucesso
+      if (sucessCount > 0) {
+        const message = sucessCount === 1 
+          ? "Agendamento realizado com sucesso!" 
+          : `${sucessCount} agendamentos realizados com sucesso!`;
+        
+        showToast.success(message);
+      }
+      
+      setShowMultiAppointmentDialog(false);
+      setMultiClientId("");
+      setMultiSelectedItems([]);
+      setMultiDateTime("");
+    } catch (error) {
+      console.error("Erro ao criar agendamentos:", error);
+      showToast.error("Ocorreu um erro ao realizar os agendamentos. Por favor, tente novamente.");
     }
-    setShowMultiAppointmentDialog(false);
-    setMultiClientId("");
-    setMultiSelectedItems([]);
-    setMultiDateTime("");
   };
 
-  const handleCreateAppointmentMulti = async ({ client_id, service_or_package_id, date, type, employee_id, package_id, hora, original_appointment_id }) => {
+  const handleCreateAppointmentMulti = async ({ client_id, service_or_package_id, date, type, employee_id, package_id, hora, original_appointment_id, pending_service_id }) => {
     try {
       // Combina data e hora igual ao modal antigo
       let appointmentDate;
@@ -1462,14 +1413,26 @@ export default function Appointments() {
       console.log("[DEBUG][handleCreateAppointmentMulti] Data original:", date);
       console.log("[DEBUG][handleCreateAppointmentMulti] Data formatada:", formattedDate);
       
+      // Preparar os dados do agendamento, garantindo que package_id seja null e não undefined
       const appointmentData = {
         client_id,
         employee_id,
         service_id: service_or_package_id,
         date: formattedDate,
-        package_id: type === 'pacote' ? package_id : undefined,
         status: 'agendado'
       };
+      
+      // Adicionar package_id apenas se for do tipo pacote e package_id existir
+      if (type === 'pacote' && package_id) {
+        appointmentData.package_id = package_id;
+      } else {
+        appointmentData.package_id = null; // Garantir que seja null e não undefined
+      }
+      
+      // Adicionar pending_service_id se existir
+      if (pending_service_id) {
+        appointmentData.pending_service_id = pending_service_id;
+      }
 
       let result;
       
@@ -1481,9 +1444,7 @@ export default function Appointments() {
         // Se não for reagendamento, cria um novo
         result = await Appointment.create(appointmentData);
       }
-      
-      console.log("[DEBUG][handleCreateAppointmentMulti] Resultado da operação:", result);
-      
+
       // Atualizar o histórico do pacote se o agendamento for do tipo pacote
       if (type === 'pacote' && package_id) {
         console.log("[DEBUG][handleCreateAppointmentMulti] Atualizando histórico do pacote:", package_id);
@@ -1530,10 +1491,27 @@ export default function Appointments() {
         await updatePackageSession(result, 'agendado');
       }
       
+      // Atualizar o status do serviço pendente para "agendado" se existir
+      if (pending_service_id) {
+        try {
+          console.log("[DEBUG][handleCreateAppointmentMulti] Atualizando serviço pendente:", pending_service_id);
+          await PendingService.update(pending_service_id, {
+            status: 'agendado',
+            appointment_id: result.id || original_appointment_id
+          });
+          console.log("[DEBUG][handleCreateAppointmentMulti] Serviço pendente atualizado com sucesso");
+        } catch (error) {
+          console.error("[ERROR][handleCreateAppointmentMulti] Erro ao atualizar serviço pendente:", error);
+        }
+      }
+      
       // Opcional: recarregar dados após criar
       await loadData();
+      
+      return result;
     } catch (error) {
       console.error("[ERROR][handleCreateAppointmentMulti] Falha ao criar agendamento múltiplo:", error);
+      throw error; // Propagar o erro para ser tratado pelo chamador
     }
   };
 
@@ -1582,6 +1560,15 @@ export default function Appointments() {
       </div>
     );
   }
+
+  const selectedProfessional = employees.find(e => e.id === newAppointment.employee_id);
+  const selectedService = services.find(s => s.id === newAppointment.service_id);
+  const selectedPendingService = pendingServices.find(ps => ps.service_id === newAppointment.service_id);
+
+  const handleViewClientDetails = (clientId) => {
+    navigate(`/client-details?id=${clientId}`);
+    setShowAppointmentDetails(false);
+  };
 
   return (
     <div className="space-y-6">
@@ -1892,7 +1879,7 @@ export default function Appointments() {
                                           }}
                                         >
                                           <div className="flex flex-col">
-                                            <p className="font-medium text-sm truncate">{client?.name?.length > 11 ? client.name.substring(0, 11) + '...' : client?.name}</p>
+                                            <p className="font-medium">{client?.name?.length > 11 ? client.name.substring(0, 11) + '...' : client?.name}</p>
                                             <p className="text-xs text-gray-600 truncate">
                                               {service?.name?.length > 11 ? service.name.substring(0, 11) + '...' : service?.name}
                                             </p>

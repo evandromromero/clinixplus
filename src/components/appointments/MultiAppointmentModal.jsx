@@ -303,7 +303,7 @@ export default function MultiAppointmentModal({
     }));
     const dadosParaSalvar = {
       client_id: multiClientId,
-      package_id: tipoAgendamento === 'pacote' ? packageIdToSend : undefined,
+      package_id: tipoAgendamento === 'pacote' ? packageIdToSend : null, // Usar null em vez de undefined
       agendamentos: linhasCorrigidas
     };
     console.log('[DEBUG][MultiAppointmentModal] handleConfirm - Dados enviados para onConfirm:', dadosParaSalvar);
