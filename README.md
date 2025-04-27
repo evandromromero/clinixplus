@@ -483,12 +483,65 @@ Para mais informações e suporte, please contact Base44 support at app@base44.c
    - Mantivemos o padrão de escrita e lógica do projeto.
    - Priorizamos a clareza na exibição das informações para o usuário final.
 
+### Melhorias na Exibição de Serviços Pendentes e Notificações (Abril 2025)
+
+### Funcionalidades Implementadas
+
+#### 1. Exibição de Serviços Pendentes na Modal de Agendamento Múltiplo
+- **Problema**: A modal de agendamento múltiplo não estava exibindo corretamente os serviços pendentes para um cliente selecionado.
+- **Solução**: Implementamos uma busca direta ao Firebase para carregar os serviços pendentes quando um cliente é selecionado.
+- **Benefícios**: 
+  - Agora os serviços pendentes são exibidos corretamente quando o tipo de agendamento "Pendente" é selecionado
+  - Melhor experiência do usuário ao agendar serviços pendentes
+  - Consistência com a funcionalidade já existente na modal de agendamento simples
+
+#### 2. Atualização do Status de Serviços Pendentes
+- **Problema**: Após agendar um serviço pendente, seu status não era atualizado para "agendado", fazendo com que continuasse aparecendo como pendente.
+- **Solução**: Implementamos a atualização automática do status do serviço pendente para "agendado" após a criação do agendamento.
+- **Benefícios**:
+  - Evita duplicação de agendamentos para o mesmo serviço pendente
+  - Mantém a lista de serviços pendentes sempre atualizada
+  - Melhora a organização e controle dos serviços
+
+#### 3. Notificações Elegantes para Ações do Usuário
+- **Problema**: Não havia feedback visual claro quando um agendamento era criado com sucesso ou quando ocorria um erro.
+- **Solução**: Implementamos um sistema de notificações moderno e elegante usando react-hot-toast.
+- **Benefícios**:
+  - Feedback visual imediato para o usuário após cada ação
+  - Notificações estilizadas por tipo (sucesso, erro, aviso)
+  - Animações suaves para melhor experiência do usuário
+  - Desaparecimento automático após 5 segundos
+
+### Como foi feito
+
+1. **Carregamento de Serviços Pendentes**
+   - Modificamos o componente `MultiAppointmentModal.jsx` para receber a entidade `PendingService`
+   - Implementamos uma função assíncrona `carregarServicosPendentes` que busca os serviços pendentes diretamente do Firebase
+   - Adicionamos tratamento para diferentes formatos de dados, garantindo compatibilidade com o código existente
+
+2. **Atualização de Status de Serviços Pendentes**
+   - Atualizamos a função `handleCreateAppointmentMulti` em `Appointments.jsx` para incluir a atualização do status do serviço pendente
+   - Adicionamos o campo `pending_service_id` ao objeto de agendamento para rastrear a origem do agendamento
+   - Implementamos a chamada à API `PendingService.update` para atualizar o status para "agendado"
+
+3. **Sistema de Notificações**
+   - Criamos um utilitário personalizado `toast.js` que encapsula a biblioteca react-hot-toast
+   - Adicionamos o componente `<Toaster />` ao arquivo principal `main.jsx`
+   - Implementamos quatro tipos de notificações: success, error, warning e info
+   - Estilizamos as notificações com cores, ícones e animações adequadas
+
+### Principais Arquivos Alterados
+- `src/components/appointments/MultiAppointmentModal.jsx`
+- `src/pages/Appointments.jsx`
+- `src/utils/toast.js` (novo)
+- `src/main.jsx`
+
+### Recomendações para Manutenção
+- Utilizar o utilitário `showToast` para exibir notificações em todas as partes do sistema
+- Manter a consistência na atualização de status de serviços pendentes
+- Ao adicionar novos tipos de serviços ou agendamentos, garantir que o fluxo de atualização de status seja mantido
+
 ---
-
-Essas melhorias garantem que o sistema ClinixPlus continue robusto, flexível e fácil de usar tanto para clientes quanto para administradores, com histórico de sessões confiável e informações completas sobre cada atendimento.
-
----
-
 ## Melhorias Recentes no Portal do Funcionário (Abril 2025)
 
 ### Funcionalidades Implementadas
