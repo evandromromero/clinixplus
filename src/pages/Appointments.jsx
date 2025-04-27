@@ -1422,7 +1422,7 @@ export default function Appointments() {
   };
 
   const handleMultiAppointmentConfirm = async (dados) => {
-    // Espera-se: { client_id, package_id, agendamentos: [{ tipo, servico, profissional, data, hora }] }
+    // Espera-se: { client_id, package_id, agendamentos: [{ tipo, servico, profissional, data, hora, original_appointment_id }] }
     if (!dados || !dados.client_id || !Array.isArray(dados.agendamentos) || dados.agendamentos.length === 0) return;
     const { client_id, package_id, agendamentos } = dados;
     for (const item of agendamentos) {
@@ -1433,7 +1433,8 @@ export default function Appointments() {
         type: item.tipo,
         employee_id: item.profissional,
         package_id: item.tipo === 'pacote' ? package_id : undefined,
-        hora: item.hora // Passa hora explicitamente
+        hora: item.hora, // Passa hora explicitamente
+        original_appointment_id: item.original_appointment_id // Passa o ID do agendamento original
       });
     }
     setShowMultiAppointmentDialog(false);
@@ -1442,7 +1443,7 @@ export default function Appointments() {
     setMultiDateTime("");
   };
 
-  const handleCreateAppointmentMulti = async ({ client_id, service_or_package_id, date, type, employee_id, package_id, hora }) => {
+  const handleCreateAppointmentMulti = async ({ client_id, service_or_package_id, date, type, employee_id, package_id, hora, original_appointment_id }) => {
     try {
       // Combina data e hora igual ao modal antigo
       let appointmentDate;
@@ -1469,12 +1470,63 @@ export default function Appointments() {
         package_id: type === 'pacote' ? package_id : undefined,
         status: 'agendado'
       };
-      const result = await Appointment.create(appointmentData);
-      console.log("[DEBUG][handleCreateAppointmentMulti] Resultado da criação:", result);
+
+      let result;
+      
+      // Verificar se é um reagendamento
+      if (original_appointment_id) {
+        console.log("[DEBUG][handleCreateAppointmentMulti] Reagendando agendamento:", original_appointment_id);
+        result = await Appointment.update(original_appointment_id, appointmentData);
+      } else {
+        // Se não for reagendamento, cria um novo
+        result = await Appointment.create(appointmentData);
+      }
+      
+      console.log("[DEBUG][handleCreateAppointmentMulti] Resultado da operação:", result);
       
       // Atualizar o histórico do pacote se o agendamento for do tipo pacote
       if (type === 'pacote' && package_id) {
         console.log("[DEBUG][handleCreateAppointmentMulti] Atualizando histórico do pacote:", package_id);
+        
+        try {
+          const clientPackage = await ClientPackage.get(package_id);
+          if (clientPackage) {
+            let updatedSessionHistory = [...(clientPackage.session_history || [])];
+            
+            // Se for reagendamento, remover a entrada antiga do histórico
+            if (original_appointment_id) {
+              updatedSessionHistory = updatedSessionHistory.filter(
+                entry => entry.appointment_id !== original_appointment_id
+              );
+            }
+            
+            // Adicionar a nova entrada ao histórico
+            const serviceData = services.find(s => s.id === service_or_package_id);
+            const employeeData = employees.find(e => e.id === employee_id);
+            
+            const sessionHistoryEntry = {
+              service_id: service_or_package_id,
+              service_name: serviceData?.name || "Serviço não encontrado",
+              employee_id: employee_id,
+              employee_name: employeeData?.name || "Profissional não encontrado",
+              date: formattedDate,
+              appointment_id: result.id || original_appointment_id,
+              status: 'agendado'
+            };
+            
+            updatedSessionHistory.push(sessionHistoryEntry);
+            
+            // Atualizar o pacote com o novo histórico
+            await ClientPackage.update(package_id, {
+              session_history: updatedSessionHistory
+            });
+            
+            console.log("[DEBUG][handleCreateAppointmentMulti] Histórico do pacote atualizado com sucesso");
+          }
+        } catch (error) {
+          console.error("[ERROR][handleCreateAppointmentMulti] Erro ao atualizar histórico do pacote:", error);
+        }
+        
         await updatePackageSession(result, 'agendado');
       }
       
