@@ -2924,6 +2924,8 @@ export default function Appointments() {
         services={services}
         ClientPackage={ClientPackage}
         employees={employees}
+        pendingServices={pendingServices}
+        PendingService={PendingService}
         onConfirm={handleMultiAppointmentConfirm}
       />
     </div>

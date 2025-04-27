@@ -13,7 +13,8 @@ export default function MultiAppointmentModal({
   ClientPackage, // entidade para buscar pacotes ativos
   employees, // lista de profissionais
   onConfirm,
-  pendingServices: pendingServicesProp = [] // NOVO: prop para serviços pendentes
+  pendingServices: pendingServicesProp = [], // NOVO: prop para serviços pendentes
+  PendingService // NOVO: entidade para buscar serviços pendentes
 }) {
   // Estados internos da modal
   const [multiClientId, setMultiClientId] = useState("");
@@ -56,21 +57,53 @@ export default function MultiAppointmentModal({
       setPendentes([]);
       return;
     }
+    
     // Avulsos: todos os serviços disponíveis
     setAvulsos(services || []);
-    // Pendentes: usar prop se fornecida
-    if (pendingServicesProp && pendingServicesProp.length > 0) {
-      setPendentes(pendingServicesProp.map(ps => ({
-        ...ps,
-        id: ps.service_id || ps.id,
-        name: ps.name || (services.find(s => s.id === (ps.service_id || ps.id))?.name ?? 'Procedimento Pendente')
-      })));
-    } else if (clients && clients.length > 0) {
-      const client = clients.find(c => c.id === multiClientId);
-      setPendentes(client?.pending_services || []); // fallback
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [multiClientId]);
+    
+    // Carregar serviços pendentes
+    const carregarServicosPendentes = async () => {
+      try {
+        // Se temos a entidade PendingService, buscar diretamente do Firebase
+        if (PendingService) {
+          console.log("[MultiAppointmentModal] Buscando serviços pendentes para cliente:", multiClientId);
+          const pendingServicesData = await PendingService.filter({
+            client_id: multiClientId,
+            status: "pendente"
+          });
+          console.log("[MultiAppointmentModal] Serviços pendentes encontrados:", pendingServicesData);
+          
+          // Normalizar os serviços pendentes com informações completas
+          const pendentesNormalizados = pendingServicesData.map(ps => {
+            const serviceInfo = services.find(s => s.id === ps.service_id);
+            return {
+              ...ps,
+              id: ps.service_id || ps.id,
+              name: serviceInfo?.name || ps.name || 'Procedimento Pendente'
+            };
+          });
+          
+          setPendentes(pendentesNormalizados);
+        } 
+        // Se não temos a entidade, usar a prop ou o fallback
+        else if (pendingServicesProp && pendingServicesProp.length > 0) {
+          setPendentes(pendingServicesProp.map(ps => ({
+            ...ps,
+            id: ps.service_id || ps.id,
+            name: ps.name || (services.find(s => s.id === (ps.service_id || ps.id))?.name ?? 'Procedimento Pendente')
+          })));
+        } else if (clients && clients.length > 0) {
+          const client = clients.find(c => c.id === multiClientId);
+          setPendentes(client?.pending_services || []); // fallback
+        }
+      } catch (error) {
+        console.error("[MultiAppointmentModal] Erro ao carregar serviços pendentes:", error);
+      }
+    };
+    
+    carregarServicosPendentes();
+    
+  }, [multiClientId, services, clients, pendingServicesProp, PendingService]);
 
   // Função auxiliar para montar pacotes do cliente com nome e serviços corretos
   function normalizarPacoteCliente(pkg) {
