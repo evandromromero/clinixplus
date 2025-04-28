@@ -799,9 +799,7 @@ export default function SalesRegister() {
   
   // Função para calcular o valor do desconto geral
   const calculateGeneralDiscount = () => {
-    const subtotal = cartItems.reduce((total, item) => {
-      return total + getSubtotal(item);
-    }, 0);
+    const subtotal = cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
     
     if (finalDiscountType === "final_price" && finalPrice > 0) {
       return Math.max(0, subtotal - finalPrice);
@@ -1015,7 +1013,8 @@ export default function SalesRegister() {
         if (!payment.methodId || !payment.amount) continue;
         
         const paymentMethod = availablePaymentMethods.find(m => m.id === payment.methodId);
-        const isPaid = !paymentMethod?.name?.toLowerCase().includes("crédito");
+        // Sempre considerar o pagamento como "pago", inclusive para cartão de crédito
+        const isPaid = true;
         
         // Usar a data selecionada pelo usuário, garantindo que não haja problemas de fuso horário
         const paymentDate = createISODateWithoutTimezone(saleDate);
@@ -1660,7 +1659,7 @@ export default function SalesRegister() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8 text-red-500"
+                                className="text-red-500"
                                 onClick={() => handleRemoveFromCart(index)}
                               >
                                 <X className="h-4 w-4" />
