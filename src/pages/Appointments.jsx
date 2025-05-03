@@ -39,7 +39,8 @@ import {
   Package, 
   ClientPackage, 
   FinancialTransaction, 
-  PendingService 
+  PendingService,
+  User as UserEntity
 } from "@/firebase/entities";
 import { Calendar } from "@/components/ui/calendar"; 
 import {
@@ -59,6 +60,11 @@ import {
   CommandItem,
 } from "@/components/ui/command";
 import MultiAppointmentModal from '@/components/appointments/MultiAppointmentModal';
+import app from "@/firebase/config";
+import { getAuth } from "firebase/auth";
+
+// Inicializa a autenticação
+const auth = getAuth(app);
 
 export default function Appointments() {
   const navigate = useNavigate();
@@ -165,7 +171,7 @@ export default function Appointments() {
       // Verifica se o usuário está logado
       const currentUser = auth.currentUser;
       if (currentUser) {
-        await User.update(currentUser.uid, {
+        await UserEntity.update(currentUser.uid, {
           appointment_interval: newInterval
         });
       }
@@ -180,7 +186,7 @@ export default function Appointments() {
       try {
         const currentUser = auth.currentUser;
         if (currentUser) {
-          const userData = await User.get(currentUser.uid);
+          const userData = await UserEntity.get(currentUser.uid);
           if (userData && userData.appointment_interval) {
             setIntervaloAgenda(userData.appointment_interval);
             localStorage.setItem('appointmentInterval', userData.appointment_interval.toString());

@@ -341,16 +341,19 @@ export default function MultiAppointmentModal({
     const employee = employees.find(emp => emp.id === employeeId);
     if (!employee || !employee.appointment_interval) return [];
     const interval = employee.appointment_interval;
-    const intervalInMinutes = interval;
-    const startHour = 8;
-    const endHour = 20;
+    
+    // Horário de trabalho padrão das 8h às 20h (em minutos)
+    const startMinutes = 8 * 60;
+    const endMinutes = 20 * 60;
+    
+    // Gerar slots baseados no intervalo
     const slots = [];
-    for (let hour = startHour; hour < endHour; hour++) {
-      for (let min = 0; min < 60; min += intervalInMinutes) {
-        const h = String(hour).padStart(2, '0');
-        const m = String(min).padStart(2, '0');
-        slots.push(`${h}:${m}`);
-      }
+    for (let minutes = startMinutes; minutes < endMinutes; minutes += interval) {
+      const hours = Math.floor(minutes / 60);
+      const mins = minutes % 60;
+      const h = String(hours).padStart(2, '0');
+      const m = String(mins).padStart(2, '0');
+      slots.push(`${h}:${m}`);
     }
     return slots;
   }
