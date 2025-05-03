@@ -1906,10 +1906,25 @@ export default function Appointments() {
                                   // Evita mover para o mesmo lugar
                                   if (originalEmployeeId === employee.id && originalHour === slotHour) return;
                                   
+                                  // Atualiza o agendamento com novo profissional e horário
                                   await Appointment.update(appointmentId, {
                                     employee_id: employee.id,
                                     date: format(timeSlotDate, "yyyy-MM-dd'T'HH:mm:ss")
                                   });
+                                  
+                                  // Busca o agendamento atualizado para verificar se pertence a um pacote
+                                  const updatedAppointment = appointments.find(a => a.id === appointmentId);
+                                  if (updatedAppointment && updatedAppointment.package_id) {
+                                    // Atualiza o histórico do pacote com o novo profissional e horário
+                                    await updatePackageSession(
+                                      {
+                                        ...updatedAppointment,
+                                        employee_id: employee.id,
+                                        date: format(timeSlotDate, "yyyy-MM-dd'T'HH:mm:ss")
+                                      }, 
+                                      updatedAppointment.status
+                                    );
+                                  }
 
                                   await loadData();
                                   
