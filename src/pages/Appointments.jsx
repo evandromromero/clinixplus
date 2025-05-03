@@ -60,6 +60,9 @@ import {
   CommandItem,
 } from "@/components/ui/command";
 import MultiAppointmentModal from '@/components/appointments/MultiAppointmentModal';
+import ClientSearchBar from '@/components/appointments/ClientSearchBar';
+import DependentSelector from '@/components/appointments/DependentSelector';
+import AppointmentSearchBar from '@/components/appointments/AppointmentSearchBar';
 import app from "@/firebase/config";
 import { getAuth } from "firebase/auth";
 
@@ -85,6 +88,11 @@ export default function Appointments() {
   const [multiSearch, setMultiSearch] = useState("");
   const [multiClientSearch, setMultiClientSearch] = useState("");
   const [multiClientPackages, setMultiClientPackages] = useState([]);
+
+  // Estados para barra de pesquisa de cliente avançada
+  const [selectedClientForSearch, setSelectedClientForSearch] = useState(null);
+  const [selectedPersonId, setSelectedPersonId] = useState(null);
+  const [filtroAgendamentos, setFiltroAgendamentos] = useState("");
 
   // Helpers para valores selecionados
   const [date, setDate] = useState(new Date());
@@ -150,6 +158,21 @@ export default function Appointments() {
   
   // Estado para controlar a visibilidade dos filtros
   const [showFilters, setShowFilters] = useState(true);
+
+  // Carregar a preferência do usuário do localStorage ao inicializar
+  useEffect(() => {
+    const savedPreference = localStorage.getItem('showAgendaFilters');
+    if (savedPreference !== null) {
+      setShowFilters(savedPreference === 'true');
+    }
+  }, []);
+
+  // Salvar a preferência do usuário no localStorage quando mudar
+  const toggleFilters = () => {
+    const newValue = !showFilters;
+    setShowFilters(newValue);
+    localStorage.setItem('showAgendaFilters', newValue.toString());
+  };
 
   // Estado para o intervalo dos slots da agenda (com persistência no localStorage e banco de dados)
   const [intervaloAgenda, setIntervaloAgenda] = useState(() => {
@@ -445,12 +468,65 @@ export default function Appointments() {
     }
   };
 
+  const clearNewAppointmentForm = () => {
+    setNewAppointment({
+      client_id: "",
+      employee_id: "",
+      service_id: "",
+      date: new Date(),
+      status: "agendado",
+      notes: "",
+      original_appointment_id: null,
+      pending_service_id: null,
+      dependent_index: null
+    });
+    setProcedimentoTipo("avulso");
+    setSelectedPackageId("");
+    setSelectedClientPackage(null);
+    setSearchTerm("");
+    setSearchResults([]);
+    setShowSearch(false);
+    setSelectedClientForSearch(null);
+    setSelectedPersonId(null);
+  };
+
+  // Função para filtrar agendamentos com base no texto de busca
+  const filtrarAgendamentos = (agendamentos) => {
+    if (!filtroAgendamentos) return agendamentos;
+    
+    const termoBusca = filtroAgendamentos.toLowerCase();
+    return agendamentos.filter(app => {
+      const cliente = clients.find(c => c.id === app.client_id);
+      if (!cliente) return false;
+      
+      // Busca no nome do cliente
+      if (cliente.name?.toLowerCase().includes(termoBusca)) return true;
+      
+      // Busca nos dependentes
+      if (cliente.dependents?.some(dep => dep.name?.toLowerCase().includes(termoBusca))) return true;
+      
+      // Busca no serviço
+      const servico = services.find(s => s.id === app.service_id);
+      if (servico?.name?.toLowerCase().includes(termoBusca)) return true;
+      
+      // Busca no profissional
+      const profissional = employees.find(e => e.id === app.employee_id);
+      if (profissional?.name?.toLowerCase().includes(termoBusca)) return true;
+      
+      return false;
+    });
+  };
+
   const getDayAppointments = (date) => {
-    return appointments.filter(app => {
+    // Primeiro filtra por data e status
+    const appointmentsByDate = appointments.filter(app => {
       const dateMatch = format(new Date(app.date), 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd');
       const statusMatch = !hideCancelled || app.status !== 'cancelado';
       return dateMatch && statusMatch;
     });
+    
+    // Depois aplica o filtro de busca
+    return filtrarAgendamentos(appointmentsByDate);
   };
 
   // Função para gerar horários baseados no intervalo do profissional
@@ -694,7 +770,7 @@ export default function Appointments() {
   
         // Limpa o serviço selecionado para forçar uma nova seleção
         setNewAppointment(prev => ({
-          ...prev,
+          ...prev, 
           service_id: ""
         }));
 
@@ -1046,7 +1122,7 @@ export default function Appointments() {
       // Se não for uma exclusão, atualiza os detalhes do agendamento
       if (confirmationDialog.type !== 'delete') {
         // Busca o agendamento atualizado
-        const updatedAppointment = await Appointment.get(confirmationDialog.appointmentId);
+        const updatedAppointment = appointments.find(a => a.id === confirmationDialog.appointmentId);
         if (updatedAppointment) {
           // Atualiza os detalhes do agendamento na modal
           await handleSelectAppointment(updatedAppointment);
@@ -1071,7 +1147,7 @@ export default function Appointments() {
     const dayAppointments = getDayAppointments(newAppointment.date);
     const employeeAppointments = dayAppointments.filter(app => app.employee_id === employeeId);
     
-    // Verificar se existe algum agendamento dentro do intervalo mínimo
+    // Verifica se existe algum agendamento dentro do intervalo mínimo
     return !employeeAppointments.some(app => {
       const appHour = new Date(app.date).getHours();
       const hourDiff = Math.abs(appHour - selectedHour);
@@ -1162,38 +1238,6 @@ export default function Appointments() {
     loadPendingServices();
   }, [newAppointment.client_id]);
 
-  const clearNewAppointmentForm = () => {
-    setNewAppointment({
-      client_id: "",
-      employee_id: "",
-      service_id: "",
-      date: new Date(),
-      status: "agendado",
-      notes: "",
-      original_appointment_id: null,
-      pending_service_id: null,
-      dependent_index: null
-    });
-    setSelectedClientPackage(null);
-    setSelectedPackageId("");
-    setProcedimentoTipo("avulso");
-  };
-
-  // Carregar a preferência do usuário do localStorage ao inicializar
-  useEffect(() => {
-    const savedPreference = localStorage.getItem('showAgendaFilters');
-    if (savedPreference !== null) {
-      setShowFilters(savedPreference === 'true');
-    }
-  }, []);
-
-  // Salvar a preferência do usuário no localStorage quando mudar
-  const toggleFilters = () => {
-    const newValue = !showFilters;
-    setShowFilters(newValue);
-    localStorage.setItem('showAgendaFilters', newValue.toString());
-  };
-
   const handleOpenNewAppointmentDialog = async () => {
     // Verificar se os pacotes já foram carregados
     if (packages.length === 0) {
@@ -1247,8 +1291,13 @@ export default function Appointments() {
       console.log("[updatePackageSession] relevantPackage:", relevantPackage);
       if (relevantPackage) {
         console.log("[updatePackageSession] Pacote relevante encontrado:", relevantPackage.id);
+        // Usar o nome do profissional fornecido ou buscar nos dados
+        let employeeName = appointment.employee_name;
+        if (!employeeName) {
+          const employeeData = employees.find(e => e.id === appointment.employee_id);
+          employeeName = employeeData ? employeeData.name : "Profissional não encontrado";
+        }
         const serviceData = services.find(s => s.id === appointment.service_id);
-        const employeeData = employees.find(e => e.id === appointment.employee_id);
         const currentSessionHistory = Array.isArray(relevantPackage.session_history) 
           ? relevantPackage.session_history 
           : [];
@@ -1271,7 +1320,13 @@ export default function Appointments() {
             .filter((session, index) => session.appointment_id !== appointment.id || index === sessionIndex)
             .map((session, index) =>
               index === sessionIndex
-                ? { ...session, status: newStatus }
+                ? { 
+                    ...session, 
+                    status: newStatus,
+                    employee_id: appointment.employee_id,
+                    employee_name: employeeName,
+                    date: appointment.date
+                  }
                 : session
             );
           console.log("[updatePackageSession][Ajuste] Atualizando sessão existente e removendo duplicatas:", updatedSessionHistory);
@@ -1286,7 +1341,7 @@ export default function Appointments() {
             service_id: appointment.service_id,
             service_name: serviceData?.name || "Serviço não encontrado",
             employee_id: appointment.employee_id,
-            employee_name: employeeData?.name || "Profissional não encontrado",
+            employee_name: employeeName,
             date: appointment.date,
             appointment_id: appointment.id,
             status: newStatus,
@@ -1316,35 +1371,126 @@ export default function Appointments() {
         console.log("[updatePackageSession] Nenhum pacote relevante encontrado para o agendamento:", appointment.id, appointment);
       }
     } catch (error) {
-      console.error("[updatePackageSession][ERROR] Erro ao atualizar sessão do pacote:", error, appointment);
+      console.error("[updatePackageSession] Erro ao atualizar sessão do pacote:", error);
     }
   };
 
-  const showConfirmDialog = (type, appointmentId) => {
-    const configs = {
-      cancel: {
-        title: 'Cancelar Agendamento',
-        description: 'Tem certeza que deseja cancelar este agendamento?',
-        confirmText: 'Sim, cancelar'
-      },
-      complete: {
-        title: 'Concluir Agendamento',
-        description: 'Confirmar que este agendamento foi realizado?',
-        confirmText: 'Sim, concluir'
-      },
-      delete: {
-        title: 'Excluir Agendamento',
-        description: 'Tem certeza que deseja excluir este agendamento? Esta ação não pode ser desfeita.',
-        confirmText: 'Sim, excluir'
-      }
-    };
+  const filteredMultiItems = services.concat(packages).filter(item => {
+    const term = multiSearch.toLowerCase();
+    const name = (item.name || item.title || "").toLowerCase();
+    return name.includes(term);
+  });
 
-    setConfirmationDialog({
-      isOpen: true,
-      type,
-      appointmentId,
-      ...configs[type]
-    });
+  const filteredClients = clients.filter(client =>
+    client.name.toLowerCase().includes(multiClientSearch.toLowerCase())
+  );
+
+  useEffect(() => {
+    if (!multiClientId) {
+      setMultiClientPackages([]);
+      return;
+    }
+    (async () => {
+      const pkgs = await ClientPackage.filter({ client_id: multiClientId, status: 'ativo' });
+      setMultiClientPackages(pkgs);
+    })();
+  }, [multiClientId]);
+
+  function renderClientPackages() {
+    if (!multiClientId || multiClientPackages.length === 0) return null;
+    return (
+      <div className="mt-2 space-y-2">
+        <Label>Pacotes ativos do cliente</Label>
+        <div className="space-y-1">
+          {multiClientPackages.map(pkg => (
+            <div key={pkg.id} className="border rounded p-2 bg-gray-50">
+              <div className="font-semibold text-green-800">{pkg.title || pkg.name || "Pacote"}</div>
+              <div className="text-xs text-gray-600">Sessões restantes: {pkg.sessions_left ?? '-'}</div>
+              {pkg.services && Array.isArray(pkg.services) && (
+                <div className="text-xs mt-1 text-gray-700">
+                  Procedimentos: {pkg.services.map(sid => {
+                    const svc = services.find(s => s.id === (sid.id || sid));
+                    return svc ? svc.name : sid.name || sid;
+                  }).join(', ')}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const selectedProfessional = employees.find(e => e.id === newAppointment.employee_id);
+  const selectedService = services.find(s => s.id === newAppointment.service_id);
+  const selectedPendingService = pendingServices.find(ps => ps.service_id === newAppointment.service_id);
+
+  const handleViewClientDetails = (clientId) => {
+    navigate(`/client-details?id=${clientId}`);
+    setShowAppointmentDetails(false);
+  };
+
+  // Função para gerar os slots de horários dinâmicos
+  const gerarSlots = () => {
+    const slots = [];
+    const start = 8 * 60; // 8:00 em minutos
+    const end = 20 * 60; // 20:00 em minutos
+    for (let min = start; min < end; min += intervaloAgenda) {
+      slots.push(min);
+    }
+    return slots;
+  };
+
+  // Formatar os horários para exibição
+  const formatarHora = min => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+
+  // Função para verificar se um agendamento pertence a um slot específico
+  const isAppointmentInSlot = (appointment, slotMinutes) => {
+    const appDate = new Date(appointment.date);
+    const appHour = appDate.getHours();
+    const appMinute = appDate.getMinutes();
+    const appTotalMinutes = appHour * 60 + appMinute;
+    
+    // Verifica se o agendamento está dentro do intervalo deste slot
+    const slotStart = slotMinutes;
+    const slotEnd = slotMinutes + intervaloAgenda;
+    
+    return appTotalMinutes >= slotStart && appTotalMinutes < slotEnd;
+  };
+
+  // Função para selecionar cliente na barra de pesquisa avançada
+  const handleClientSelect = (client) => {
+    setSelectedClientForSearch(client);
+    setSelectedPersonId(client.id); // Seleciona o titular por padrão
+    
+    // Atualiza o formulário de agendamento
+    setNewAppointment(prev => ({
+      ...prev,
+      client_id: client.id
+    }));
+  };
+
+  // Função para limpar seleção de cliente
+  const handleClearClient = () => {
+    setSelectedClientForSearch(null);
+    setSelectedPersonId(null);
+    
+    // Limpa o cliente do formulário
+    setNewAppointment(prev => ({
+      ...prev,
+      client_id: ""
+    }));
+  };
+
+  // Função para selecionar pessoa (titular ou dependente)
+  const handlePersonSelect = (personId) => {
+    setSelectedPersonId(personId);
+    
+    // Atualiza o formulário de agendamento
+    setNewAppointment(prev => ({
+      ...prev,
+      client_id: personId
+    }));
   };
 
   // --- Bulk Action Handlers ---
@@ -1378,18 +1524,25 @@ export default function Appointments() {
         const appointment = appointments.find(a => a.id === appointmentId);
         if (!appointment) continue;
         await Appointment.update(appointmentId, { status: newStatus });
+
+        // Se o agendamento está associado a um pacote, atualizar a sessão
         if (appointment.package_id) {
           await updatePackageSession(appointment, newStatus);
         }
+
+        // Se o agendamento tem um serviço pendente associado, atualizar seu status
         if (appointment.pending_service_id) {
           await PendingService.update(appointment.pending_service_id, {
             status: newStatus === 'concluido' ? 'concluido' : 'agendado'
           });
         }
+
+        // Atualizar a lista de agendamentos
+        await loadData();
+
+        showToast.success(`Agendamentos ${newStatus === 'concluido' ? 'confirmados' : 'cancelados'} com sucesso!`);
+        closeBulkActionsModal();
       }
-      await loadData();
-      showToast.success(`Agendamentos ${newStatus === 'concluido' ? 'confirmados' : 'cancelados'} com sucesso!`);
-      closeBulkActionsModal();
     } catch (error) {
       showToast.error("Não foi possível atualizar os agendamentos em massa");
     }
@@ -1499,7 +1652,7 @@ export default function Appointments() {
         result = await Appointment.create(appointmentData);
       }
 
-      // Atualizar o histórico do pacote se o agendamento for do tipo pacote
+      // Se houver um pacote selecionado e o tipo de procedimento for pacote, atualiza o histórico
       if (type === 'pacote' && package_id) {
         console.log("[DEBUG][handleCreateAppointmentMulti] Atualizando histórico do pacote:", package_id);
         
@@ -1544,7 +1697,7 @@ export default function Appointments() {
         await updatePackageSession(result, 'agendado');
       }
       
-      // Atualizar o status do serviço pendente para "agendado" se existir
+      // Se houver um serviço pendente associado, atualizar seu status
       if (pending_service_id) {
         try {
           console.log("[DEBUG][handleCreateAppointmentMulti] Atualizando serviço pendente:", pending_service_id);
@@ -1568,87 +1721,31 @@ export default function Appointments() {
     }
   };
 
-  const filteredMultiItems = services.concat(packages).filter(item => {
-    const term = multiSearch.toLowerCase();
-    const name = (item.name || item.title || "").toLowerCase();
-    return name.includes(term);
-  });
+  const showConfirmDialog = (type, appointmentId) => {
+    const configs = {
+      cancel: {
+        title: 'Cancelar Agendamento',
+        description: 'Tem certeza que deseja cancelar este agendamento?',
+        confirmText: 'Sim, cancelar'
+      },
+      complete: {
+        title: 'Concluir Agendamento',
+        description: 'Confirmar que este agendamento foi realizado?',
+        confirmText: 'Sim, concluir'
+      },
+      delete: {
+        title: 'Excluir Agendamento',
+        description: 'Tem certeza que deseja excluir este agendamento? Esta ação não pode ser desfeita.',
+        confirmText: 'Sim, excluir'
+      }
+    };
 
-  const filteredClients = clients.filter(client =>
-    client.name.toLowerCase().includes(multiClientSearch.toLowerCase())
-  );
-
-  useEffect(() => {
-    if (!multiClientId) {
-      setMultiClientPackages([]);
-      return;
-    }
-    (async () => {
-      const pkgs = await ClientPackage.filter({ client_id: multiClientId, status: 'ativo' });
-      setMultiClientPackages(pkgs);
-    })();
-  }, [multiClientId]);
-
-  function renderClientPackages() {
-    if (!multiClientId || multiClientPackages.length === 0) return null;
-    return (
-      <div className="mt-2 space-y-2">
-        <Label>Pacotes ativos do cliente</Label>
-        <div className="space-y-1">
-          {multiClientPackages.map(pkg => (
-            <div key={pkg.id} className="border rounded p-2 bg-gray-50">
-              <div className="font-semibold text-green-800">{pkg.title || pkg.name || "Pacote"}</div>
-              <div className="text-xs text-gray-600">Sessões restantes: {pkg.sessions_left ?? '-'}</div>
-              {pkg.services && Array.isArray(pkg.services) && (
-                <div className="text-xs mt-1 text-gray-700">
-                  Procedimentos: {pkg.services.map(sid => {
-                    const svc = services.find(s => s.id === (sid.id || sid));
-                    return svc ? svc.name : sid.name || sid;
-                  }).join(', ')}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  const selectedProfessional = employees.find(e => e.id === newAppointment.employee_id);
-  const selectedService = services.find(s => s.id === newAppointment.service_id);
-  const selectedPendingService = pendingServices.find(ps => ps.service_id === newAppointment.service_id);
-
-  const handleViewClientDetails = (clientId) => {
-    navigate(`/client-details?id=${clientId}`);
-    setShowAppointmentDetails(false);
-  };
-
-  // Função para gerar os slots de horários dinâmicos
-  const gerarSlots = () => {
-    const slots = [];
-    const start = 8 * 60; // 8:00 em minutos
-    const end = 20 * 60; // 20:00 em minutos
-    for (let min = start; min < end; min += intervaloAgenda) {
-      slots.push(min);
-    }
-    return slots;
-  };
-
-  // Formatar os horários para exibição
-  const formatarHora = min => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
-
-  // Função para verificar se um agendamento pertence a um slot específico
-  const isAppointmentInSlot = (appointment, slotMinutes) => {
-    const appDate = new Date(appointment.date);
-    const appHour = appDate.getHours();
-    const appMinute = appDate.getMinutes();
-    const appTotalMinutes = appHour * 60 + appMinute;
-    
-    // Verifica se o agendamento está dentro do intervalo deste slot
-    const slotStart = slotMinutes;
-    const slotEnd = slotMinutes + intervaloAgenda;
-    
-    return appTotalMinutes >= slotStart && appTotalMinutes < slotEnd;
+    setConfirmationDialog({
+      isOpen: true,
+      type,
+      appointmentId,
+      ...configs[type]
+    });
   };
 
   return (
@@ -1675,19 +1772,28 @@ export default function Appointments() {
             )}
           </Button>
         </div>
-        <div className="flex gap-2 mb-4">
-          <Button
-            className="bg-purple-700 hover:bg-purple-800"
-            onClick={() => setShowNewAppointmentDialog(true)}
-          >
-            + Novo Agendamento
-          </Button>
-          <Button
-            className="bg-green-700 hover:bg-green-800"
-            onClick={() => setShowMultiAppointmentDialog(true)}
-          >
-            + Agendamento Múltiplo
-          </Button>
+        <div className="flex flex-col sm:flex-row gap-2 mb-4">
+          <AppointmentSearchBar
+            value={filtroAgendamentos}
+            onChange={setFiltroAgendamentos}
+            onClear={() => setFiltroAgendamentos("")}
+            placeholder="Buscar cliente, serviço ou profissional..."
+            className="w-full sm:w-64 mb-2 sm:mb-0"
+          />
+          <div className="flex gap-2">
+            <Button
+              className="bg-purple-700 hover:bg-purple-800"
+              onClick={() => setShowNewAppointmentDialog(true)}
+            >
+              + Novo Agendamento
+            </Button>
+            <Button
+              className="bg-green-700 hover:bg-green-800"
+              onClick={() => setShowMultiAppointmentDialog(true)}
+            >
+              + Agendamento Múltiplo
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -1842,7 +1948,7 @@ export default function Appointments() {
                           <div 
                             className="w-3 h-3 rounded-full"
                             style={{ backgroundColor: employee.color || '#94a3b8' }}
-                          ></div>
+                          />
                           {employee.name.length > 16 ? employee.name.substring(0, 16) + '...' : employee.name}
                         </div>
                       </th>
@@ -1915,15 +2021,23 @@ export default function Appointments() {
                                   // Busca o agendamento atualizado para verificar se pertence a um pacote
                                   const updatedAppointment = appointments.find(a => a.id === appointmentId);
                                   if (updatedAppointment && updatedAppointment.package_id) {
+                                    // Busca os dados completos do profissional
+                                    const employeeData = employees.find(e => e.id === employee.id);
+                                    
                                     // Atualiza o histórico do pacote com o novo profissional e horário
                                     await updatePackageSession(
                                       {
                                         ...updatedAppointment,
                                         employee_id: employee.id,
+                                        employee_name: employeeData ? employeeData.name : "Profissional não encontrado",
                                         date: format(timeSlotDate, "yyyy-MM-dd'T'HH:mm:ss")
                                       }, 
                                       updatedAppointment.status
                                     );
+                                    
+                                    // Busca o pacote do cliente para verificar se o histórico foi atualizado
+                                    const clientPackage = await ClientPackage.get(updatedAppointment.package_id);
+                                    console.log("[DEBUG] Pacote atualizado após drag and drop:", clientPackage);
                                   }
 
                                   await loadData();
@@ -2056,89 +2170,73 @@ export default function Appointments() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Cliente</Label>
-                <div className="relative">
-                  <Input
-                    placeholder="Digite o nome do cliente..."
-                    value={searchTerm}
-                    onChange={(e) => {
-                      setSearchTerm(e.target.value);
-                      searchClientsAndDependents(e.target.value);
-                      setShowSearch(true);
-                    }}
-                    onFocus={() => setShowSearch(true)}
-                  />
-                  {showSearch && searchResults.length > 0 && (
-                    <div className="absolute z-10 w-full mt-1 bg-white rounded-md shadow-lg border max-h-60 overflow-auto">
-                      {searchResults.map((result) => (
-                        <button
-                          key={result.id}
-                          className="w-full text-left px-4 py-2 hover:bg-gray-100"
-                          onClick={() => handleClientSelection(
-                            result.type === 'titular' ? result.id : result.parent.id,
-                            result.name,
-                            result.type,
-                            result.type === 'dependente' ? result.dependentIndex : null
-                          )}
-                        >
-                          <div>
-                            <span className="font-medium">{result.name}</span>
-                            <span className="text-sm text-gray-500 ml-2">
-                              ({result.type === 'titular' ? 'Titular' : 'Dependente'})
-                            </span>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                <ClientSearchBar
+                  clients={clients}
+                  onClientSelect={handleClientSelect}
+                  selectedClient={selectedClientForSearch}
+                  onClear={handleClearClient}
+                  placeholder="Buscar cliente para agendamento..."
+                  className="w-full"
+                />
               </div>
 
-              <div className="space-y-2">
-                <Label>Profissional</Label>
-                <Popover open={showProfessionalPopover} onOpenChange={setShowProfessionalPopover}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      role="combobox"
-                      className="w-full justify-start text-left font-normal"
-                      aria-expanded={showProfessionalPopover}
-                    >
-                      {selectedProfessional ? (
-                        <span className="flex items-center gap-2">
-                          <span className="w-3 h-3 rounded-full" style={{ backgroundColor: selectedProfessional.color || '#94a3b8' }} />
-                          {selectedProfessional.name.length > 16 ? selectedProfessional.name.substring(0, 16) + '...' : selectedProfessional.name}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">Selecione o profissional...</span>
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="p-0 w-[300px]">
-                    <Command>
-                      <CommandInput placeholder="Buscar profissional..." />
-                      <CommandEmpty>Nenhum profissional encontrado.</CommandEmpty>
-                      <CommandList>
-                        <CommandGroup>
-                          {employees.map((employee) => (
-                            <CommandItem
-                              key={employee.id}
-                              value={employee.name}
-                              onSelect={() => {
-                                setNewAppointment({ ...newAppointment, employee_id: employee.id, service_id: "" });
-                                updateServicesForEmployee(employee.id);
-                                setShowProfessionalPopover(false);
-                              }}
-                            >
-                              <span className="w-3 h-3 rounded-full mr-2 inline-block" style={{ backgroundColor: employee.color || '#94a3b8' }} />
-                              {employee.name.length > 24 ? employee.name.substring(0, 24) + '...' : employee.name}
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-              </div>
+              {selectedClientForSearch && selectedClientForSearch.dependents && selectedClientForSearch.dependents.length > 0 && (
+                <div>
+                  <Label>Paciente</Label>
+                  <DependentSelector
+                    client={selectedClientForSearch}
+                    selectedPersonId={selectedPersonId}
+                    onPersonSelect={handlePersonSelect}
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Profissional</Label>
+              <Popover open={showProfessionalPopover} onOpenChange={setShowProfessionalPopover}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-start text-left font-normal"
+                    aria-expanded={showProfessionalPopover}
+                  >
+                    {selectedProfessional ? (
+                      <span className="flex items-center gap-2">
+                        <span className="w-3 h-3 rounded-full" style={{ backgroundColor: selectedProfessional.color || '#94a3b8' }} />
+                        {selectedProfessional.name.length > 16 ? selectedProfessional.name.substring(0, 16) + '...' : selectedProfessional.name}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">Selecione o profissional...</span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="p-0 w-[300px]">
+                  <Command>
+                    <CommandInput placeholder="Buscar profissional..." />
+                    <CommandEmpty>Nenhum profissional encontrado.</CommandEmpty>
+                    <CommandList>
+                      <CommandGroup>
+                        {employees.map((employee) => (
+                          <CommandItem
+                            key={employee.id}
+                            value={employee.name}
+                            onSelect={() => {
+                              setNewAppointment({ ...newAppointment, employee_id: employee.id, service_id: "" });
+                              updateServicesForEmployee(employee.id);
+                              setShowProfessionalPopover(false);
+                            }}
+                          >
+                            <span className="w-3 h-3 rounded-full mr-2 inline-block" style={{ backgroundColor: employee.color || '#94a3b8' }} />
+                            {employee.name.length > 24 ? employee.name.substring(0, 24) + '...' : employee.name}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
 
             {newAppointment.client_id && (
@@ -2153,7 +2251,7 @@ export default function Appointments() {
                     }
                   }}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-24">
                     <SelectValue placeholder="Selecione o tipo de procedimento" />
                   </SelectTrigger>
                   <SelectContent>
@@ -2394,11 +2492,14 @@ export default function Appointments() {
           </div>
 
           <DialogFooter className="flex gap-2">
-            <Button variant="outline" onClick={() => {
-              setShowNewAppointmentDialog(false);
-              setSelectedClientPackage(null);
-              setSelectedPackageId("");
-            }}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowNewAppointmentDialog(false);
+                setSelectedClientPackage(null);
+                setSelectedPackageId("");
+              }}
+            >
               Cancelar
             </Button>
             <Button 
@@ -2599,13 +2700,16 @@ export default function Appointments() {
                           <CardContent className="pt-6">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-4">
-                                <div className={`w-3 h-3 rounded-full ${
-                                  app.status === 'concluido'
-                                    ? 'bg-green-500'
-                                    : app.status === 'cancelado'
-                                    ? 'bg-red-500'
-                                    : ''
-                                }`} />
+                                <div 
+                                  className="w-3 h-3 rounded-full"
+                                  style={{ 
+                                    backgroundColor: app.status === 'concluido'
+                                      ? '#34C759'
+                                      : app.status === 'cancelado'
+                                      ? '#FF3737'
+                                      : ''
+                                  }}
+                                />
                                 <div>
                                   <p className="font-medium">
                                     {format(new Date(app.date), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
@@ -2984,7 +3088,7 @@ export default function Appointments() {
                           onCheckedChange={() => toggleBulkAppointment(app.id)}
                         />
                       </td>
-                      <td>{format(new Date(app.date), 'HH:mm')}</td>
+                      <td>{format(new Date(app.date), "HH:mm")}</td>
                       <td>{client?.name || '-'}</td>
                       <td>{employee?.name || '-'}</td>
                       <td>{service?.name || '-'}</td>
