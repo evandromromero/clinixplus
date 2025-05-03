@@ -145,10 +145,54 @@ export default function Appointments() {
   // Estado para controlar a visibilidade dos filtros
   const [showFilters, setShowFilters] = useState(true);
 
-  // --- Bulk Actions Modal State ---
-  const [showBulkActionsModal, setShowBulkActionsModal] = useState(false);
-  const [bulkSelectedAppointments, setBulkSelectedAppointments] = useState([]);
-  const [bulkActionsDate, setBulkActionsDate] = useState(date);
+  // Estado para o intervalo dos slots da agenda (com persistência no localStorage e banco de dados)
+  const [intervaloAgenda, setIntervaloAgenda] = useState(() => {
+    // Primeiro tenta obter do localStorage para experiência imediata
+    const savedInterval = localStorage.getItem('appointmentInterval');
+    return savedInterval ? Number(savedInterval) : 60; // padrão: 60 minutos
+  });
+
+  // Salvar o intervalo no localStorage e no banco de dados quando ele mudar
+  const handleIntervaloChange = async (value) => {
+    const newInterval = Number(value);
+    setIntervaloAgenda(newInterval);
+    
+    // Salvar no localStorage para persistência local
+    localStorage.setItem('appointmentInterval', newInterval.toString());
+    
+    // Salvar no banco de dados para persistência entre dispositivos
+    try {
+      // Verifica se o usuário está logado
+      const currentUser = auth.currentUser;
+      if (currentUser) {
+        await User.update(currentUser.uid, {
+          appointment_interval: newInterval
+        });
+      }
+    } catch (error) {
+      console.error("Erro ao salvar intervalo de agendamento:", error);
+    }
+  };
+
+  // Carregar o intervalo do banco de dados quando o componente montar
+  useEffect(() => {
+    const loadUserSettings = async () => {
+      try {
+        const currentUser = auth.currentUser;
+        if (currentUser) {
+          const userData = await User.get(currentUser.uid);
+          if (userData && userData.appointment_interval) {
+            setIntervaloAgenda(userData.appointment_interval);
+            localStorage.setItem('appointmentInterval', userData.appointment_interval.toString());
+          }
+        }
+      } catch (error) {
+        console.error("Erro ao carregar configurações do usuário:", error);
+      }
+    };
+    
+    loadUserSettings();
+  }, []);
 
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
@@ -957,9 +1001,9 @@ export default function Appointments() {
     }
   };
 
-  const handleAddToEmptySlot = (employeeId, hour) => {
+  const handleAddToEmptySlot = (employeeId, hour, minute) => {
     const newDate = new Date(date);
-    newDate.setHours(hour, 0, 0, 0);
+    newDate.setHours(hour, minute, 0, 0);
     setNewAppointment(prev => ({ 
       ...prev, 
       date: newDate,
@@ -1243,7 +1287,7 @@ export default function Appointments() {
             notes: appointment.notes || ""
           };
           updatedSessionHistory.push(sessionHistoryEntry);
-          console.log("[updatePackageSession][Ajuste] Adicionando nova sessão sem duplicidade:", sessionHistoryEntry);
+
           await ClientPackage.update(relevantPackage.id, {
             session_history: updatedSessionHistory,
             sessions_used: Math.max(0, (relevantPackage.sessions_used || 0) + sessionsUsedDelta)
@@ -1298,6 +1342,10 @@ export default function Appointments() {
   };
 
   // --- Bulk Action Handlers ---
+  const [showBulkActionsModal, setShowBulkActionsModal] = useState(false);
+  const [bulkSelectedAppointments, setBulkSelectedAppointments] = useState([]);
+  const [bulkActionsDate, setBulkActionsDate] = useState(date);
+
   const openBulkActionsModal = () => {
     setShowBulkActionsModal(true);
     setBulkSelectedAppointments([]);
@@ -1476,8 +1524,7 @@ export default function Appointments() {
             };
             
             updatedSessionHistory.push(sessionHistoryEntry);
-            
-            // Atualizar o pacote com o novo histórico
+
             await ClientPackage.update(package_id, {
               session_history: updatedSessionHistory
             });
@@ -1568,6 +1615,34 @@ export default function Appointments() {
   const handleViewClientDetails = (clientId) => {
     navigate(`/client-details?id=${clientId}`);
     setShowAppointmentDetails(false);
+  };
+
+  // Função para gerar os slots de horários dinâmicos
+  const gerarSlots = () => {
+    const slots = [];
+    const start = 8 * 60; // 8:00 em minutos
+    const end = 20 * 60; // 20:00 em minutos
+    for (let min = start; min < end; min += intervaloAgenda) {
+      slots.push(min);
+    }
+    return slots;
+  };
+
+  // Formatar os horários para exibição
+  const formatarHora = min => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+
+  // Função para verificar se um agendamento pertence a um slot específico
+  const isAppointmentInSlot = (appointment, slotMinutes) => {
+    const appDate = new Date(appointment.date);
+    const appHour = appDate.getHours();
+    const appMinute = appDate.getMinutes();
+    const appTotalMinutes = appHour * 60 + appMinute;
+    
+    // Verifica se o agendamento está dentro do intervalo deste slot
+    const slotStart = slotMinutes;
+    const slotEnd = slotMinutes + intervaloAgenda;
+    
+    return appTotalMinutes >= slotStart && appTotalMinutes < slotEnd;
   };
 
   return (
@@ -1719,6 +1794,26 @@ export default function Appointments() {
               Ações em Massa do Dia
             </Button>
           </div>
+
+          <div className="flex items-center gap-2 mt-2">
+            <Label htmlFor="intervalo-agenda">Intervalo dos slots:</Label>
+            <Select
+              id="intervalo-agenda"
+              value={intervaloAgenda.toString()}
+              onValueChange={handleIntervaloChange}
+            >
+              <SelectTrigger className="w-24">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="15">15 min</SelectItem>
+                <SelectItem value="20">20 min</SelectItem>
+                <SelectItem value="30">30 min</SelectItem>
+                <SelectItem value="40">40 min</SelectItem>
+                <SelectItem value="60">60 min</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         <Card>
@@ -1749,17 +1844,21 @@ export default function Appointments() {
                   </tr>
                 </thead>
                 <tbody>
-                  {timeSlots.map((hour) => {
+                  {gerarSlots().map((slotMinutes) => {
                     const currentDate = new Date(date);
-                    const timeSlotDate = new Date(currentDate.setHours(hour, 0, 0, 0));
+                    const slotHour = Math.floor(slotMinutes / 60);
+                    const slotMinute = slotMinutes % 60;
+                    const timeSlotDate = new Date(currentDate.setHours(slotHour, slotMinute, 0, 0));
+                    
+                    // Filtrar agendamentos que pertencem a este slot
                     const slotAppointments = getDayAppointments(date).filter(
-                      app => new Date(app.date).getHours() === hour
+                      app => isAppointmentInSlot(app, slotMinutes)
                     );
 
                     return (
-                      <tr key={hour} className="border-b">
+                      <tr key={slotMinutes} className="border-b">
                         <td className="p-2 border-r text-sm text-gray-500 text-center">
-                          {format(timeSlotDate, "HH:mm")}
+                          {formatarHora(slotMinutes)}
                         </td>
 
                         {filteredEmployees.map(employee => {
@@ -1767,7 +1866,7 @@ export default function Appointments() {
                             app => app.employee_id === employee.id
                           );
 
-                          const isAvailable = getEmployeeAvailability(employee.id, hour);
+                          const isAvailable = getEmployeeAvailability(employee.id, slotHour);
 
                           return (
                             <td 
@@ -1799,7 +1898,7 @@ export default function Appointments() {
                                   const { appointmentId, clientId, serviceId, originalEmployeeId, originalHour } = data;
                                   
                                   // Evita mover para o mesmo lugar
-                                  if (originalEmployeeId === employee.id && originalHour === hour) return;
+                                  if (originalEmployeeId === employee.id && originalHour === slotHour) return;
                                   
                                   await Appointment.update(appointmentId, {
                                     employee_id: employee.id,
@@ -1910,7 +2009,7 @@ export default function Appointments() {
                               {isAvailable && empAppointments.length === 0 && (
                                 <div 
                                   className="h-10 w-full rounded-md border border-dashed border-gray-300 hover:border-purple-400 hover:bg-purple-50 transition-colors cursor-pointer"
-                                  onClick={() => handleAddToEmptySlot(employee.id, hour)}
+                                  onClick={() => handleAddToEmptySlot(employee.id, slotHour, slotMinute)}
                                 />
                               )}
                             </td>
@@ -2220,8 +2319,8 @@ export default function Appointments() {
                         newDate.setHours(currentHour, currentMinute, 0);
                         setNewAppointment({...newAppointment, date: newDate})
                       }}
+                      className="rounded-md border w-fit mx-auto"
                       locale={ptBR}
-                      initialFocus
                     />
                   </PopoverContent>
                 </Popover>
@@ -2578,7 +2677,7 @@ export default function Appointments() {
                   <TabsContent value="packages" className="mt-4">
                     <div className="space-y-4">
                       {clientPackages.length > 0 ? clientPackages.map((pkg, index) => {
-                        const packageDetails = packages.find(p => p.id === pkg.package_id);
+                        const packageData = packages.find(p => p.id === pkg.package_id);
                         const progress = (pkg.sessions_used / pkg.total_sessions) * 100;
                         
                         return (
@@ -2587,7 +2686,7 @@ export default function Appointments() {
                               <div className="space-y-4">
                                 <div className="flex items-center justify-between">
                                   <div>
-                                    <h4 className="font-medium">{packageDetails?.name}</h4>
+                                    <h4 className="font-medium">{packageData?.name}</h4>
                                     <p className="text-sm text-gray-600">
                                       Válido até {format(new Date(pkg.expiration_date), "dd/MM/yyyy", { locale: ptBR })}
                                     </p>
