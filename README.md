@@ -416,50 +416,59 @@ src/
   - Melhorado o feedback ao usuário usando toast ao invés de alerts
   - Mantida a compatibilidade com a integração Firebase
 
-## Melhorias no Modal de Múltiplos Agendamentos (Mobile) — Abril 2025
+## Histórico de Melhorias e Funcionalidades (Maio 2025)
 
-### Objetivo
-Adaptar o componente `MultiAppointmentModal` para funcionar perfeitamente em dispositivos móveis, garantindo que todas as informações (pacotes ativos, serviços pendentes, etc.) sejam exibidas corretamente, sem alterar a experiência no desktop.
+### 🔎 Busca Avançada e Filtros de Pacotes de Clientes
+- Implementada barra de pesquisa inteligente na tela de pacotes
+  - Permite buscar por nome do cliente, email, telefone, CPF ou nome do pacote
+  - Atualização automática dos resultados ao digitar
+- Filtros combinados:
+  - Status (Todos, Ativos, Finalizados, Expirados, Cancelados)
+  - Período (Hoje, Semana, Mês)
+  - Paginação dos resultados
+- Botão para limpar todos os filtros rapidamente
+- Feedback visual para estados vazios e contagem de resultados
 
-### Alterações Realizadas
+### 🗂️ Modularização e Organização do Código
+- Componentização das principais funções de busca e filtro
+- Separação da lógica de busca do layout para facilitar manutenção
 
-1. **Responsividade e Layout Mobile**
-   - Implementação de design responsivo utilizando Tailwind CSS.
-   - Criação de um arquivo CSS exclusivo para mobile: `MultiAppointmentModal.mobile.css`.
-   - O modal ocupa toda a tela em dispositivos móveis, com colunas reorganizadas verticalmente para melhor usabilidade.
-   - Botões de ação (Cancelar/Confirmar) fixos na parte inferior do modal no mobile, facilitando a interação.
+### 🏗️ Build para Produção
+- Build realizado com Vite (`npm run build`)
+- Arquivos otimizados gerados em `/dist` (pronto para deploy)
+- Estrutura de build:
+  - `index.html`
+  - Pasta `assets/` com JS e CSS otimizados
 
-2. **Exibição de Pacotes e Serviços**
-   - Correção na renderização de pacotes ativos e serviços pendentes, garantindo que sejam exibidos corretamente ao abrir o modal no mobile.
-   - Ajuste para que a seleção de cliente atualize imediatamente os serviços exibidos, tanto no mobile quanto no desktop.
+### ☁️ Deploy no Hostinger
+- Recomenda-se fazer upload de todo o conteúdo da pasta `dist/` para a raiz do domínio no Hostinger (`public_html/`)
+- Adicionar arquivo `.htaccess` para suporte a SPA (Single Page Application):
 
-3. **Correções de Bugs**
-   - Ajuste das propriedades de overflow no CSS para permitir rolagem adequada no modal mobile.
-   - Correção de um problema onde pacotes e serviços só apareciam corretamente após abrir o modal no desktop primeiro.
+```
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+  RewriteRule ^index\.html$ - [L]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteCond %{REQUEST_FILENAME} !-l
+  RewriteRule . /index.html [L]
+</IfModule>
+```
 
-4. **Tratamento de Dados de Pacotes**
-   - Padronização do processamento dos serviços dos pacotes, considerando que podem vir como array ou objeto, evitando bugs de exibição.
-   - Ajuste na função de atualização de progresso dos pacotes para aceitar tanto IDs em string quanto objetos completos, garantindo atualização correta do progresso ao concluir agendamentos.
+- Testar todas as funcionalidades após upload
+- Certificar-se de que variáveis de ambiente e configurações do Firebase estejam corretas no build
 
-### Decisões Técnicas
-
-- **Tailwind CSS** foi utilizado para garantir um código de estilos limpo, reutilizável e fácil de manter.
-- O arquivo `MultiAppointmentModal.mobile.css` concentra as regras específicas para mobile, separando responsabilidades e facilitando futuras manutenções.
-- Todo o ajuste foi feito de modo a não impactar o layout e a experiência do usuário no desktop.
-
-### Recomendações para Manutenção
-
-- Testar sempre em diferentes tamanhos de tela após alterações no modal.
-- Manter a separação dos estilos mobile e desktop para evitar regressões.
-- Documentar futuras mudanças na lógica de exibição de pacotes/serviços, especialmente se houver alterações no formato dos dados recebidos do backend.
-
-### Resumo das Funções Modificadas
-
-- `MultiAppointmentModal.jsx`: componente principal ajustado para suportar responsividade e lógica de exibição dinâmica.
-- `MultiAppointmentModal.mobile.css`: novo arquivo com regras de layout e overflow específicas para mobile.
-- Funções de processamento de pacotes e serviços: agora tratam corretamente diferentes formatos de dados.
+### 📋 Resumo das Etapas Recentes
+- Refatoração e correção de duplicidade de estados no React
+- Melhoria da experiência de busca e filtragem de pacotes
+- Orientação para hospedagem em ambiente compartilhado
+- Documentação atualizada para facilitar manutenção e novos desenvolvedores
 
 ---
+
+Se precisar de mais detalhes sobre qualquer etapa ou de exemplos de configuração para outros ambientes de hospedagem, consulte os comentários no código ou peça ajuda!
+
 ## Melhorias Recentes
 
 ### Correções de Bugs
