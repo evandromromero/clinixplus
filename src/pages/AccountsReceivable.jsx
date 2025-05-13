@@ -257,8 +257,118 @@ export default function AccountsReceivable() {
       // Atualizar no Firebase
       await FinancialTransaction.update(transactionToEdit.id, updatedData);
       
+      // Atualizar o estado local imediatamente
+      const updatedTransactions = transactions.map(t => {
+        if (t.id === transactionToEdit.id) {
+          // Criar um objeto atualizado com todos os dados formatados
+          const sale = dataCache.current.sales.get(t.sale_id) || { items: [] };
+          const client = dataCache.current.clients.get(t.client_id) || { name: 'Cliente não encontrado' };
+          
+          // Atualizar o objeto com os novos dados
+          const updated = {
+            ...t,
+            ...updatedData,
+            client_name: client.name,
+            sale_items: sale.items,
+            formatted_amount: formatCurrency(t.amount),
+            formatted_due_date: t.due_date 
+              ? format(new Date(t.due_date), 'dd/MM/yyyy', { locale: ptBR })
+              : 'Sem data',
+            status_class: getStatusClass(t.status),
+            formatted_description: formatTransactionDescription(t, sale)
+          };
+          
+          // Se for uma transação paga com data de pagamento, formatar a data
+          if (updated.status === 'pago' && updated.payment_date) {
+            updated.formatted_payment_date = format(new Date(updated.payment_date), 'dd/MM/yyyy', { locale: ptBR });
+          }
+          
+          return updated;
+        }
+        return t;
+      });
+      
+      // Atualizar o cache
+      if (dataCache.current && dataCache.current.transactions) {
+        const transactionIndex = dataCache.current.transactions.findIndex(t => t.id === transactionToEdit.id);
+        if (transactionIndex !== -1) {
+          dataCache.current.transactions[transactionIndex] = {
+            ...dataCache.current.transactions[transactionIndex],
+            ...updatedData
+          };
+        }
+      }
+      
+      // Atualizar os estados
+      setTransactions(updatedTransactions);
+      
+      // Aplicar os mesmos filtros que estão atualmente ativos
+      const filtered = updatedTransactions.filter(transaction => {
+        // Filtro por status
+        if (statusFilter !== 'all' && transaction.status !== statusFilter) {
+          return false;
+        }
+        
+        // Filtro por cliente
+        if (clientFilter !== 'all' && transaction.client_id !== clientFilter) {
+          return false;
+        }
+        
+        // Filtro por termo de busca (nome do cliente ou descrição)
+        if (searchTerm && searchTerm.trim() !== '') {
+          const term = searchTerm.toLowerCase();
+          const matchesName = transaction.client_name?.toLowerCase().includes(term);
+          const matchesDescription = transaction.description?.toLowerCase().includes(term);
+          if (!matchesName && !matchesDescription) {
+            return false;
+          }
+        }
+        
+        // Filtro por data
+        if (dateFilter !== 'all') {
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          
+          const dueDate = transaction.due_date ? new Date(transaction.due_date) : null;
+          
+          if (dateFilter === 'overdue') {
+            // Vencidas: data de vencimento é anterior a hoje e status não é pago
+            if (!dueDate || dueDate >= today || transaction.status === 'pago') {
+              return false;
+            }
+          } else if (dateFilter === 'today') {
+            // Hoje: data de vencimento é hoje
+            if (!dueDate || dueDate.toDateString() !== today.toDateString()) {
+              return false;
+            }
+          } else if (dateFilter === 'thisWeek') {
+            // Esta semana: data de vencimento é entre hoje e 7 dias para frente
+            if (!dueDate) return false;
+            
+            const nextWeek = new Date(today);
+            nextWeek.setDate(today.getDate() + 7);
+            
+            if (dueDate < today || dueDate > nextWeek) {
+              return false;
+            }
+          } else if (dateFilter === 'thisMonth') {
+            // Este mês: data de vencimento é neste mês
+            if (!dueDate) return false;
+            
+            const currentMonth = today.getMonth();
+            const currentYear = today.getFullYear();
+            
+            if (dueDate.getMonth() !== currentMonth || dueDate.getFullYear() !== currentYear) {
+              return false;
+            }
+          }
+        }
+        
+        return true;
+      });
+      
+      setFilteredTransactions(filtered);
       setShowEditDialog(false);
-      loadData(); // Recarregar os dados
       
       toast({
         title: "Sucesso",
