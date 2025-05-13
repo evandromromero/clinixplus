@@ -354,8 +354,26 @@ export default function AccountsReceivable() {
     setClientSearchTimeout(newTimeout);
   };
 
+  // Referência para controlar se o componente está montado
+  const isMounted = useRef(true);
+  
+  // Cache de dados para evitar recarregamentos desnecessários
+  const dataCache = useRef({
+    lastUpdate: null,
+    transactions: [],
+    clients: new Map(),
+    sales: new Map(),
+    paymentMethods: []
+  });
+  
   useEffect(() => {
+    // Carregar dados na montagem do componente
     loadData();
+    
+    // Limpar referência quando o componente for desmontado
+    return () => {
+      isMounted.current = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -363,28 +381,30 @@ export default function AccountsReceivable() {
   }, []);
 
   useEffect(() => {
-    // Aplicar filtros quando os critérios mudarem
+    // OTIMIZAÇÃO: Aplicar filtros de forma mais eficiente
     if (!transactions.length) return;
     
-    // Filtrar as transações com base nos critérios selecionados
-    let filtered = [...transactions];
+    // Usar um único loop para aplicar todos os filtros de uma vez
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
     
-    // Filtro de status
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(t => t.status === statusFilter);
-    }
+    const thisWeekStart = new Date(today);
+    thisWeekStart.setDate(today.getDate() - today.getDay()); // Domingo
     
-    // Filtro de data
-    if (dateFilter !== 'all') {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+    const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    
+    // Preparar o termo de busca uma única vez
+    const term = searchTerm ? searchTerm.toLowerCase() : '';
+    
+    // Aplicar todos os filtros em uma única passagem
+    const filtered = transactions.filter(t => {
+      // Filtro de status
+      if (statusFilter !== 'all' && t.status !== statusFilter) {
+        return false;
+      }
       
-      const thisWeekStart = new Date(today);
-      thisWeekStart.setDate(today.getDate() - today.getDay()); // Domingo
-      
-      const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-      
-      filtered = filtered.filter(t => {
+      // Filtro de data
+      if (dateFilter !== 'all') {
         if (!t.due_date) return false;
         
         const dueDate = new Date(t.due_date);
@@ -392,35 +412,37 @@ export default function AccountsReceivable() {
         
         switch (dateFilter) {
           case 'today':
-            return dueDate.getTime() === today.getTime();
+            if (dueDate.getTime() !== today.getTime()) return false;
+            break;
           case 'thisWeek':
-            return dueDate >= thisWeekStart && dueDate <= today;
+            if (!(dueDate >= thisWeekStart && dueDate <= today)) return false;
+            break;
           case 'thisMonth':
-            return dueDate >= thisMonthStart && dueDate <= today;
+            if (!(dueDate >= thisMonthStart && dueDate <= today)) return false;
+            break;
           case 'overdue':
-            return dueDate < today;
-          default:
-            return true;
+            if (!(dueDate < today)) return false;
+            break;
         }
-      });
-    }
-    
-    // Filtro de cliente
-    if (clientFilter !== 'all' && clientFilter !== 'sem_cliente') {
-      filtered = filtered.filter(t => t.client_id === clientFilter);
-    }
-    
-    // Filtro de busca
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(t => 
-        (t.description && t.description.toLowerCase().includes(term)) ||
-        (t.client_name && t.client_name.toLowerCase().includes(term))
-      );
-    }
+      }
+      
+      // Filtro de cliente
+      if (clientFilter !== 'all' && clientFilter !== 'sem_cliente' && t.client_id !== clientFilter) {
+        return false;
+      }
+      
+      // Filtro de busca
+      if (term) {
+        const descriptionMatch = t.description && t.description.toLowerCase().includes(term);
+        const clientNameMatch = t.client_name && t.client_name.toLowerCase().includes(term);
+        if (!descriptionMatch && !clientNameMatch) return false;
+      }
+      
+      return true;
+    });
     
     setFilteredTransactions(filtered);
-  }, [transactions, statusFilter, dateFilter, clientFilter, searchTerm, sortField, sortDirection]);
+  }, [transactions, statusFilter, dateFilter, clientFilter, searchTerm]);
 
   useEffect(() => {
     // Calcular paginação sempre que os dados filtrados mudarem
@@ -527,13 +549,23 @@ export default function AccountsReceivable() {
       localStorage.setItem('force_refresh_financial_transactions', 'true');
       localStorage.setItem('force_refresh_clients', 'true');
       
+      // Limpar o cache para forçar uma recarga completa
+      dataCache.current = {
+        lastUpdate: null,
+        transactions: [],
+        clients: new Map(),
+        sales: new Map(),
+        paymentMethods: []
+      };
+      
       toast({
         title: "Atualizando dados",
         description: "Buscando dados atualizados do servidor...",
         duration: 3000,
       });
       
-      await loadData();
+      // Forçar recarga dos dados
+      await loadData(true); // true = forçar atualização
       
       toast({
         title: "Dados atualizados",
@@ -780,19 +812,35 @@ export default function AccountsReceivable() {
     }
   };
 
-  const loadData = async () => {
+  const loadData = async (forceRefresh = false) => {
     try {
       setIsLoading(true);
       setError(null);
       
-      // Carrega as transações (agora exclusivamente do Firebase)
-      // Otimização: Filtrar diretamente no Firebase para reduzir dados transferidos
-      const transactionsData = await FinancialTransaction.filter({
-        type: 'receita'
-      });
+      // Verificar se podemos usar o cache (se não for forçada atualização)
+      const now = new Date();
+      const cacheAge = dataCache.current.lastUpdate ? now - dataCache.current.lastUpdate : null;
+      const cacheValid = !forceRefresh && cacheAge && cacheAge < 5 * 60 * 1000; // Cache válido por 5 minutos
       
-      // Otimização: Carregar apenas os métodos de pagamento primeiro (são poucos)
+      if (cacheValid && dataCache.current.transactions.length > 0) {
+        console.log('[AccountsReceivable] Usando dados em cache');
+        // Usar dados do cache
+        setPaymentMethods(dataCache.current.paymentMethods);
+        setClients(Array.from(dataCache.current.clients.values()));
+        setSales(Array.from(dataCache.current.sales.values()));
+        
+        // Processar transações do cache
+        setTransactions(dataCache.current.transactions);
+        setFilteredTransactions(dataCache.current.transactions);
+        setIsLoading(false);
+        return;
+      }
+      
+      console.log('[AccountsReceivable] Carregando dados do Firebase');
+      
+      // Carregar métodos de pagamento primeiro (são poucos)
       const paymentMethodsData = await PaymentMethod.list();
+      dataCache.current.paymentMethods = paymentMethodsData;
       setPaymentMethods(paymentMethodsData);
       
       // Criar um mapa de métodos de pagamento para facilitar a busca
@@ -801,108 +849,100 @@ export default function AccountsReceivable() {
         return acc;
       }, {});
       
-      // Processar transações para identificar quais clientes precisamos carregar
+      // Carregar transações financeiras com filtro otimizado
+      const transactionsData = await FinancialTransaction.filter({
+        type: 'receita'
+      });
+      
+      // Filtrar transações irrelevantes
+      const relevantTransactions = transactionsData.filter(transaction => {
+        return transaction.type === 'receita' && transaction.category !== 'abertura_caixa';
+      });
+      
+      // Extrair IDs únicos para carregamento em lote
       const clientIds = new Set();
       const saleIds = new Set();
       
-      // Pré-filtrar transações relevantes
-      const relevantTransactions = transactionsData.filter(transaction => {
-        // Filtra transações a receber:
-        // 1. Transações do tipo receita que não estão pagas
-        // 2. Transações com cartão de crédito (que são a prazo)
-        // 3. Transações marcadas como parceladas (is_installment)
-        // 4. TODAS as transações do tipo receita (para mostrar histórico)
-        // 5. Excluir aberturas de caixa
-        const paymentMethodId = transaction.payment_method || '';
-        const paymentMethod = paymentMethodsMap[paymentMethodId];
-        
-        // Verifica se é um cartão de crédito baseado no método de pagamento do Firebase
-        const isCredit = paymentMethod ? 
-          (paymentMethod.name && (
-            paymentMethod.name.toLowerCase().includes('crédito') || 
-            paymentMethod.name.toLowerCase().includes('credito')
-          )) : false;
-        
-        // Mostra todas as transações do tipo receita, exceto aberturas de caixa
-        const isOpeningTransaction = transaction.category === 'abertura_caixa';
-        const shouldInclude = transaction.type === 'receita' && !isOpeningTransaction;
-        
-        if (shouldInclude) {
-          // Coletar IDs para carregamento posterior
-          if (transaction.client_id) clientIds.add(transaction.client_id);
-          if (transaction.sale_id) saleIds.add(transaction.sale_id);
-        }
-        
-        return shouldInclude;
+      // Coletar IDs únicos de clientes e vendas para carregamento otimizado
+      relevantTransactions.forEach(transaction => {
+        if (transaction.client_id) clientIds.add(transaction.client_id);
+        if (transaction.sale_id) saleIds.add(transaction.sale_id);
       });
       
-      // Otimização: Carregar apenas os clientes necessários para as transações atuais
-      // em vez de carregar todos os 5849 clientes
-      let clientsMap = {};
-      if (clientIds.size > 0) {
-        // Carregar clientes em lotes para evitar consultas muito grandes
-        const clientIdsArray = Array.from(clientIds);
-        const clientBatches = [];
+      console.log(`[DEBUG] Carregando: ${relevantTransactions.length} transações, ${clientIds.size} clientes, ${saleIds.size} vendas`);
+      
+      // Inicializar caches se não existirem
+      if (!dataCache.current.clients) dataCache.current.clients = new Map();
+      if (!dataCache.current.sales) dataCache.current.sales = new Map();
+      
+      // Função otimizada para carregar entidades em lotes grandes
+      const loadEntitiesInBatches = async (ids, entityType) => {
+        if (ids.size === 0) return [];
         
-        // Dividir em lotes de 10 IDs para evitar consultas muito grandes
-        for (let i = 0; i < clientIdsArray.length; i += 10) {
-          const batch = clientIdsArray.slice(i, i + 10);
-          clientBatches.push(batch);
-        }
+        const batchSize = 40; // Tamanho do lote otimizado para reduzir número de requisições
+        const idArray = Array.from(ids);
+        const Entity = entityType === 'client' ? Client : Sale;
+        const cacheMap = dataCache.current[entityType === 'client' ? 'clients' : 'sales'];
+        const results = [];
         
-        console.log(`[DEBUG] Carregando ${clientIds.size} clientes em ${clientBatches.length} lotes`);
-        
-        clientsMap = {};
-        for (const batch of clientBatches) {
-          const batchResults = await Promise.all(
-            batch.map(id => Client.get(id))
-          );
+        // Dividir em lotes para evitar consultas muito grandes
+        for (let i = 0; i < idArray.length; i += batchSize) {
+          // Verificar se o componente ainda está montado
+          if (!isMounted.current) break;
           
-          // Adicionar ao mapa apenas os clientes que existem
-          batchResults.filter(Boolean).forEach(client => {
-            clientsMap[client.id] = client;
+          const batchIds = idArray.slice(i, i + batchSize);
+          
+          // Filtrar IDs que já estão no cache para evitar consultas desnecessárias
+          const idsToFetch = batchIds.filter(id => !cacheMap.has(id));
+          
+          if (idsToFetch.length > 0) {
+            console.log(`[DEBUG] Carregando lote de ${idsToFetch.length} ${entityType}s`);
+            
+            // Carregar apenas os IDs que não estão no cache
+            const batchResults = await Promise.all(
+              idsToFetch.map(id => Entity.get(id))
+            );
+            
+            // Adicionar ao cache
+            batchResults.filter(Boolean).forEach(item => {
+              if (item && item.id) {
+                cacheMap.set(item.id, item);
+                results.push(item);
+              }
+            });
+          } else {
+            console.log(`[DEBUG] Todos os ${batchIds.length} ${entityType}s já estão em cache`);
+          }
+          
+          // Adicionar itens que já estão no cache aos resultados
+          batchIds.filter(id => cacheMap.has(id)).forEach(id => {
+            results.push(cacheMap.get(id));
           });
         }
         
-        // Atualizar o estado apenas com os clientes necessários para o filtro
-        setClients(Object.values(clientsMap));
-      }
+        return results;
+      };
       
-      // Otimização: Carregar apenas as vendas necessárias
-      let salesMap = {};
-      if (saleIds.size > 0) {
-        // Carregar vendas em lotes para evitar consultas muito grandes
-        const saleIdsArray = Array.from(saleIds);
-        const saleBatches = [];
-        
-        for (let i = 0; i <saleIdsArray.length; i += 10) {
-          const batch = saleIdsArray.slice(i, i + 10);
-          saleBatches.push(batch);
-        }
-        
-        let salesData = [];
-        for (const batch of saleBatches) {
-          const batchResults = await Promise.all(
-            batch.map(id => Sale.get(id))
-          );
-          salesData.push(...batchResults.filter(Boolean));
-        }
-        
-        // Criar mapa de vendas
-        salesMap = salesData.reduce((acc, sale) => {
-          if (sale) acc[sale.id] = sale;
-          return acc;
-        }, {});
-        
-        // Atualizar estado
-        setSales(salesData);
-      }
+      // Carregar clientes e vendas em paralelo para melhor performance
+      console.log('[DEBUG] Iniciando carregamento paralelo de clientes e vendas');
+      await Promise.all([
+        loadEntitiesInBatches(clientIds, 'client').then(data => {
+          if (isMounted.current) {
+            setClients(Array.from(dataCache.current.clients.values()));
+          }
+        }),
+        loadEntitiesInBatches(saleIds, 'sale').then(data => {
+          if (isMounted.current) {
+            setSales(Array.from(dataCache.current.sales.values()));
+          }
+        })
+      ]);
       
       // Processar transações com os dados carregados
       const processedTransactions = relevantTransactions.map(transaction => {
-        // Enriquece a transação com dados do cliente
-        const client = clientsMap[transaction.client_id] || { name: 'Cliente não encontrado' };
-        const sale = salesMap[transaction.sale_id] || { items: [] };
+        // Enriquece a transação com dados do cliente e venda
+        const client = dataCache.current.clients.get(transaction.client_id) || { name: 'Cliente não encontrado' };
+        const sale = dataCache.current.sales.get(transaction.sale_id) || { items: [] };
         
         return {
           ...transaction,
@@ -1004,27 +1044,44 @@ export default function AccountsReceivable() {
         }
       });
       
-      setTransactions(sortedTransactions);
-      setFilteredTransactions(sortedTransactions);
+      // Atualizar cache global com timestamp para controle de validade
+      dataCache.current.transactions = sortedTransactions;
+      dataCache.current.lastUpdate = new Date();
+      console.log(`[DEBUG] Cache atualizado com ${sortedTransactions.length} transações`);
+      
+      // Atualizar estado apenas se o componente ainda estiver montado
+      if (isMounted.current) {
+        setTransactions(sortedTransactions);
+        setFilteredTransactions(sortedTransactions);
+        console.log('[DEBUG] Estados atualizados com sucesso');
+      }
     } catch (error) {
       console.error('[AccountsReceivable] Erro ao carregar dados:', error);
-      setError(error);
-      
-      // Exibe mensagem de erro para o usuário
-      toast({
-        title: "Erro ao carregar dados",
-        description: "Não foi possível carregar as transações. Tente novamente mais tarde.",
-        variant: "destructive",
-        duration: 5000,
-      });
+      if (isMounted.current) {
+        setError(error);
+        
+        // Exibe mensagem de erro para o usuário
+        toast({
+          title: "Erro ao carregar dados",
+          description: "Não foi possível carregar as transações. Tente novamente mais tarde.",
+          variant: "destructive",
+          duration: 5000,
+        });
+      }
     } finally {
-      setIsLoading(false);
+      if (isMounted.current) {
+        setIsLoading(false);
+      }
     }
   };
 
-  // Função para mudar de página
+  // Função para mudar de página com melhor performance
   const handlePageChange = (page) => {
+    // Verificar se é necessário carregar mais dados
     setCurrentPage(page);
+    
+    // Rolar para o topo da tabela quando mudar de página
+    window.scrollTo({ top: document.querySelector('table')?.offsetTop - 100 || 0, behavior: 'smooth' });
   };
 
   // Função para mudar o número de itens por página
@@ -1033,18 +1090,61 @@ export default function AccountsReceivable() {
     setCurrentPage(1); // Voltar para a primeira página ao mudar itens por página
   };
 
-  // Obter os itens da página atual
-  const getCurrentPageItems = () => {
+  // OTIMIZAÇÃO: Obter os itens da página atual com melhor performance usando useMemo
+  const currentPageItems = React.useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     return filteredTransactions.slice(startIndex, endIndex);
-  };
+  }, [filteredTransactions, currentPage, itemsPerPage]);
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <RefreshCw className="h-8 w-8 text-purple-600 animate-spin mr-2" />
-        <p className="text-xl font-medium">Carregando contas a receber...</p>
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <h2 className="text-3xl font-bold tracking-tight">Contas a Receber</h2>
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              disabled={true}
+              className="flex items-center gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Nova Conta a Receber
+            </Button>
+            <Button 
+              variant="outline" 
+              disabled={true}
+              className="flex items-center gap-2"
+            >
+              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+              Atualizando...
+            </Button>
+          </div>
+        </div>
+        
+        <Card>
+          <CardHeader>
+            <CardTitle>Filtros</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 opacity-50">
+              {/* Esqueletos de filtros */}
+              <div className="h-10 bg-gray-200 animate-pulse rounded"></div>
+              <div className="h-10 bg-gray-200 animate-pulse rounded"></div>
+              <div className="h-10 bg-gray-200 animate-pulse rounded"></div>
+              <div className="h-10 bg-gray-200 animate-pulse rounded"></div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-0">
+            <div className="flex items-center justify-center h-64">
+              <RefreshCw className="h-8 w-8 text-purple-600 animate-spin mr-2" />
+              <p className="text-xl font-medium">Carregando contas a receber...</p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -1222,8 +1322,8 @@ export default function AccountsReceivable() {
                     </div>
                   </TableCell>
                 </TableRow>
-              ) : getCurrentPageItems().length > 0 ? (
-                getCurrentPageItems().map((transaction) => (
+              ) : currentPageItems.length > 0 ? (
+                currentPageItems.map((transaction) => (
                   <TableRow key={transaction.id}>
                     <TableCell>
                       <div className="font-medium">{transaction.formatted_description}</div>
