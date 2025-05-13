@@ -39,6 +39,7 @@ import { InvokeLLM } from "@/api/integrations";
 import { toast } from "@/components/ui/toast";
 import RateLimitHandler from '@/components/RateLimitHandler';
 import html2pdf from 'html2pdf.js';
+import { generateCorrectedReportHtml } from './CashRegisterReportCorrection';
 
 export default function CashRegister() {
   const [transactions, setTransactions] = useState([]);
@@ -1914,8 +1915,17 @@ export default function CashRegister() {
         difference: (closing && opening) ? (closing.amount - opening.amount) : 0
       };
       
-      // Gerar HTML do relatório
-      const html = await generateCashReport(cashData, processedTransactions);
+      // Gerar HTML do relatório com layout corrigido
+      const html = generateCorrectedReportHtml(
+        cashData, 
+        processedTransactions, 
+        paymentMethods, 
+        getPaymentMethodTotals, 
+        formatPaymentMethodsForReport,
+        formatDate,
+        ptBR,
+        format
+      );
       setReportHtml(html);
       setShowReportDialog(true);
       setShowHistoricCashDialog(false);
@@ -2136,7 +2146,17 @@ export default function CashRegister() {
       difference: (closing && opening) ? (closing.amount - opening.amount) : 0
     };
     
-    const html = generateReportHtml(cashData, transactionsForDate);
+    // Usar a função de relatório com layout corrigido
+    const html = generateCorrectedReportHtml(
+      cashData, 
+      transactionsForDate, 
+      paymentMethods, 
+      getPaymentMethodTotals, 
+      formatPaymentMethodsForReport,
+      formatDate,
+      ptBR,
+      format
+    );
     setReportHtml(html);
     setShowReportDialog(true);
   };
