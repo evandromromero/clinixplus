@@ -123,19 +123,14 @@ export default function AccountsReceivable() {
     let paymentDate;
     
     if (transaction.payment_date) {
-      // Criar uma nova data a partir da string da data de pagamento
-      paymentDate = new Date(transaction.payment_date);
+      // Tratar a data como uma string YYYY-MM-DD
+      const [year, month, day] = transaction.payment_date.split('-').map(Number);
       
-      // Ajustar para meio-dia para evitar problemas de fuso horário
-      paymentDate.setHours(12, 0, 0, 0);
+      // Criar uma data com os valores exatos, sem ajustes de fuso horário
+      // Subtrair 1 do mês porque JavaScript usa mês de 0-11
+      paymentDate = new Date(year, month - 1, day, 12, 0, 0, 0);
       
-      // Garantir que estamos usando a data local correta
-      const year = paymentDate.getFullYear();
-      const month = paymentDate.getMonth();
-      const day = paymentDate.getDate();
-      
-      // Recriar a data para garantir que está no fuso horário local
-      paymentDate = new Date(year, month, day, 12, 0, 0, 0);
+      console.log('Data carregada no modal:', `${day}/${month}/${year}`);
     } else {
       // Se não houver data de pagamento, usar a data atual
       paymentDate = new Date();
@@ -239,21 +234,19 @@ export default function AccountsReceivable() {
         // Criar uma data com o fuso horário local para evitar problemas de data
         const selectedDate = new Date(transactionToEdit.edit_payment_date);
         
-        // Garantir que estamos usando a data local correta
+        // Extrair apenas a data (dia, mês, ano) ignorando completamente a hora
         const year = selectedDate.getFullYear();
-        const month = selectedDate.getMonth();
+        const month = selectedDate.getMonth() + 1; // JavaScript usa mês de 0-11, precisamos ajustar
         const day = selectedDate.getDate();
         
-        // Recriar a data para garantir que está no fuso horário local
-        const fixedDate = new Date(year, month, day, 12, 0, 0, 0);
+        // Formatar a data como string no formato YYYY-MM-DD sem componente de hora
+        // Esta é a forma mais segura de armazenar apenas a data
+        const formattedDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
         
-        // Formatar a data como string no formato YYYY-MM-DD
-        const formattedDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        
-        // Usar a data formatada diretamente em vez de normalizeDate
+        // Armazenar a data sem nenhuma informação de hora
         updatedData.payment_date = formattedDate;
         
-        console.log('Data selecionada:', formattedDate);
+        console.log('Data selecionada para salvar:', formattedDate);
       }
       
       // Remover campos temporários de edição
@@ -1193,6 +1186,14 @@ export default function AccountsReceivable() {
                   </div>
                 </TableHead>
                 <TableHead 
+                  className="cursor-pointer"
+                  onClick={() => toggleSort("payment_date")}
+                >
+                  <div className="flex items-center">
+                    Data Pagamento {getSortIcon("payment_date")}
+                  </div>
+                </TableHead>
+                <TableHead 
                   className="cursor-pointer text-right"
                   onClick={() => toggleSort("amount")}
                 >
@@ -1214,7 +1215,7 @@ export default function AccountsReceivable() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-10">
+                  <TableCell colSpan={7} className="text-center py-10">
                     <div className="flex flex-col items-center">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#294380]"></div>
                       <p className="mt-2 text-gray-500">Carregando transações...</p>
@@ -1231,6 +1232,33 @@ export default function AccountsReceivable() {
                     <TableCell>{transaction.client_name || '-'}</TableCell>
                     <TableCell>
                       {transaction.due_date ? format(new Date(transaction.due_date), "dd/MM/yyyy") : '-'}
+                    </TableCell>
+                    <TableCell>
+                      {transaction.payment_date && transaction.status === 'pago' 
+                        ? (() => {
+                            try {
+                              // Verificar se a data está no formato antigo (com T ou Z)
+                              if (transaction.payment_date.includes('T') || transaction.payment_date.includes('Z')) {
+                                // Extrair apenas a data (DD/MM/YYYY) de forma segura
+                                const date = new Date(transaction.payment_date);
+                                const day = String(date.getDate()).padStart(2, '0');
+                                const month = String(date.getMonth() + 1).padStart(2, '0');
+                                const year = date.getFullYear();
+                                return `${day}/${month}/${year}`;
+                              } else if (transaction.payment_date.includes('-')) {
+                                // Formato YYYY-MM-DD (novo formato)
+                                const [year, month, day] = transaction.payment_date.split('-');
+                                return `${day}/${month}/${year}`;
+                              } else {
+                                // Tenta exibir a data como está
+                                return transaction.payment_date;
+                              }
+                            } catch (error) {
+                              console.error('Erro ao formatar data:', error);
+                              return transaction.payment_date || '-';
+                            }
+                          })() 
+                        : '-'}
                     </TableCell>
                     <TableCell className="font-medium">
                       {formatCurrency(transaction.amount)}
@@ -1286,7 +1314,7 @@ export default function AccountsReceivable() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-6">
+                  <TableCell colSpan={7} className="text-center py-6">
                     <div className="flex flex-col items-center">
                       <AlertCircle className="h-6 w-6 text-gray-400 mb-2" />
                       <p className="text-gray-500">Nenhuma transação encontrada</p>
