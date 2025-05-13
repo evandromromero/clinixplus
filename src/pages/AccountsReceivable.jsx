@@ -120,11 +120,34 @@ export default function AccountsReceivable() {
 
   const handleShowEditDialog = (transaction) => {
     // Preparar os dados da transação para edição
+    let paymentDate;
+    
+    if (transaction.payment_date) {
+      // Criar uma nova data a partir da string da data de pagamento
+      paymentDate = new Date(transaction.payment_date);
+      
+      // Ajustar para meio-dia para evitar problemas de fuso horário
+      paymentDate.setHours(12, 0, 0, 0);
+      
+      // Garantir que estamos usando a data local correta
+      const year = paymentDate.getFullYear();
+      const month = paymentDate.getMonth();
+      const day = paymentDate.getDate();
+      
+      // Recriar a data para garantir que está no fuso horário local
+      paymentDate = new Date(year, month, day, 12, 0, 0, 0);
+    } else {
+      // Se não houver data de pagamento, usar a data atual
+      paymentDate = new Date();
+      paymentDate.setHours(12, 0, 0, 0);
+    }
+    
     setTransactionToEdit({
       ...transaction,
       edit_payment_method: transaction.payment_method || '',
-      edit_payment_date: transaction.payment_date ? new Date(transaction.payment_date) : new Date()
+      edit_payment_date: paymentDate
     });
+    
     setShowEditDialog(true);
   };
 
@@ -215,9 +238,22 @@ export default function AccountsReceivable() {
       if (transactionToEdit.status === 'pago' && transactionToEdit.edit_payment_date) {
         // Criar uma data com o fuso horário local para evitar problemas de data
         const selectedDate = new Date(transactionToEdit.edit_payment_date);
-        // Ajustar para meio-dia para evitar problemas de fuso horário
-        selectedDate.setHours(12, 0, 0, 0);
-        updatedData.payment_date = normalizeDate(selectedDate);
+        
+        // Garantir que estamos usando a data local correta
+        const year = selectedDate.getFullYear();
+        const month = selectedDate.getMonth();
+        const day = selectedDate.getDate();
+        
+        // Recriar a data para garantir que está no fuso horário local
+        const fixedDate = new Date(year, month, day, 12, 0, 0, 0);
+        
+        // Formatar a data como string no formato YYYY-MM-DD
+        const formattedDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        
+        // Usar a data formatada diretamente em vez de normalizeDate
+        updatedData.payment_date = formattedDate;
+        
+        console.log('Data selecionada:', formattedDate);
       }
       
       // Remover campos temporários de edição
@@ -1747,7 +1783,7 @@ export default function AccountsReceivable() {
                     >
                       <CalendarIcon className="mr-2 h-4 w-4" />
                       {transactionToEdit?.edit_payment_date 
-                        ? format(transactionToEdit.edit_payment_date, 'dd/MM/yyyy', { locale: ptBR })
+                        ? format(new Date(transactionToEdit.edit_payment_date), 'dd/MM/yyyy', { locale: ptBR })
                         : 'Selecione uma data'}
                     </Button>
                   </PopoverTrigger>
