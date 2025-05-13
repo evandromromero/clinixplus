@@ -21,7 +21,7 @@ import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
 import { normalizeDate } from "@/utils/dateUtils";
 import { ptBR } from "date-fns/locale";
-import { Search, Filter, ChevronDown, ChevronUp, RefreshCw, FileText, Download, Printer, Plus, CalendarIcon, XCircle, Trash2, DollarSign, AlertCircle, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight } from "lucide-react";
+import { Search, Filter, ChevronDown, ChevronUp, RefreshCw, FileText, Download, Printer, Plus, CalendarIcon, XCircle, Trash2, DollarSign, AlertCircle, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, Edit } from "lucide-react";
 import { FinancialTransaction, Client, PaymentMethod, Sale } from "@/firebase/entities";
 import RateLimitHandler from '@/components/RateLimitHandler';
 import { toast } from "@/components/ui/use-toast";
@@ -59,6 +59,10 @@ export default function AccountsReceivable() {
     date: new Date(),
     payments: [{ method: '', amount: 0 }]
   });
+  
+  // Estado para o diálogo de edição de transação
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [transactionToEdit, setTransactionToEdit] = useState(null);
 
   // Novo estado para busca de clientes sob demanda
   const [clientSearchTerm, setClientSearchTerm] = useState("");
@@ -112,6 +116,16 @@ export default function AccountsReceivable() {
       payments: [{ method: '', amount: transaction.amount }]
     });
     setShowReceiveDialog(true);
+  };
+
+  const handleShowEditDialog = (transaction) => {
+    // Preparar os dados da transação para edição
+    setTransactionToEdit({
+      ...transaction,
+      edit_payment_method: transaction.payment_method || '',
+      edit_payment_date: transaction.payment_date ? new Date(transaction.payment_date) : new Date()
+    });
+    setShowEditDialog(true);
   };
 
   const handleAddPaymentMethod = () => {
@@ -182,6 +196,50 @@ export default function AccountsReceivable() {
       toast({
         title: "Erro",
         description: "Não foi possível registrar o pagamento",
+        variant: "destructive"
+      });
+    }
+  };
+  
+  const handleSaveEdit = async () => {
+    try {
+      if (!transactionToEdit) return;
+      
+      // Preparar os dados atualizados
+      const updatedData = {
+        ...transactionToEdit,
+        payment_method: transactionToEdit.edit_payment_method
+      };
+      
+      // Se a transação já estiver paga, atualizar a data de pagamento
+      if (transactionToEdit.status === 'pago' && transactionToEdit.edit_payment_date) {
+        // Criar uma data com o fuso horário local para evitar problemas de data
+        const selectedDate = new Date(transactionToEdit.edit_payment_date);
+        // Ajustar para meio-dia para evitar problemas de fuso horário
+        selectedDate.setHours(12, 0, 0, 0);
+        updatedData.payment_date = normalizeDate(selectedDate);
+      }
+      
+      // Remover campos temporários de edição
+      delete updatedData.edit_due_date;
+      delete updatedData.edit_payment_method;
+      delete updatedData.edit_payment_date;
+      
+      // Atualizar no Firebase
+      await FinancialTransaction.update(transactionToEdit.id, updatedData);
+      
+      setShowEditDialog(false);
+      loadData(); // Recarregar os dados
+      
+      toast({
+        title: "Sucesso",
+        description: "Transação atualizada com sucesso",
+      });
+    } catch (error) {
+      console.error("Erro ao atualizar transação:", error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível atualizar a transação",
         variant: "destructive"
       });
     }
@@ -1161,6 +1219,14 @@ export default function AccountsReceivable() {
                         <Button
                           variant="ghost"
                           size="icon"
+                          onClick={() => handleShowEditDialog(transaction)}
+                          title="Editar transação"
+                        >
+                          <Edit className="h-4 w-4 text-blue-600" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           onClick={() => {
                             setSelectedTransaction(transaction);
                             generateReceipt(transaction);
@@ -1633,6 +1699,88 @@ export default function AccountsReceivable() {
               disabled={paymentData.payments.some(p => !p.method)}
             >
               Confirmar Recebimento
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Edição de Transação */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Editar Transação</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            
+            {/* Forma de Pagamento */}
+            <div className="space-y-2">
+              <Label>Forma de Pagamento</Label>
+              <Select
+                value={transactionToEdit?.edit_payment_method || ''}
+                onValueChange={(value) => setTransactionToEdit(prev => ({
+                  ...prev,
+                  edit_payment_method: value
+                }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {paymentMethods.map(method => (
+                    <SelectItem key={method.id} value={method.id}>
+                      {method.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            {/* Data de Pagamento (apenas se a transação estiver paga) */}
+            {transactionToEdit?.status === 'pago' && (
+              <div className="space-y-2">
+                <Label>Data de Pagamento</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start text-left font-normal"
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {transactionToEdit?.edit_payment_date 
+                        ? format(transactionToEdit.edit_payment_date, 'dd/MM/yyyy', { locale: ptBR })
+                        : 'Selecione uma data'}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={transactionToEdit?.edit_payment_date}
+                      onSelect={(date) => {
+                        if (date) {
+                          // Criar uma nova data com o fuso horário local
+                          const selectedDate = new Date(date);
+                          // Ajustar para meio-dia para evitar problemas de fuso horário
+                          selectedDate.setHours(12, 0, 0, 0);
+                          
+                          setTransactionToEdit(prev => ({
+                            ...prev,
+                            edit_payment_date: selectedDate
+                          }));
+                        }
+                      }}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditDialog(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSaveEdit}>
+              Salvar Alterações
             </Button>
           </DialogFooter>
         </DialogContent>
