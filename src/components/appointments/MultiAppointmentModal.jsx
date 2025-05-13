@@ -29,6 +29,11 @@ export default function MultiAppointmentModal({
   // Estados para procedimentos avulsos e pendentes
   const [avulsos, setAvulsos] = useState([]); // Serviços avulsos disponíveis
   const [pendentes, setPendentes] = useState([]); // Serviços pendentes do cliente
+  
+  // Estados para controle de dependentes
+  const [clientType, setClientType] = useState('titular');
+  const [dependentIndex, setDependentIndex] = useState(null);
+  const [searchResults, setSearchResults] = useState([]);
 
   // Corrigir: garantir que tipoAgendamento está definido como estado
   const [tipoAgendamento, setTipoAgendamento] = useState('');
@@ -43,13 +48,77 @@ export default function MultiAppointmentModal({
       setMultiSelectedPackageId("");
       return;
     }
+    
+    console.log(`[MultiAppointmentModal] Carregando pacotes: clientId=${multiClientId}, clientType=${clientType}, dependentIndex=${dependentIndex}`);
+    
     (async () => {
-      const pkgs = await ClientPackage.filter({ client_id: multiClientId, status: "ativo" });
-      // Normalizar pacotes para garantir nome e serviços
-      const pkgsNormalizados = pkgs.map(normalizarPacoteCliente);
-      setMultiClientPackages(pkgsNormalizados);
+      try {
+        let pkgs = [];
+        
+        // Se for um cliente titular
+        if (clientType === 'titular') {
+          console.log(`[MultiAppointmentModal] Buscando pacotes do titular: ${multiClientId}`);
+          pkgs = await ClientPackage.filter({ 
+            client_id: multiClientId, 
+            status: "ativo" 
+          });
+        } 
+        // Se for um dependente
+        else if (clientType === 'dependente' && dependentIndex !== null) {
+          console.log(`[MultiAppointmentModal] Buscando pacotes do dependente: ${multiClientId}, index=${dependentIndex}`);
+          
+          // Primeiro, tentar buscar pacotes específicos do dependente
+          // Verificar se existe um campo dependent_index ou similar no sistema
+          try {
+            const dependentPkgs = await ClientPackage.filter({ 
+              client_id: multiClientId, 
+              dependent_index: dependentIndex,
+              status: "ativo" 
+            });
+            
+            console.log(`[MultiAppointmentModal] Pacotes específicos do dependente:`, dependentPkgs);
+            
+            // Se encontrou pacotes específicos do dependente
+            if (dependentPkgs && dependentPkgs.length > 0) {
+              pkgs = dependentPkgs;
+            } 
+            // Se não encontrou, buscar pacotes do titular que podem ser usados por dependentes
+            else {
+              console.log(`[MultiAppointmentModal] Buscando pacotes do titular que podem ser usados por dependentes`);
+              
+              // Buscar todos os pacotes do titular
+              const titularPkgs = await ClientPackage.filter({ 
+                client_id: multiClientId, 
+                status: "ativo"
+              });
+              
+              // Filtrar apenas pacotes que permitem uso por dependentes
+              // Este filtro pode variar dependendo da estrutura do sistema
+              // Por enquanto, vamos considerar todos os pacotes do titular
+              pkgs = titularPkgs;
+              
+              console.log(`[MultiAppointmentModal] Pacotes do titular que podem ser usados por dependentes:`, pkgs);
+            }
+          } catch (error) {
+            console.error(`[MultiAppointmentModal] Erro ao buscar pacotes específicos do dependente:`, error);
+            // Fallback: buscar todos os pacotes do titular
+            pkgs = await ClientPackage.filter({ 
+              client_id: multiClientId, 
+              status: "ativo" 
+            });
+          }
+        }
+        
+        console.log(`[MultiAppointmentModal] Total de pacotes encontrados: ${pkgs.length}`);
+        
+        // Normalizar pacotes para garantir nome e serviços
+        const pkgsNormalizados = pkgs.map(normalizarPacoteCliente);
+        setMultiClientPackages(pkgsNormalizados);
+      } catch (error) {
+        console.error(`[MultiAppointmentModal] Erro ao carregar pacotes:`, error);
+      }
     })();
-  }, [multiClientId]);
+  }, [multiClientId, clientType, dependentIndex]);
 
   // Buscar procedimentos avulsos e pendentes ao selecionar cliente
   useEffect(() => {
@@ -105,6 +174,83 @@ export default function MultiAppointmentModal({
     carregarServicosPendentes();
     
   }, [multiClientId, services, clients, pendingServicesProp, PendingService]);
+
+  // Função para buscar clientes e dependentes
+  const searchClientsAndDependents = (term) => {
+    console.log("[MultiAppointmentModal] Buscando clientes e dependentes com termo:", term);
+    
+    if (!term) {
+      // Se não houver termo de busca, mostrar todos os clientes e seus dependentes
+      const allResults = [];
+      
+      if (clients && Array.isArray(clients)) {
+        clients.forEach(client => {
+          // Adicionar cliente titular
+          allResults.push({
+            id: client.id,
+            name: client.name,
+            type: 'titular',
+            parent: null,
+            dependentIndex: null
+          });
+          
+          // Adicionar dependentes
+          if (client.dependents && Array.isArray(client.dependents)) {
+            client.dependents.forEach((dependent, index) => {
+              allResults.push({
+                id: `${client.id}-dep-${index}`,
+                name: `${dependent.name} (Dependente de ${client.name})`,
+                type: 'dependente',
+                parent: client,
+                dependentIndex: index
+              });
+            });
+          }
+        });
+      }
+      
+      console.log("[MultiAppointmentModal] Total de resultados sem filtro:", allResults.length);
+      setSearchResults(allResults);
+      return;
+    }
+
+    // Se houver termo de busca, filtrar clientes e dependentes
+    const results = [];
+    const termLower = term.toLowerCase();
+
+    if (clients && Array.isArray(clients)) {
+      clients.forEach(client => {
+        // Verificar se o cliente titular corresponde à busca
+        if (client.name && client.name.toLowerCase().includes(termLower)) {
+          results.push({
+            id: client.id,
+            name: client.name,
+            type: 'titular',
+            parent: null,
+            dependentIndex: null
+          });
+        }
+
+        // Verificar se algum dependente corresponde à busca
+        if (client.dependents && Array.isArray(client.dependents)) {
+          client.dependents.forEach((dependent, index) => {
+            if (dependent.name && dependent.name.toLowerCase().includes(termLower)) {
+              results.push({
+                id: `${client.id}-dep-${index}`,
+                name: `${dependent.name} (Dependente de ${client.name})`,
+                type: 'dependente',
+                parent: client,
+                dependentIndex: index
+              });
+            }
+          });
+        }
+      });
+    }
+
+    console.log("[MultiAppointmentModal] Total de resultados filtrados:", results.length);
+    setSearchResults(results);
+  };
 
   // Função auxiliar para montar pacotes do cliente com nome e serviços corretos
   function normalizarPacoteCliente(pkg) {
@@ -218,9 +364,11 @@ export default function MultiAppointmentModal({
     }).filter(Boolean);
   }
 
-  const filteredClients = clients.filter(client =>
-    client.name.toLowerCase().includes(multiClientSearch.toLowerCase())
-  );
+  // Substituir a filtragem simples pela função de busca completa
+  useEffect(() => {
+    // Inicializar com todos os clientes e dependentes ou filtrar com base no termo de busca
+    searchClientsAndDependents(multiClientSearch);
+  }, [multiClientSearch, clients]);
 
   const filteredAvulsos = avulsos.filter(item =>
     item.name && item.name.toLowerCase().includes(avulsoSearch.toLowerCase())
@@ -284,44 +432,71 @@ export default function MultiAppointmentModal({
     agendamentoLinhas.every(linha => linha.servico && linha.profissional && linha.data && linha.hora);
 
   // Função para confirmar múltiplos agendamentos
-  function handleConfirm() {
-    console.log('[DEBUG][MultiAppointmentModal] handleConfirm chamado');
-    console.log('[DEBUG][MultiAppointmentModal] Estado atual:', {
-      multiClientId,
-      multiSelectedPackageId,
-      tipoAgendamento,
-      agendamentoLinhas,
-      multiClientPackages
+  const handleConfirm = () => {
+    // Validar formulário
+    if (!isFormValid()) {
+      console.log(`[MultiAppointmentModal] Formulário inválido`);
+      return;
+    }
+    
+    console.log(`[MultiAppointmentModal] Confirmando agendamentos: clientId=${multiClientId}, clientType=${clientType}, dependentIndex=${dependentIndex}`);
+    
+    // Preparar agendamentos
+    const agendamentos = agendamentoLinhas.map(linha => {
+      // Determinar o tipo de cliente e índice do dependente para esta linha
+      const linhaClientType = linha.client_type || clientType;
+      const linhaDependentIndex = linha.dependent_index !== undefined ? linha.dependent_index : dependentIndex;
+      
+      // Criar objeto de agendamento
+      const agendamento = {
+        client_id: multiClientId,
+        client_type: linhaClientType,
+        dependent_index: linhaDependentIndex,
+        service_id: linha.servico,
+        employee_id: linha.profissional,
+        date: `${linha.data}T${linha.hora}:00`,
+        status: 'agendado',
+        notes: '', // Campo opcional para observações
+        // Campos específicos com base no tipo de agendamento
+        package_id: linha.tipo === 'pacote' ? (linha.package_id || multiSelectedPackageId) : null,
+        pending_service_id: linha.tipo === 'pendente' ? linha.pending_service_id : null,
+        original_appointment_id: linha.original_appointment_id || null
+      };
+      
+      console.log(`[MultiAppointmentModal] Agendamento preparado:`, agendamento);
+      
+      return agendamento;
     });
-    let packageIdToSend = multiSelectedPackageId;
-    if (tipoAgendamento === 'pacote' && !multiSelectedPackageId && multiClientPackages.length > 0) {
-      packageIdToSend = multiClientPackages[0].id;
-    }
-    // Força o tipo correto em todas as linhas antes de enviar
-    const linhasCorrigidas = agendamentoLinhas.map(linha => ({
-      ...linha,
-      tipo: tipoAgendamento || 'avulso'
-    }));
-    const dadosParaSalvar = {
-      client_id: multiClientId,
-      package_id: tipoAgendamento === 'pacote' ? packageIdToSend : null, // Usar null em vez de undefined
-      agendamentos: linhasCorrigidas
-    };
-    console.log('[DEBUG][MultiAppointmentModal] handleConfirm - Dados enviados para onConfirm:', dadosParaSalvar);
-    if (onConfirm) {
-      onConfirm(dadosParaSalvar);
-    }
-    setMultiClientId("");
-    setMultiSelectedPackageId("");
-    setAgendamentoLinhas([{ tipo: '', servico: '', profissional: '', data: '', hora: '', original_appointment_id: null }]);
-    setMultiClientSearch("");
-    setMultiClientPackages([]);
-  }
+    
+    console.log(`[MultiAppointmentModal] Total de agendamentos: ${agendamentos.length}`);
+    
+    // Chamar função de confirmação
+    onConfirm(agendamentos);
+    
+    // Fechar modal
+    onOpenChange(false);
+  };
 
   // Função para adicionar uma nova linha de agendamento
-  function adicionarLinhaAgendamento() {
-    setAgendamentoLinhas([...agendamentoLinhas, { tipo: '', servico: '', profissional: '', data: '', hora: '', original_appointment_id: null }]);
-  }
+  const adicionarLinhaAgendamento = () => {
+    const novaLinha = { 
+      tipo: tipoAgendamento || '', 
+      servico: '', 
+      profissional: '', 
+      data: '', 
+      hora: '', 
+      original_appointment_id: null,
+      client_type: clientType,
+      dependent_index: dependentIndex,
+      // Adicionar campos específicos com base no tipo de agendamento
+      ...(tipoAgendamento === 'pacote' ? { package_id: multiSelectedPackageId } : {}),
+      ...(tipoAgendamento === 'pendente' ? { pending_service_id: null } : {})
+    };
+    
+    console.log(`[MultiAppointmentModal] Adicionando linha de agendamento:`, novaLinha);
+    
+    setAgendamentoLinhas([...agendamentoLinhas, novaLinha]);
+  };
 
   // Função para remover uma linha
   function removerLinhaAgendamento(idx) {
@@ -501,16 +676,67 @@ export default function MultiAppointmentModal({
               <select
                 id="multi-client"
                 className="w-full border rounded-md px-3 py-2 bg-white border-primary/20 focus:border-primary/60 appearance-none text-gray-700"
-                value={multiClientId || ''}
-                onChange={e => { setMultiClientId(e.target.value); }}
+                value={clientType === 'dependente' ? `${multiClientId}-dep-${dependentIndex}` : (multiClientId || '')}
+                onChange={e => { 
+                  const selectedId = e.target.value;
+                  
+                  // Se não selecionou nada
+                  if (!selectedId) {
+                    setMultiClientId("");
+                    setClientType('titular');
+                    setDependentIndex(null);
+                    return;
+                  }
+                  
+                  // Verificar se é um dependente (formato: clientId-dep-index)
+                  if (selectedId.includes('-dep-')) {
+                    const [clientId, _, indexStr] = selectedId.split('-');
+                    const index = parseInt(indexStr, 10);
+                    
+                    console.log(`[MultiAppointmentModal] Selecionado dependente: clientId=${clientId}, index=${index}`);
+                    
+                    setMultiClientId(clientId);
+                    setClientType('dependente');
+                    setDependentIndex(index);
+                  } else {
+                    console.log(`[MultiAppointmentModal] Selecionado cliente titular: id=${selectedId}`);
+                    
+                    setMultiClientId(selectedId);
+                    setClientType('titular');
+                    setDependentIndex(null);
+                  }
+                }}
               >
                 <option value="">Selecione um cliente</option>
-                {filteredClients.map(client => (
-                  <option key={client.id} value={client.id}>{client.name}</option>
+                {searchResults.map(result => (
+                  <option 
+                    key={result.id} 
+                    value={result.id}
+                    className={result.type === 'dependente' ? 'pl-4 italic' : ''}
+                  >
+                    {result.name}
+                  </option>
                 ))}
               </select>
               <ChevronDown className="w-4 h-4 text-gray-400 absolute right-3 top-[10px] pointer-events-none" />
             </div>
+            
+            {/* Indicador de cliente/dependente selecionado */}
+            {multiClientId && (
+              <div className="mt-2 p-2 rounded-md bg-blue-50 border border-blue-100">
+                <p className="text-sm text-blue-700 font-medium">
+                  {clientType === 'titular' ? (
+                    <>Cliente selecionado: <span className="font-bold">{clients.find(c => c.id === multiClientId)?.name || multiClientId}</span></>
+                  ) : (
+                    <>
+                      Dependente selecionado: <span className="font-bold">
+                        {clients.find(c => c.id === multiClientId)?.dependents?.[dependentIndex]?.name || 'Dependente'}
+                      </span> de <span className="font-bold">{clients.find(c => c.id === multiClientId)?.name || multiClientId}</span>
+                    </>
+                  )}
+                </p>
+              </div>
+            )}
           </div>
           {/* Seletor de tipo de agendamento */}
           <div className="mb-6">
