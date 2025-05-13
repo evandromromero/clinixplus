@@ -2,6 +2,21 @@
 
 Sistema de gerenciamento para clínicas estéticas desenvolvido com React e Firebase.
 
+## Melhorias Recentes (Maio 2025)
+
+### Otimizações de Performance
+
+#### Contas a Receber
+- **Paginação no Servidor**: Implementação de carregamento paginado para transações financeiras, reduzindo o tempo de carregamento inicial.
+- **Sistema de Cache Aprimorado**: Redução significativa no número de consultas ao Firebase através de um sistema de cache inteligente.
+- **Carregamento em Lotes**: Implementação de carregamento em lotes para clientes e vendas, melhorando a performance.
+- **Atualização em Tempo Real**: Correção para atualizar a interface imediatamente após edição de transações, sem necessidade de recarregar todos os dados.
+- **Tratamento Robusto de Datas**: Implementação de verificações e validações para diferentes formatos de data, evitando erros de formatação.
+
+#### Caixa
+- **Relatórios Otimizados**: Correção do layout da tabela de transações nos relatórios de caixa para melhor visualização.
+- **Tratamento de Erros**: Implementação de tratamento de erros para evitar falhas ao visualizar relatórios de caixas anteriores.
+
 ## Funcionalidades
 
 ### Gestão de Clientes

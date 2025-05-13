@@ -123,14 +123,40 @@ export default function AccountsReceivable() {
     let paymentDate;
     
     if (transaction.payment_date) {
-      // Tratar a data como uma string YYYY-MM-DD
-      const [year, month, day] = transaction.payment_date.split('-').map(Number);
-      
-      // Criar uma data com os valores exatos, sem ajustes de fuso horário
-      // Subtrair 1 do mês porque JavaScript usa mês de 0-11
-      paymentDate = new Date(year, month - 1, day, 12, 0, 0, 0);
-      
-      console.log('Data carregada no modal:', `${day}/${month}/${year}`);
+      try {
+        // Verificar se a data está no formato esperado
+        if (transaction.payment_date.includes('T')) {
+          // Formato ISO com timestamp (YYYY-MM-DDTHH:MM:SS)
+          paymentDate = new Date(transaction.payment_date);
+        } else if (transaction.payment_date.includes('-') && transaction.payment_date.split('-').length === 3) {
+          // Formato YYYY-MM-DD
+          const [year, month, day] = transaction.payment_date.split('-').map(Number);
+          
+          // Verificar se os componentes da data são válidos
+          if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
+            // Criar uma data com os valores exatos, sem ajustes de fuso horário
+            // Subtrair 1 do mês porque JavaScript usa mês de 0-11
+            paymentDate = new Date(year, month - 1, day, 12, 0, 0, 0);
+            console.log('Data carregada no modal (formato YYYY-MM-DD):', `${day}/${month}/${year}`);
+          } else {
+            throw new Error('Componentes da data inválidos');
+          }
+        } else {
+          // Tentar criar a data diretamente
+          paymentDate = new Date(transaction.payment_date);
+          console.log('Data carregada no modal (formato alternativo):', paymentDate.toLocaleDateString());
+        }
+        
+        // Verificar se a data é válida
+        if (isNaN(paymentDate.getTime())) {
+          throw new Error('Data inválida');
+        }
+      } catch (error) {
+        console.error('Erro ao processar a data de pagamento:', error, transaction.payment_date);
+        // Em caso de erro, usar a data atual
+        paymentDate = new Date();
+        paymentDate.setHours(12, 0, 0, 0);
+      }
     } else {
       // Se não houver data de pagamento, usar a data atual
       paymentDate = new Date();
@@ -231,22 +257,37 @@ export default function AccountsReceivable() {
       
       // Se a transação já estiver paga, atualizar a data de pagamento
       if (transactionToEdit.status === 'pago' && transactionToEdit.edit_payment_date) {
-        // Criar uma data com o fuso horário local para evitar problemas de data
-        const selectedDate = new Date(transactionToEdit.edit_payment_date);
-        
-        // Extrair apenas a data (dia, mês, ano) ignorando completamente a hora
-        const year = selectedDate.getFullYear();
-        const month = selectedDate.getMonth() + 1; // JavaScript usa mês de 0-11, precisamos ajustar
-        const day = selectedDate.getDate();
-        
-        // Formatar a data como string no formato YYYY-MM-DD sem componente de hora
-        // Esta é a forma mais segura de armazenar apenas a data
-        const formattedDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        
-        // Armazenar a data sem nenhuma informação de hora
-        updatedData.payment_date = formattedDate;
-        
-        console.log('Data selecionada para salvar:', formattedDate);
+        try {
+          // Verificar se a data é válida
+          const selectedDate = new Date(transactionToEdit.edit_payment_date);
+          
+          if (isNaN(selectedDate.getTime())) {
+            throw new Error('Data inválida');
+          }
+          
+          // Extrair apenas a data (dia, mês, ano) ignorando completamente a hora
+          const year = selectedDate.getFullYear();
+          const month = selectedDate.getMonth() + 1; // JavaScript usa mês de 0-11, precisamos ajustar
+          const day = selectedDate.getDate();
+          
+          // Formatar a data como string no formato YYYY-MM-DD sem componente de hora
+          // Esta é a forma mais segura de armazenar apenas a data
+          const formattedDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          
+          // Armazenar a data sem nenhuma informação de hora
+          updatedData.payment_date = formattedDate;
+          
+          console.log('Data selecionada para salvar:', formattedDate);
+        } catch (error) {
+          console.error('Erro ao processar a data de pagamento para salvar:', error);
+          // Em caso de erro, usar a data atual formatada
+          const now = new Date();
+          const year = now.getFullYear();
+          const month = String(now.getMonth() + 1).padStart(2, '0');
+          const day = String(now.getDate()).padStart(2, '0');
+          updatedData.payment_date = `${year}-${month}-${day}`;
+          console.log('Usando data atual como fallback:', updatedData.payment_date);
+        }
       }
       
       // Remover campos temporários de edição
@@ -2021,7 +2062,18 @@ export default function AccountsReceivable() {
                     >
                       <CalendarIcon className="mr-2 h-4 w-4" />
                       {transactionToEdit?.edit_payment_date 
-                        ? format(new Date(transactionToEdit.edit_payment_date), 'dd/MM/yyyy', { locale: ptBR })
+                        ? (() => {
+                            try {
+                              const date = new Date(transactionToEdit.edit_payment_date);
+                              if (isNaN(date.getTime())) {
+                                return 'Selecione uma data';
+                              }
+                              return format(date, 'dd/MM/yyyy', { locale: ptBR });
+                            } catch (error) {
+                              console.error('Erro ao formatar data para exibição:', error);
+                              return 'Selecione uma data';
+                            }
+                          })()
                         : 'Selecione uma data'}
                     </Button>
                   </PopoverTrigger>
