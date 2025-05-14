@@ -3448,7 +3448,7 @@ export default function ClientPackages() {
 
       {/* Modal de importação de pacote antigo */}
       <Dialog open={showImportPackageDialog} onOpenChange={setShowImportPackageDialog}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Importar Pacote Antigo</DialogTitle>
             <DialogDescription>Adicione pacotes já pagos em outro sistema para um cliente.</DialogDescription>
