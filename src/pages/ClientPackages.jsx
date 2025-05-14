@@ -223,6 +223,18 @@ export default function ClientPackages() {
     });
   };
 
+  // Função para remover uma sessão específica de um serviço
+  const handleRemoveSessionFromService = (serviceIdx, sessionIdx) => {
+    setImportPackageForm(prev => {
+      const services = [...prev.services];
+      // Remove a sessão específica
+      services[serviceIdx].sessions.splice(sessionIdx, 1);
+      // Decrementa o contador de sessões usadas
+      services[serviceIdx].used = Math.max(0, (services[serviceIdx].used || 0) - 1);
+      return { ...prev, services };
+    });
+  };
+
   const resetNewPackageForm = () => {
     setNewPackage({
       client_id: '',
@@ -3569,6 +3581,15 @@ export default function ClientPackages() {
                         placeholder="Observações"
                         className="flex-1"
                       />
+                      <Button 
+                        size="icon" 
+                        variant="ghost" 
+                        onClick={() => handleRemoveSessionFromService(idx, sidx)}
+                        className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                        title="Excluir sessão"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   ))}
                   <Button size="xs" variant="outline" onClick={() => handleAddSessionToService(idx)} className="mt-1"><Plus className="w-3 h-3 mr-1" />Adicionar Sessão Concluída</Button>
