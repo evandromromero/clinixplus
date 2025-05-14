@@ -4,6 +4,29 @@ Sistema de gerenciamento para clínicas estéticas desenvolvido com React e Fire
 
 ## Melhorias Recentes (Maio 2025)
 
+### Melhorias em Pacotes de Clientes (14/05/2025)
+
+1. **Exibição do Valor do Pacote**:
+   - Implementada a exibição do valor pago pelo cliente no card de pacotes
+   - Valor exibido ao lado do nome do cliente com formatação destacada em verde
+   - Layout responsivo que se adapta a diferentes tamanhos de tela
+
+2. **Busca Avançada de Clientes**:
+   - Adicionado campo de busca por nome de cliente no filtro da página de pacotes
+   - Resultados exibidos em tempo real enquanto o usuário digita
+   - Seleção direta do cliente a partir dos resultados da busca
+   - Filtro automático dos pacotes pelo cliente selecionado
+
+3. **Melhorias na Modal de Importação de Pacotes**:
+   - Adicionado botão de exclusão para cada linha de sessão concluída
+   - Implementado scroll automático na modal para melhor usabilidade com muitos serviços
+   - Correção do contador de sessões ao remover sessões concluídas
+
+4. **Build Otimizada para Hospedagem**:
+   - Geração de arquivos otimizados para hospedagem na Hostinger
+   - Configurações para suporte a SPA em hospedagem compartilhada
+   - Instruções detalhadas para upload e configuração
+
 ### Otimizações de Performance
 
 #### Contas a Receber
