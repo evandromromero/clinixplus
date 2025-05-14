@@ -2286,9 +2286,16 @@ export default function ClientPackages() {
                         <h3 className="text-sm font-medium text-gray-900">
                           {getPackageName(clientPkg.id)}
                         </h3>
-                        <p className="text-sm text-gray-600">
-                          Cliente: {getClientName(clientPkg.client_id)}
-                        </p>
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2">
+                          <p className="text-sm text-gray-600">
+                            Cliente: {getClientName(clientPkg.client_id)}
+                          </p>
+                          {clientPkg.package_snapshot?.total_price && (
+                            <p className="text-sm font-medium text-emerald-600">
+                              Valor: R$ {parseFloat(clientPkg.package_snapshot.total_price).toFixed(2)}
+                            </p>
+                          )}
+                        </div>
                       </div>
                       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
                         <Badge 
