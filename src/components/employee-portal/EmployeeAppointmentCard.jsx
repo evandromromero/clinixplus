@@ -56,6 +56,14 @@ export default function EmployeeAppointmentCard({ appointments, onAction, curren
   const updatePackageSession = async (appointment, newStatus) => {
     try {
       console.log("[EmployeePortal][updatePackageSession] Iniciando atualização de pacote para agendamento:", appointment.id);
+      console.log("[EmployeePortal][updatePackageSession] Dados do agendamento:", {
+        id: appointment.id,
+        status: appointment.status,
+        client_id: appointment.client_id,
+        service_id: appointment.service_id,
+        hasSignature: !!appointment.signature,
+        signatureLength: appointment.signature ? appointment.signature.length : 0
+      });
       
       // Buscar pacotes ativos do cliente
       const clientPackages = await ClientPackage.filter({ 
@@ -130,19 +138,39 @@ export default function EmployeeAppointmentCard({ appointments, onAction, curren
       
       if (sessionIndex >= 0) {
         // Atualizar sessão existente
+        console.log("[EmployeePortal][updatePackageSession] Atualizando sessão existente:", {
+          sessionIndex,
+          currentStatus: currentSessionHistory[sessionIndex].status,
+          newStatus,
+          hasExistingSignature: !!currentSessionHistory[sessionIndex].signature,
+          hasNewSignature: !!appointment.signature,
+          appointmentId: appointment.id
+        });
+        
         updatedSessionHistory = currentSessionHistory
           .filter((session, index) => session.appointment_id !== appointment.id || index === sessionIndex)
-          .map((session, index) =>
-            index === sessionIndex
-              ? { 
-                  ...session, 
-                  status: newStatus,
-                  employee_id: appointment.employee_id,
-                  employee_name: employeeName,
-                  date: appointment.date
-                }
-              : session
-          );
+          .map((session, index) => {
+            if (index === sessionIndex) {
+              const updatedSession = { 
+                ...session, 
+                status: newStatus,
+                employee_id: appointment.employee_id,
+                employee_name: employeeName,
+                date: appointment.date,
+                signature: appointment.signature || session.signature || null // Manter assinatura existente ou adicionar nova
+              };
+              
+              console.log("[EmployeePortal][updatePackageSession] Sessão atualizada:", {
+                appointment_id: updatedSession.appointment_id,
+                status: updatedSession.status,
+                hasSignature: !!updatedSession.signature,
+                signatureSource: appointment.signature ? 'nova assinatura' : (session.signature ? 'assinatura existente' : 'sem assinatura')
+              });
+              
+              return updatedSession;
+            }
+            return session;
+          });
       } else {
         // Adicionar nova sessão
         updatedSessionHistory = [...currentSessionHistory].filter(session => 
@@ -157,8 +185,16 @@ export default function EmployeeAppointmentCard({ appointments, onAction, curren
           date: appointment.date,
           appointment_id: appointment.id,
           status: newStatus,
-          notes: appointment.notes || ""
+          notes: appointment.notes || "",
+          signature: appointment.signature || null // Incluir a assinatura do cliente
         };
+        
+        console.log("[EmployeePortal][updatePackageSession] Criando nova entrada de histórico:", {
+          appointment_id: sessionHistoryEntry.appointment_id,
+          status: sessionHistoryEntry.status,
+          hasSignature: !!sessionHistoryEntry.signature,
+          signatureLength: sessionHistoryEntry.signature ? sessionHistoryEntry.signature.length : 0
+        });
         
         updatedSessionHistory.push(sessionHistoryEntry);
       }
@@ -225,8 +261,18 @@ export default function EmployeeAppointmentCard({ appointments, onAction, curren
       // Atualizar o status do agendamento com a assinatura
       await Appointment.update(concludeId, { status: 'concluido', signature });
       
+      // Adicionar a assinatura ao objeto appointmentToUpdate antes de passar para updatePackageSession
+      const updatedAppointment = {
+        ...appointmentToUpdate,
+        status: 'concluido',
+        signature: signature
+      };
+      
+      console.log('[DEBUG] Assinatura capturada:', signature ? 'Sim (comprimento: ' + signature.length + ')' : 'Não');
+      console.log('[DEBUG] Objeto atualizado com assinatura:', updatedAppointment.id, updatedAppointment.status, updatedAppointment.signature ? 'Tem assinatura' : 'Sem assinatura');
+      
       // Atualizar pacotes associados
-      await updatePackageSession(appointmentToUpdate, 'concluido');
+      await updatePackageSession(updatedAppointment, 'concluido');
       
       // Atualizar serviços pendentes associados
       if (appointmentToUpdate.pending_service_id) {

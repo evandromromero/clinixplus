@@ -58,6 +58,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import SignatureCanvas from 'react-signature-canvas';
 import AnamneseListCard from '../components/employee-portal/AnamneseListCard';
+import { useSignatureModal } from '../components/SignatureModal';
 
 export default function ClientDetails() {
   const [client, setClient] = useState(null);
@@ -111,6 +112,7 @@ export default function ClientDetails() {
   const [showPaymentHistoryDialog, setShowPaymentHistoryDialog] = useState(false);
   const [expandedPackages, setExpandedPackages] = useState({});
   const [signature, setSignature] = useState(null);
+  const { openModal } = useSignatureModal();
   const sigCanvasRef = useRef();
   const urlParams = new URLSearchParams(window.location.search);
   const clientId = urlParams.get('id');
@@ -1375,6 +1377,18 @@ export default function ClientDetails() {
                                       <div className="text-[#175EA0]">{session.service_name}</div>
                                       {session.notes && (
                                         <div className="text-xs text-[#518CD0] mt-1">{session.notes}</div>
+                                      )}
+                                      {(session.signature && typeof session.signature === 'string' && session.signature.length > 0) && (
+                                        <Button 
+                                          variant="outline" 
+                                          size="sm"
+                                          className="text-purple-500 hover:text-purple-700 hover:bg-purple-50 mt-1"
+                                          onClick={() => openModal(session.signature)}
+                                          title="Ver assinatura"
+                                        >
+                                          <FileText className="h-4 w-4 mr-1" />
+                                          Assinatura
+                                        </Button>
                                       )}
                                     </div>
                                   </div>

@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Migração de Assinaturas</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <style>
+    .log-container {
+      max-height: 500px;
+      overflow-y: auto;
+      background-color: #f8f9fa;
+      border: 1px solid #dee2e6;
+      padding: 1rem;
+      border-radius: 0.25rem;
+      font-family: monospace;
+      white-space: pre-wrap;
+    }
+    .log-entry {
+      margin-bottom: 0.5rem;
+    }
+    .log-entry.info {
+      color: #0d6efd;
+    }
+    .log-entry.success {
+      color: #198754;
+    }
+    .log-entry.error {
+      color: #dc3545;
+    }
+    .log-entry.warning {
+      color: #fd7e14;
+    }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+  <div class="container mx-auto py-8 px-4">
+    <div class="bg-white shadow-md rounded-lg p-6 max-w-4xl mx-auto">
+      <h1 class="text-2xl font-bold mb-6 text-center text-gray-800">Migração de Assinaturas</h1>
+      
+      <p class="mb-4 text-gray-700">
+        Esta ferramenta irá migrar as assinaturas dos agendamentos concluídos para o histórico de sessões dos pacotes correspondentes.
+      </p>
+      
+      <div class="flex justify-center mb-6">
+        <button id="startMigration" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+          Iniciar Migração
+        </button>
+      </div>
+      
+      <div class="mb-4">
+        <h2 class="text-xl font-semibold mb-2 text-gray-800">Log de Execução</h2>
+        <div id="logContainer" class="log-container">
+          <div class="log-entry info">Aguardando início da migração...</div>
+        </div>
+      </div>
+      
+      <div id="summary" class="hidden bg-green-50 border border-green-200 rounded-md p-4 mb-4">
+        <h2 class="text-xl font-semibold mb-2 text-green-800">Resumo da Migração</h2>
+        <div id="summaryContent" class="text-green-700"></div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    // Importar Firebase
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.6.10/firebase-app.js';
+    import { getFirestore, collection, getDocs, doc, updateDoc } from 'https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore.js';
+
+    // Configuração do Firebase
+    const firebaseConfig = {
+      apiKey: "AIzaSyBYKSrQdHKXLRfJJmqq0qTSYLKLHGZQfj0",
+      authDomain: "clinixplus-8f148.firebaseapp.com",
+      projectId: "clinixplus-8f148",
+      storageBucket: "clinixplus-8f148.appspot.com",
+      messagingSenderId: "441368298835",
+      appId: "1:441368298835:web:6c3d0a8a8e9c1e8f0a8e9c"
+    };
+
+    // Inicializar Firebase
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // Elementos DOM
+    const startButton = document.getElementById('startMigration');
+    const logContainer = document.getElementById('logContainer');
+    const summary = document.getElementById('summary');
+    const summaryContent = document.getElementById('summaryContent');
+
+    // Função para adicionar log
+    function addLog(message, type = 'info') {
+      const logEntry = document.createElement('div');
+      logEntry.className = `log-entry ${type}`;
+      logEntry.textContent = message;
+      logContainer.appendChild(logEntry);
+      logContainer.scrollTop = logContainer.scrollHeight;
+    }
+
+    // Função para migrar assinaturas
+    async function migrateSignatures() {
+      addLog('Iniciando migração de assinaturas...', 'info');
+      
+      try {
+        // 1. Buscar todos os agendamentos concluídos que têm assinatura
+        addLog('Buscando agendamentos concluídos com assinatura...', 'info');
+        const appointmentsRef = collection(db, 'appointments');
+        const appointmentsSnapshot = await getDocs(appointmentsRef);
+        
+        const completedAppointmentsWithSignature = [];
+        appointmentsSnapshot.forEach(doc => {
+          const appointment = { id: doc.id, ...doc.data() };
+          if (appointment.status === 'concluido' && appointment.signature) {
+            completedAppointmentsWithSignature.push(appointment);
+          }
+        });
+        
+        addLog(`Encontrados ${completedAppointmentsWithSignature.length} agendamentos concluídos com assinatura.`, 'success');
+        
+        if (completedAppointmentsWithSignature.length === 0) {
+          addLog('Nenhum agendamento com assinatura encontrado. Migração concluída.', 'warning');
+          return { processed: 0, updated: 0, notFound: 0 };
+        }
+        
+        // 2. Buscar todos os pacotes
+        addLog('Buscando todos os pacotes...', 'info');
+        const clientPackagesRef = collection(db, 'client_packages');
+        const clientPackagesSnapshot = await getDocs(clientPackagesRef);
+        
+        const clientPackages = [];
+        clientPackagesSnapshot.forEach(doc => {
+          clientPackages.push({ id: doc.id, ...doc.data() });
+        });
+        
+        addLog(`Encontrados ${clientPackages.length} pacotes no total.`, 'success');
+        
+        // 3. Para cada agendamento concluído com assinatura
+        let updatedPackagesCount = 0;
+        let updatedSessionsCount = 0;
+        let notFoundCount = 0;
+        
+        for (const appointment of completedAppointmentsWithSignature) {
+          addLog(`\nProcessando agendamento ${appointment.id}...`, 'info');
+          
+          if (!appointment.service_id) {
+            addLog(`Agendamento ${appointment.id} não tem serviço associado. Pulando...`, 'warning');
+            continue;
+          }
+          
+          // Encontrar pacotes relevantes para este agendamento
+          const relevantPackages = clientPackages.filter(pkg => 
+            pkg.client_id === appointment.client_id
+          );
+          
+          addLog(`Encontrados ${relevantPackages.length} pacotes para o cliente.`, 'info');
+          
+          let foundMatch = false;
+          
+          for (const pkg of relevantPackages) {
+            // Verificar se o pacote tem histórico de sessões
+            if (!pkg.session_history) {
+              pkg.session_history = [];
+            }
+            
+            if (!Array.isArray(pkg.session_history)) {
+              pkg.session_history = [];
+            }
+            
+            // Verificar se existe uma sessão para este agendamento
+            const sessionIndex = pkg.session_history.findIndex(
+              session => session.appointment_id === appointment.id
+            );
+            
+            if (sessionIndex >= 0) {
+              // Sessão encontrada, atualizar com a assinatura
+              foundMatch = true;
+              const updatedSessionHistory = [...pkg.session_history];
+              
+              // Verificar se a sessão já tem assinatura
+              if (!updatedSessionHistory[sessionIndex].signature) {
+                addLog(`Adicionando assinatura à sessão do agendamento ${appointment.id} no pacote ${pkg.id}`, 'info');
+                
+                updatedSessionHistory[sessionIndex] = {
+                  ...updatedSessionHistory[sessionIndex],
+                  signature: appointment.signature
+                };
+                
+                // Atualizar o pacote
+                const packageDocRef = doc(db, 'client_packages', pkg.id);
+                await updateDoc(packageDocRef, {
+                  session_history: updatedSessionHistory
+                });
+                
+                updatedSessionsCount++;
+                updatedPackagesCount++;
+                addLog(`Pacote ${pkg.id} atualizado com sucesso.`, 'success');
+              } else {
+                addLog(`A sessão já possui assinatura. Pulando...`, 'warning');
+              }
+            }
+          }
+          
+          if (!foundMatch) {
+            addLog(`Não foi possível encontrar uma sessão correspondente para o agendamento ${appointment.id}.`, 'error');
+            notFoundCount++;
+          }
+        }
+        
+        addLog(`\n=== RESUMO DA MIGRAÇÃO ===`, 'success');
+        addLog(`Total de agendamentos processados: ${completedAppointmentsWithSignature.length}`, 'success');
+        addLog(`Sessões atualizadas: ${updatedSessionsCount}`, 'success');
+        addLog(`Pacotes atualizados: ${updatedPackagesCount}`, 'success');
+        addLog(`Agendamentos sem sessão correspondente: ${notFoundCount}`, 'warning');
+        addLog(`Migração concluída!`, 'success');
+        
+        return {
+          processed: completedAppointmentsWithSignature.length,
+          updated: updatedSessionsCount,
+          notFound: notFoundCount
+        };
+        
+      } catch (error) {
+        addLog(`Erro durante a migração: ${error.message}`, 'error');
+        console.error('Erro durante a migração:', error);
+        return { error: true, message: error.message };
+      }
+    }
+
+    // Event listener para o botão de iniciar migração
+    startButton.addEventListener('click', async () => {
+      startButton.disabled = true;
+      startButton.textContent = 'Migrando...';
+      logContainer.innerHTML = '';
+      
+      try {
+        const result = await migrateSignatures();
+        
+        if (!result.error) {
+          summary.classList.remove('hidden');
+          summaryContent.innerHTML = `
+            <p>Total de agendamentos processados: <strong>${result.processed}</strong></p>
+            <p>Sessões atualizadas com assinatura: <strong>${result.updated}</strong></p>
+            <p>Agendamentos sem sessão correspondente: <strong>${result.notFound}</strong></p>
+          `;
+        }
+      } catch (error) {
+        addLog(`Erro fatal durante a migração: ${error.message}`, 'error');
+        console.error('Erro fatal durante a migração:', error);
+      } finally {
+        startButton.disabled = false;
+        startButton.textContent = 'Iniciar Migração';
+      }
+    });
+  </script>
+</body>
+</html>

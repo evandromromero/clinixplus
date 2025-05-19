@@ -1325,7 +1325,8 @@ export default function Appointments() {
                     status: newStatus,
                     employee_id: appointment.employee_id,
                     employee_name: employeeName,
-                    date: appointment.date
+                    date: appointment.date,
+                    signature: appointment.signature || session.signature || null // Manter assinatura existente ou adicionar nova
                   }
                 : session
             );
@@ -1345,7 +1346,8 @@ export default function Appointments() {
             date: appointment.date,
             appointment_id: appointment.id,
             status: newStatus,
-            notes: appointment.notes || ""
+            notes: appointment.notes || "",
+            signature: appointment.signature || null // Incluir a assinatura do cliente
           };
           updatedSessionHistory.push(sessionHistoryEntry);
 

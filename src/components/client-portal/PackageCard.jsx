@@ -1,13 +1,23 @@
 import React, { useState } from 'react';
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Package, Calendar, CheckCircle, ChevronLeft, ChevronRight, ChevronDown, ChevronUp } from "lucide-react";
+import { Package, Calendar, CheckCircle, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, FileText } from "lucide-react";
+import { useSignatureModal } from '@/components/SignatureModal';
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog";
 
 export default function PackageCard({ packages = [], services = [] }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [expandedPackages, setExpandedPackages] = useState({});
+  const { openModal } = useSignatureModal();
   const ITEMS_PER_PAGE = 10;
   const totalPages = Math.ceil(packages.length / ITEMS_PER_PAGE);
 
@@ -142,6 +152,19 @@ export default function PackageCard({ packages = [], services = [] }) {
                                   Profissional: {session.employee_name || "Não informado"}
                                   {console.log('Session exibida no histórico:', session)}
                                 </div>
+                                {(session.signature && typeof session.signature === 'string' && session.signature.length > 0) && (
+                                  <div className="mt-2">
+                                    <Button 
+                                      variant="outline" 
+                                      size="sm"
+                                      className="text-purple-500 hover:text-purple-700 hover:bg-purple-50 w-full"
+                                      onClick={() => openModal(session.signature)}
+                                    >
+                                      <FileText className="h-4 w-4 mr-1" />
+                                      Ver Assinatura
+                                    </Button>
+                                  </div>
+                                )}
                               </div>
                             ))}
                         </div>
@@ -208,6 +231,8 @@ export default function PackageCard({ packages = [], services = [] }) {
           </Button>
         </div>
       )}
+
+
     </div>
   );
 }

@@ -32,6 +32,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { useToast } from "@/components/ui/use-toast";
 import RateLimitHandler from '@/components/RateLimitHandler';
+import { useSignatureModal } from '@/components/SignatureModal';
 import { 
   Calendar, 
   Plus, 
@@ -41,7 +42,8 @@ import {
   Search, 
   PackageCheck, 
   ChevronUp, 
-  ChevronDown 
+  ChevronDown,
+  FileText
 } from "lucide-react";
 import { collection, query, where, limit, getDocs, doc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/firebase/config';
@@ -65,6 +67,7 @@ export default function ClientPackages() {
   const [anamnesis, setAnamnesis] = useState(null);
   const [isEditingAnamnesis, setIsEditingAnamnesis] = useState(false);
   const [showAnamnesisDialog, setShowAnamnesisDialog] = useState(false);
+  const { openModal } = useSignatureModal();
   const [anamnesisTemplates, setAnamnesisTemplates] = useState([]);
   const [selectedTemplate, setSelectedTemplate] = useState("");
   const [dateFilter, setDateFilter] = useState("todos");
@@ -2452,7 +2455,20 @@ export default function ClientPackages() {
                                            session.status === 'cancelado' ? 'Cancelado' :
                                            session.status}
                                         </Badge>
-                                        {(
+                                        
+                                        <div className="flex items-center gap-2">
+                                          {(session.signature && typeof session.signature === 'string' && session.signature.length > 0) && (
+                                            <Button 
+                                              variant="outline" 
+                                              size="sm"
+                                              className="text-purple-500 hover:text-purple-700 hover:bg-purple-50"
+                                              onClick={() => openModal(session.signature)}
+                                              title="Ver assinatura"
+                                            >
+                                              <FileText className="h-4 w-4 mr-1" />
+                                              Assinatura
+                                            </Button>
+                                          )}
                                           <Button 
                                             variant="ghost" 
                                             size="icon"
@@ -2462,7 +2478,7 @@ export default function ClientPackages() {
                                           >
                                             <Trash2 className="h-4 w-4" />
                                           </Button>
-                                        )}
+                                        </div>
                                       </div>
                                     </div>
                                   ))}
@@ -2641,7 +2657,19 @@ export default function ClientPackages() {
                                session.status === 'cancelado' ? 'Cancelado' :
                                session.status}
                             </Badge>
-                            {(
+                            <div className="flex items-center gap-2">
+                              {(session.signature && typeof session.signature === 'string' && session.signature.length > 0) && (
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  className="text-purple-500 hover:text-purple-700 hover:bg-purple-50"
+                                  onClick={() => openModal(session.signature)}
+                                  title="Ver assinatura"
+                                >
+                                  <FileText className="h-4 w-4 mr-1" />
+                                  Assinatura
+                                </Button>
+                              )}
                               <Button 
                                 variant="ghost" 
                                 size="icon"
@@ -2651,7 +2679,7 @@ export default function ClientPackages() {
                               >
                                 <Trash2 className="h-4 w-4" />
                               </Button>
-                            )}
+                            </div>
                           </div>
                         </div>
                       );
@@ -3677,6 +3705,37 @@ export default function ClientPackages() {
       </Dialog>
 
       <RateLimitHandler />
+
+      {/* Modal para exibir a assinatura do cliente */}
+      <Dialog open={showSignatureModal} onOpenChange={setShowSignatureModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Assinatura do Cliente</DialogTitle>
+            <DialogDescription>
+              Assinatura capturada na conclusão do agendamento.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center justify-center p-4 bg-gray-50 rounded-md">
+            {currentSignature ? (
+              <img 
+                src={currentSignature} 
+                alt="Assinatura do cliente" 
+                className="max-h-48 max-w-full"
+              />
+            ) : (
+              <p className="text-gray-500">Assinatura não disponível</p>
+            )}
+          </div>
+          <DialogFooter className="sm:justify-center">
+            <Button 
+              variant="secondary" 
+              onClick={() => setShowSignatureModal(false)}
+            >
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
