@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Check, User, Clock, CalendarCheck2 } from 'lucide-react';
-import { Appointment } from '@/firebase/entities';
+import { Appointment, ClientPackage, PendingService, Service } from '@/firebase/entities';
 import AnamneseActionCard from './AnamneseActionCard';
 import { Client } from '@/firebase/entities';
 import SignatureCanvas from 'react-signature-canvas';
@@ -35,8 +35,146 @@ export default function EmployeeAppointmentCard({ appointments, onAction, curren
   const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [signature, setSignature] = useState(null);
   const [concludeId, setConcludeId] = useState(null);
-  const serviceColorMap = useMemo(() => ({}), []);
+  const [serviceColorMap, setServiceColorMap] = useState({});
+  const [services, setServices] = useState([]);
+  const [packages, setPackages] = useState([]);
+  
+  // Carregar serviços para referência
+  useEffect(() => {
+    const loadServices = async () => {
+      try {
+        const servicesData = await Service.list();
+        setServices(servicesData);
+      } catch (error) {
+        console.error('Erro ao carregar serviços:', error);
+      }
+    };
+    loadServices();
+  }, []);
 
+  // Função para atualizar sessões de pacotes quando um agendamento é concluído
+  const updatePackageSession = async (appointment, newStatus) => {
+    try {
+      console.log("[EmployeePortal][updatePackageSession] Iniciando atualização de pacote para agendamento:", appointment.id);
+      
+      // Buscar pacotes ativos do cliente
+      const clientPackages = await ClientPackage.filter({ 
+        client_id: appointment.client_id,
+        status: 'ativo'
+      });
+      
+      if (!clientPackages || clientPackages.length === 0) {
+        console.log("[EmployeePortal][updatePackageSession] Nenhum pacote ativo encontrado para o cliente");
+        return;
+      }
+      
+      // Encontrar o pacote relevante que contém o serviço do agendamento
+      const relevantPackage = clientPackages.find(pkg => {
+        // Verificar pacotes personalizados (sem package_id)
+        if (!pkg.package_id) {
+          // Verificar em diferentes formatos de dados
+          if (pkg.services && pkg.services.some(s => 
+            (typeof s === 'object' ? (s.service_id || s.id) : s) === appointment.service_id)) {
+            return true;
+          }
+          if (pkg.package_snapshot && pkg.package_snapshot.services && 
+              pkg.package_snapshot.services.some(s => 
+                (typeof s === 'object' ? (s.service_id || s.id) : s) === appointment.service_id)) {
+            return true;
+          }
+          if (pkg.services_included && pkg.services_included.some(s => 
+            (typeof s === 'object' ? (s.service_id || s.id) : s) === appointment.service_id)) {
+            return true;
+          }
+          return false;
+        }
+        return false;
+      });
+      
+      if (!relevantPackage) {
+        console.log("[EmployeePortal][updatePackageSession] Nenhum pacote relevante encontrado");
+        return;
+      }
+      
+      console.log("[EmployeePortal][updatePackageSession] Pacote relevante encontrado:", relevantPackage.id);
+      
+      // Obter nome do profissional
+      const employeeName = currentEmployee?.name || "Profissional não encontrado";
+      
+      // Obter nome do serviço
+      const serviceData = services.find(s => s.id === appointment.service_id);
+      const serviceName = serviceData?.name || "Serviço não encontrado";
+      
+      // Preparar histórico de sessões
+      const currentSessionHistory = Array.isArray(relevantPackage.session_history) 
+        ? relevantPackage.session_history 
+        : [];
+      
+      // Verificar se já existe uma entrada para este agendamento
+      const sessionIndex = currentSessionHistory.findIndex(
+        s => s.appointment_id === appointment.id
+      );
+      
+      // Verificar se houve mudança no status de conclusão
+      const wasCompleted = sessionIndex >= 0 && currentSessionHistory[sessionIndex].status === 'concluido';
+      const willBeCompleted = newStatus === 'concluido';
+      let sessionsUsedDelta = 0;
+      
+      if (!wasCompleted && willBeCompleted) {
+        sessionsUsedDelta = 1;
+      } else if (wasCompleted && !willBeCompleted) {
+        sessionsUsedDelta = -1;
+      }
+      
+      let updatedSessionHistory;
+      
+      if (sessionIndex >= 0) {
+        // Atualizar sessão existente
+        updatedSessionHistory = currentSessionHistory
+          .filter((session, index) => session.appointment_id !== appointment.id || index === sessionIndex)
+          .map((session, index) =>
+            index === sessionIndex
+              ? { 
+                  ...session, 
+                  status: newStatus,
+                  employee_id: appointment.employee_id,
+                  employee_name: employeeName,
+                  date: appointment.date
+                }
+              : session
+          );
+      } else {
+        // Adicionar nova sessão
+        updatedSessionHistory = [...currentSessionHistory].filter(session => 
+          session.appointment_id !== appointment.id
+        );
+        
+        const sessionHistoryEntry = {
+          service_id: appointment.service_id,
+          service_name: serviceName,
+          employee_id: appointment.employee_id,
+          employee_name: employeeName,
+          date: appointment.date,
+          appointment_id: appointment.id,
+          status: newStatus,
+          notes: appointment.notes || ""
+        };
+        
+        updatedSessionHistory.push(sessionHistoryEntry);
+      }
+      
+      // Atualizar o pacote
+      await ClientPackage.update(relevantPackage.id, {
+        session_history: updatedSessionHistory,
+        sessions_used: Math.max(0, (relevantPackage.sessions_used || 0) + sessionsUsedDelta)
+      });
+      
+      console.log("[EmployeePortal][updatePackageSession] Pacote atualizado com sucesso");
+    } catch (error) {
+      console.error("[EmployeePortal][updatePackageSession] Erro ao atualizar pacote:", error);
+    }
+  };
+  
   useEffect(() => {
     const fetchLastAnamnese = async () => {
       if (anamneseModal.open && anamneseModal.clientId) {
@@ -50,6 +188,7 @@ export default function EmployeeAppointmentCard({ appointments, onAction, curren
             setLastAnamnese(null);
           }
         } catch (e) {
+          console.error('Erro ao buscar anamneses:', e);
           setLastAnamnese(null);
         }
       } else {
@@ -58,7 +197,7 @@ export default function EmployeeAppointmentCard({ appointments, onAction, curren
     };
     fetchLastAnamnese();
   }, [anamneseModal]);
-
+  
   useEffect(() => {
     if (anamneseModal.open && lastAnamnese) {
       setShowEdit(false);
@@ -77,12 +216,31 @@ export default function EmployeeAppointmentCard({ appointments, onAction, curren
     }
     setLoadingId(concludeId);
     try {
+      // Buscar o agendamento completo antes de atualizar
+      const appointmentToUpdate = appointments.find(a => a.id === concludeId);
+      if (!appointmentToUpdate) {
+        throw new Error('Agendamento não encontrado');
+      }
+      
+      // Atualizar o status do agendamento com a assinatura
       await Appointment.update(concludeId, { status: 'concluido', signature });
+      
+      // Atualizar pacotes associados
+      await updatePackageSession(appointmentToUpdate, 'concluido');
+      
+      // Atualizar serviços pendentes associados
+      if (appointmentToUpdate.pending_service_id) {
+        await PendingService.update(appointmentToUpdate.pending_service_id, {
+          status: 'concluido'
+        });
+      }
+      
       if (onAction) onAction();
       setShowSignatureModal(false);
       setSignature(null);
       setConcludeId(null);
     } catch (error) {
+      console.error('Erro ao concluir o agendamento:', error);
       alert('Erro ao concluir o agendamento.');
     }
     setLoadingId(null);
