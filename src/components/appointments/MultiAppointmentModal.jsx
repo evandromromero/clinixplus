@@ -447,31 +447,34 @@ export default function MultiAppointmentModal({
       const linhaClientType = linha.client_type || clientType;
       const linhaDependentIndex = linha.dependent_index !== undefined ? linha.dependent_index : dependentIndex;
       
-      // Criar objeto de agendamento
-      const agendamento = {
-        client_id: multiClientId,
+      // Criar objeto de agendamento no formato esperado pela função handleMultiAppointmentConfirm
+      return {
+        tipo: linha.tipo,
+        servico: linha.servico,
+        profissional: linha.profissional,
+        data: linha.data,
+        hora: linha.hora,
         client_type: linhaClientType,
         dependent_index: linhaDependentIndex,
-        service_id: linha.servico,
-        employee_id: linha.profissional,
-        date: `${linha.data}T${linha.hora}:00`,
-        status: 'agendado',
-        notes: '', // Campo opcional para observações
-        // Campos específicos com base no tipo de agendamento
         package_id: linha.tipo === 'pacote' ? (linha.package_id || multiSelectedPackageId) : null,
         pending_service_id: linha.tipo === 'pendente' ? linha.pending_service_id : null,
         original_appointment_id: linha.original_appointment_id || null
       };
-      
-      console.log(`[MultiAppointmentModal] Agendamento preparado:`, agendamento);
-      
-      return agendamento;
     });
     
     console.log(`[MultiAppointmentModal] Total de agendamentos: ${agendamentos.length}`);
     
-    // Chamar função de confirmação
-    onConfirm(agendamentos);
+    // Criar o objeto no formato esperado pela função handleMultiAppointmentConfirm
+    const dadosAgendamento = {
+      client_id: multiClientId,
+      package_id: multiSelectedPackageId,
+      agendamentos: agendamentos
+    };
+    
+    console.log(`[MultiAppointmentModal] Enviando dados de agendamento:`, dadosAgendamento);
+    
+    // Chamar função de confirmação com o formato correto
+    onConfirm(dadosAgendamento);
     
     // Fechar modal
     onOpenChange(false);

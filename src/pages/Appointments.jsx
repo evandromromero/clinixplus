@@ -1558,15 +1558,19 @@ export default function Appointments() {
   };
 
   const handleMultiAppointmentConfirm = async (dados) => {
-    // Espera-se: { client_id, package_id, agendamentos: [{ tipo, servico, profissional, data, hora, original_appointment_id, pending_service_id }] }
+    // Espera-se: { client_id, package_id, agendamentos: [{ tipo, servico, profissional, data, hora, client_type, dependent_index, original_appointment_id, pending_service_id }] }
     if (!dados || !dados.client_id || !Array.isArray(dados.agendamentos) || dados.agendamentos.length === 0) return;
     const { client_id, package_id, agendamentos } = dados;
+    
+    console.log("[DEBUG][handleMultiAppointmentConfirm] Dados recebidos:", dados);
     
     try {
       // Contador para agendamentos bem-sucedidos
       let sucessCount = 0;
       
       for (const item of agendamentos) {
+        console.log("[DEBUG][handleMultiAppointmentConfirm] Processando item:", item);
+        
         await handleCreateAppointmentMulti({
           client_id,
           service_or_package_id: item.servico,
@@ -1576,7 +1580,9 @@ export default function Appointments() {
           package_id: item.tipo === 'pacote' ? package_id : null,
           hora: item.hora, // Passa hora explicitamente
           original_appointment_id: item.original_appointment_id, // Passa o ID do agendamento original
-          pending_service_id: item.pending_service_id // Passa o ID do serviço pendente
+          pending_service_id: item.pending_service_id, // Passa o ID do serviço pendente
+          client_type: item.client_type, // NOVO: Passa o tipo de cliente (titular/dependente)
+          dependent_index: item.dependent_index // NOVO: Passa o índice do dependente se aplicável
         });
         
         sucessCount++;
@@ -1601,7 +1607,7 @@ export default function Appointments() {
     }
   };
 
-  const handleCreateAppointmentMulti = async ({ client_id, service_or_package_id, date, type, employee_id, package_id, hora, original_appointment_id, pending_service_id }) => {
+  const handleCreateAppointmentMulti = async ({ client_id, service_or_package_id, date, type, employee_id, package_id, hora, original_appointment_id, pending_service_id, client_type, dependent_index }) => {
     try {
       // Combina data e hora igual ao modal antigo
       let appointmentDate;
@@ -1628,6 +1634,15 @@ export default function Appointments() {
         date: formattedDate,
         status: 'agendado'
       };
+      
+      // Adicionar informações de dependente se fornecidas
+      if (client_type) {
+        appointmentData.client_type = client_type;
+      }
+      
+      if (dependent_index !== undefined && dependent_index !== null) {
+        appointmentData.dependent_index = dependent_index;
+      }
       
       // Adicionar package_id apenas se for do tipo pacote e package_id existir
       if (type === 'pacote' && package_id) {

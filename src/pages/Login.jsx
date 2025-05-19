@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Eye, EyeOff, LogIn, AlertCircle, Home } from 'lucide-react';
+import { Eye, EyeOff, LogIn, AlertCircle, Home, UserIcon } from 'lucide-react';
 import SimpleAlert from "@/components/SimpleAlert";
 
 export default function Login() {
@@ -165,10 +165,16 @@ export default function Login() {
               </Button>
             </form>
           </CardContent>
-          <CardFooter className="flex justify-center">
+          <CardFooter className="flex flex-col items-center space-y-3">
             <p className="text-sm text-gray-500">
               Esqueceu sua senha? Entre em contato com o administrador do sistema.
             </p>
+            <div className="border-t w-full pt-3">
+              <Link to="/employee-portal" className="flex items-center justify-center text-sm text-blue-600 hover:text-blue-800 transition-colors">
+                <UserIcon className="mr-1 h-4 w-4" />
+                Acessar Portal do Funcionário
+              </Link>
+            </div>
           </CardFooter>
         </Card>
       </div>
