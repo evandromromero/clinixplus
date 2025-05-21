@@ -158,6 +158,10 @@ export default function ClientPackages() {
 
   const [expandedPackages, setExpandedPackages] = useState({});
 
+  // Estado para controlar o modal de assinatura
+  const [showSignatureModal, setShowSignatureModal] = useState(false);
+  const [currentSignature, setCurrentSignature] = useState(null);
+
   // Estado para abrir/fechar o modal de importação de pacote antigo
   const [showImportPackageDialog, setShowImportPackageDialog] = useState(false);
 
