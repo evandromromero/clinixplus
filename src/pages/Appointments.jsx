@@ -520,9 +520,23 @@ export default function Appointments() {
   const getDayAppointments = (date) => {
     // Primeiro filtra por data e status
     const appointmentsByDate = appointments.filter(app => {
-      const dateMatch = format(new Date(app.date), 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd');
-      const statusMatch = !hideCancelled || app.status !== 'cancelado';
-      return dateMatch && statusMatch;
+      // Verificar se app.date existe e é válido antes de tentar criar um objeto Date
+      if (!app.date) return false;
+      
+      try {
+        // Tentar criar um objeto Date e comparar as datas formatadas
+        const appDate = new Date(app.date);
+        
+        // Verificar se a data é válida
+        if (isNaN(appDate.getTime())) return false;
+        
+        const dateMatch = format(appDate, 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd');
+        const statusMatch = !hideCancelled || app.status !== 'cancelado';
+        return dateMatch && statusMatch;
+      } catch (error) {
+        console.error(`Erro ao processar data do agendamento:`, app.id, app.date, error);
+        return false;
+      }
     });
     
     // Depois aplica o filtro de busca
