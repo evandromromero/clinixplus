@@ -3169,6 +3169,7 @@ export default function Appointments() {
         pendingServices={pendingServices}
         PendingService={PendingService}
         onConfirm={handleMultiAppointmentConfirm}
+        appointments={appointments}
       />
     </div>
   );

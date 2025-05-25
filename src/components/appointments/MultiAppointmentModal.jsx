@@ -6,6 +6,34 @@ import { Label } from "@/components/ui/label";
 import { User, Package as PackageIcon, Scissors, Clock, PlusCircle, AlertTriangle, ChevronDown, X } from "lucide-react";
 import "./MultiAppointmentModal.mobile.css"; // Importação do CSS apenas para mobile
 
+// Estilo para tooltips de alerta
+const tooltipStyles = `
+  .tooltip-container {
+    position: relative;
+    cursor: pointer;
+  }
+  
+  .tooltip-content {
+    display: none;
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background-color: #fff;
+    border: 1px solid #f0d4a8;
+    border-radius: 4px;
+    padding: 8px 12px;
+    width: 220px;
+    font-size: 12px;
+    color: #664d03;
+    z-index: 10;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  }
+  
+  .tooltip-container:hover .tooltip-content {
+    display: block;
+  }
+`;
+
 export default function MultiAppointmentModal({
   open,
   onOpenChange,
@@ -15,7 +43,8 @@ export default function MultiAppointmentModal({
   employees, // lista de profissionais
   onConfirm,
   pendingServices: pendingServicesProp = [], // NOVO: prop para serviços pendentes
-  PendingService // NOVO: entidade para buscar serviços pendentes
+  PendingService, // NOVO: entidade para buscar serviços pendentes
+  appointments = [] // NOVO: agendamentos existentes para verificar conflitos
 }) {
   // Estados internos da modal
   const [multiClientId, setMultiClientId] = useState("");
@@ -538,10 +567,36 @@ export default function MultiAppointmentModal({
 
   // Função para contar agendamentos existentes para um profissional em um horário e data
   function countAppointments(employeeId, dateStr, hourStr) {
-    if (!employeeId || !dateStr || !hourStr) return 0;
-    // Supondo que appointments seja passado como prop futuramente, por enquanto sempre retorna 0
-    // Para integração real, deve-se passar appointments como prop e filtrar aqui
-    return 0;
+    if (!employeeId || !dateStr) return 0;
+    
+    // Log para verificar os dados de entrada
+    console.log(`[MultiAppointmentModal] Verificando agendamentos para: employeeId=${employeeId}, dateStr=${dateStr}, hourStr=${hourStr}`);
+    console.log(`[MultiAppointmentModal] Total de agendamentos disponíveis:`, appointments.length);
+    
+    // Filtra os agendamentos que correspondem ao profissional e data
+    const filteredAppointments = appointments.filter(app => {
+      // Verifica se o agendamento é para o mesmo profissional
+      if (app.employee_id !== employeeId) return false;
+      
+      // Verifica se é a mesma data (formato YYYY-MM-DD)
+      const appDate = app.date ? app.date.split('T')[0] : null;
+      if (appDate !== dateStr) return false;
+      
+      // Se hourStr for fornecido, verifica se é o mesmo horário
+      if (hourStr) {
+        const appHour = app.time || app.hour;
+        if (appHour !== hourStr) return false;
+      }
+      
+      return true;
+    });
+    
+    console.log(`[MultiAppointmentModal] Agendamentos encontrados para ${employeeId} em ${dateStr}${hourStr ? ' às ' + hourStr : ''}: ${filteredAppointments.length}`);
+    if (filteredAppointments.length > 0) {
+      console.log('[MultiAppointmentModal] Horários ocupados:', filteredAppointments.map(app => app.time || app.hour));
+    }
+    
+    return filteredAppointments.length;
   }
 
   // Função para verificar se existe conflito de horário
@@ -557,7 +612,7 @@ export default function MultiAppointmentModal({
           // Aqui pode-se exibir um alerta visual na linha ou usar toast/alert
           // Exemplo simples: adicionar um campo de erro ou highlight visual
           // Para integração real, utilize um estado de erro por linha
-          // window.alert(`Conflito de horário na linha ${idx + 1}`);
+          window.alert(`Conflito de horário na linha ${idx + 1}`);
         }
       }
     });
@@ -1086,18 +1141,102 @@ export default function MultiAppointmentModal({
                           onChange={e => atualizarLinhaAgendamento(idx, 'hora', e.target.value)}
                         >
                           <option value="">Selecione...</option>
-                          {linha.profissional && linha.data && getAvailableHours(linha.profissional).map(horario => {
-                            const agendamentos = countAppointments(linha.profissional, linha.data, horario);
-                            return (
-                              <option 
-                                key={horario} 
-                                value={horario} 
-                                className={agendamentos > 0 ? "text-red-500 font-semibold" : ""}
-                              >
-                                {horario} {agendamentos > 0 ? `(${agendamentos} agendamento${agendamentos > 1 ? 's' : ''})` : ''}
-                              </option>
-                            );
-                          })}
+                          {linha.profissional && linha.data && (() => {
+                            try {
+                              // Primeiro, obter todos os horários disponíveis
+                              const horariosDisponiveis = getAvailableHours(linha.profissional);
+                              
+                              // Criar um array de agendamentos para esta data e profissional
+                              // Isso é importante para debug
+                              const agendamentosNaData = [];
+                              
+                              // Verificar cada agendamento
+                              appointments.forEach(app => {
+                                if (!app.employee_id || !app.date) return;
+                                
+                                // Verificar se é o mesmo profissional
+                                if (app.employee_id !== linha.profissional) return;
+                                
+                                // Verificar se é a mesma data
+                                const appDate = app.date.split('T')[0];
+                                if (appDate !== linha.data) return;
+                                
+                                // Adicionar ao array de agendamentos
+                                agendamentosNaData.push(app);
+                              });
+                              
+                              console.log(`[MultiAppointmentModal] Encontrados ${agendamentosNaData.length} agendamentos para ${linha.profissional} em ${linha.data}:`, agendamentosNaData);
+                              
+                              // Analisar detalhadamente cada agendamento para depuração
+                              console.log('[MultiAppointmentModal] Analisando detalhadamente os agendamentos:');
+                              agendamentosNaData.forEach((app, index) => {
+                                console.log(`[MultiAppointmentModal] Agendamento ${index+1}:`, {
+                                  id: app.id,
+                                  date_completa: app.date,
+                                  time: app.time,
+                                  hour: app.hour
+                                });
+                              });
+                              
+                              // Mapear os horários ocupados
+                              const horariosOcupados = {};
+                              
+                              agendamentosNaData.forEach(app => {
+                                // Extrair a hora do agendamento
+                                let hora = null;
+                                
+                                if (app.date) {
+                                  // Verificar se a data está no formato ISO (2025-05-26T10:00:00)
+                                  if (app.date.includes('T')) {
+                                    const partes = app.date.split('T');
+                                    if (partes.length > 1) {
+                                      // Extrair apenas a parte da hora (10:00:00)
+                                      const horaParte = partes[1].split(':');
+                                      if (horaParte.length >= 2) {
+                                        hora = `${horaParte[0]}:${horaParte[1]}`;
+                                      }
+                                    }
+                                  }
+                                }
+                                
+                                // Se não conseguiu extrair da data, tentar outros campos
+                                if (!hora && app.time) {
+                                  hora = app.time;
+                                } else if (!hora && app.hour) {
+                                  hora = app.hour;
+                                }
+                                
+                                console.log(`[MultiAppointmentModal] Hora extraída para agendamento ${app.id}: ${hora}`);
+                                
+                                if (hora) {
+                                  horariosOcupados[hora] = (horariosOcupados[hora] || 0) + 1;
+                                }
+                              });
+                              
+                              // Log final dos horários ocupados
+                              console.log('[MultiAppointmentModal] Horários ocupados após processamento:', horariosOcupados);
+                              
+                              console.log('[MultiAppointmentModal] Horários ocupados:', horariosOcupados);
+                              
+                              // Retornar as opções para o dropdown
+                              return horariosDisponiveis.map(horario => {
+                                // Usar os horários ocupados reais
+                                const qtdAgendamentos = horariosOcupados[horario] || 0;
+                                return (
+                                  <option 
+                                    key={horario} 
+                                    value={horario} 
+                                    style={qtdAgendamentos > 0 ? {color: 'red', fontWeight: 'bold'} : {}}
+                                  >
+                                    {horario} {qtdAgendamentos > 0 ? `(${qtdAgendamentos} agendamento${qtdAgendamentos > 1 ? 's' : ''})` : ''}
+                                  </option>
+                                );
+                              });
+                            } catch (error) {
+                              console.error('[MultiAppointmentModal] Erro ao processar horários:', error);
+                              return <option value="">Erro ao carregar horários</option>;
+                            }
+                          })()}
                         </select>
                         <ChevronDown className="w-4 h-4 text-gray-400 absolute right-3 top-[10px] pointer-events-none" />
                       </div>
