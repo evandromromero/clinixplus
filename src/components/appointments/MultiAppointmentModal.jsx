@@ -403,35 +403,62 @@ export default function MultiAppointmentModal({
     item.name && item.name.toLowerCase().includes(avulsoSearch.toLowerCase())
   );
 
-  // Função para obter serviços disponíveis conforme o tipo selecionado
-  function getServicosDisponiveis() {
-    console.log('[LOG] getServicosDisponiveis chamado. tipoAgendamento:', tipoAgendamento, 'multiSelectedPackageId:', multiSelectedPackageId);
+  // Função para obter serviços disponíveis conforme o tipo selecionado e o pacote específico
+  function getServicosDisponiveis(pacoteId = null) {
+    console.log('[LOG] getServicosDisponiveis chamado. tipoAgendamento:', tipoAgendamento, 'pacoteId:', pacoteId);
+    
     if (tipoAgendamento === 'pacote') {
-      const pacote = multiClientPackages.find(pkg => pkg.id === multiSelectedPackageId);
+      // Se não foi fornecido um pacoteId específico, usar o pacote selecionado globalmente
+      const pacoteIdToUse = pacoteId || multiSelectedPackageId;
+      
+      if (!pacoteIdToUse) {
+        console.log('[LOG] Nenhum pacote selecionado.');
+        return [];
+      }
+      
+      const pacote = multiClientPackages.find(pkg => pkg.id === pacoteIdToUse);
       console.log('[LOG] Pacote encontrado em getServicosDisponiveis:', pacote);
+      
       if (!pacote || !pacote.services) return [];
+      
       console.log('[LOG] Conteúdo de pacote.services:', pacote.services);
       console.log('[LOG] Lista global de services:', services);
-      const servicos = pacote.services.map(sid => {
+      
+      // Filtrar apenas serviços que ainda têm sessões disponíveis
+      const servicosComSessoesDisponiveis = pacote.services.map(sid => {
         let serviceId = null;
         if (typeof sid === 'string') serviceId = sid;
         else if (typeof sid === 'object' && (sid.service_id || sid.id)) serviceId = sid.service_id || sid.id;
         else return undefined;
+        
+        // Verificar se ainda há sessões disponíveis para este serviço
+        const sessoesInfo = getSessionsLeft(pacote, serviceId);
+        if (!sessoesInfo || sessoesInfo.left <= 0) {
+          console.log(`[LOG] Serviço ${serviceId} não tem mais sessões disponíveis`);
+          return undefined;
+        }
+        
         const found = services.find(s => s.id === serviceId);
         if (!found) {
           console.log('[LOG] Serviço NÃO encontrado no global para serviceId:', serviceId, 'sid:', sid);
+          return undefined;
         }
+        
         return found;
       }).filter(Boolean);
-      console.log('[LOG] Serviços retornados por getServicosDisponiveis (corrigido):', servicos);
-      return servicos;
+      
+      console.log('[LOG] Serviços com sessões disponíveis:', servicosComSessoesDisponiveis);
+      return servicosComSessoesDisponiveis;
     }
+    
     if (tipoAgendamento === 'avulso') {
       return avulsos;
     }
+    
     if (tipoAgendamento === 'pendente') {
       return pendentes;
     }
+    
     return [];
   }
 
@@ -671,10 +698,18 @@ export default function MultiAppointmentModal({
     // Verificar se cliente e tipo foram selecionados
     if (!multiClientId || !tipoAgendamento) return false;
     
-    // Verificar se todas as linhas estão preenchidas
-    return agendamentoLinhas.every(linha => 
-      linha.servico && linha.profissional && linha.data && linha.hora
-    );
+    // Verificar se todas as linhas estão preenchidas corretamente
+    return agendamentoLinhas.every(linha => {
+      // Verificar campos básicos
+      const camposBasicosPreenchidos = linha.servico && linha.profissional && linha.data && linha.hora;
+      
+      // Para linhas do tipo pacote, verificar se o pacote foi selecionado
+      if (linha.tipo === 'pacote') {
+        return camposBasicosPreenchidos && linha.package_id;
+      }
+      
+      return camposBasicosPreenchidos;
+    });
   }
 
   // Função para obter todas as sessões reagendáveis do pacote selecionado
@@ -1083,6 +1118,26 @@ export default function MultiAppointmentModal({
                     )}
                   </div>
                   <div className="grid grid-cols-2 gap-3 mb-3 grid-mobile">
+                    {/* Pacote (quando o tipo for pacote) */}
+                    {linha.tipo === 'pacote' && (
+                      <div className="space-y-1 col-span-2">
+                        <Label className="text-xs text-gray-500">Pacote</Label>
+                        <div className="relative">
+                          <select
+                            className="w-full border rounded-md px-3 py-2 bg-white border-gray-200 focus:border-primary/60 appearance-none text-gray-700"
+                            value={linha.package_id || ""}
+                            onChange={e => atualizarLinhaAgendamento(idx, 'package_id', e.target.value)}
+                          >
+                            <option value="">Selecione um pacote...</option>
+                            {multiClientPackages.map(pkg => (
+                              <option key={pkg.id} value={pkg.id}>{pkg.name}</option>
+                            ))}
+                          </select>
+                          <ChevronDown className="w-4 h-4 text-gray-400 absolute right-3 top-[10px] pointer-events-none" />
+                        </div>
+                      </div>
+                    )}
+                    
                     {/* Serviço */}
                     <div className="space-y-1">
                       <Label className="text-xs text-gray-500">Serviço</Label>
@@ -1091,15 +1146,22 @@ export default function MultiAppointmentModal({
                           className="w-full border rounded-md px-3 py-2 bg-white border-gray-200 focus:border-primary/60 appearance-none text-gray-700"
                           value={linha.servico}
                           onChange={e => atualizarLinhaAgendamento(idx, 'servico', e.target.value)}
+                          disabled={linha.tipo === 'pacote' && !linha.package_id}
                         >
                           <option value="">Selecione...</option>
-                          {servicosDisponiveis.map(s => (
-                            <option key={s.id} value={s.id}>{s.name}</option>
-                          ))}
+                          {linha.tipo === 'pacote' && linha.package_id
+                            ? getServicosDisponiveis(linha.package_id).map(s => (
+                                <option key={s.id} value={s.id}>{s.name}</option>
+                              ))
+                            : servicosDisponiveis.map(s => (
+                                <option key={s.id} value={s.id}>{s.name}</option>
+                              ))
+                          }
                         </select>
                         <ChevronDown className="w-4 h-4 text-gray-400 absolute right-3 top-[10px] pointer-events-none" />
                       </div>
                     </div>
+                    
                     {/* Profissional */}
                     <div className="space-y-1">
                       <Label className="text-xs text-gray-500">Profissional</Label>
