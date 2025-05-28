@@ -130,7 +130,7 @@ export default function Dashboard() {
       const today = new Date();
       const todayStr = format(today, 'yyyy-MM-dd');
       const todayAppts = appointments.filter(app => 
-        app.date.startsWith(todayStr) && 
+        app.date && typeof app.date === 'string' && app.date.startsWith(todayStr) && 
         app.status !== 'cancelado'
       );
       setTodayAppointments(todayAppts);
@@ -225,7 +225,7 @@ export default function Dashboard() {
     nextDays.forEach(day => {
       const dayStr = format(day, 'yyyy-MM-dd');
       const dayAppts = appointments.filter(app => 
-        app.date.startsWith(dayStr) && app.status !== 'cancelado'
+        app.date && typeof app.date === 'string' && app.date.startsWith(dayStr) && app.status !== 'cancelado'
       );
       
       if (dayAppts.length > 0) {
