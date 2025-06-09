@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Search, ChevronLeft, ChevronRight, ShoppingCart, Clock, Info, Loader2 } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, ShoppingCart, Clock, Info, Loader2, Trash2, Plus, Minus, ShoppingBag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
+import { Badge } from "@/components/ui/badge";
 import { db } from "@/firebase/config";
 import { collection, getDocs, query, where, addDoc, doc, getDoc } from "firebase/firestore";
 import MercadoPagoService from "@/services/mercadoPagoService";
 import { PendingService } from "@/api/entities";
+import { toast } from "@/components/ui/use-toast";
+import { Separator } from "@/components/ui/separator";
 
 export default function ServiceShopCard({ clientId }) {
   const [services, setServices] = useState([]);
@@ -18,14 +21,19 @@ export default function ServiceShopCard({ clientId }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedService, setSelectedService] = useState(null);
   const [showServiceDialog, setShowServiceDialog] = useState(false);
+  const [showQuantityDialog, setShowQuantityDialog] = useState(false);
+  const [showCartDialog, setShowCartDialog] = useState(false);
+  const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(false);
   const [paymentUrl, setPaymentUrl] = useState(null);
   const [clientData, setClientData] = useState(null);
   const [paymentStatus, setPaymentStatus] = useState(null);
   const [paymentMessage, setPaymentMessage] = useState(null);
+  const [cart, setCart] = useState([]);
   
   const ITEMS_PER_PAGE = 6;
   const totalPages = Math.ceil(filteredServices.length / ITEMS_PER_PAGE);
+  const cartTotal = cart.reduce((total, item) => total + (item.price * item.quantity), 0);
   
   // Verificar parâmetros de URL para processamento de retorno de pagamento
   useEffect(() => {
@@ -137,7 +145,7 @@ export default function ServiceShopCard({ clientId }) {
       setFilteredServices(services);
     } else {
       const filtered = services.filter(service => 
-        service.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        service.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         service.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         service.category?.toLowerCase().includes(searchTerm.toLowerCase())
       );
@@ -148,8 +156,7 @@ export default function ServiceShopCard({ clientId }) {
   
   // Paginação
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-  const endIndex = startIndex + ITEMS_PER_PAGE;
-  const displayedServices = filteredServices.slice(startIndex, endIndex);
+  const displayedServices = filteredServices.slice(startIndex, startIndex + ITEMS_PER_PAGE);
   
   const handlePageChange = (page) => {
     setCurrentPage(page);
@@ -168,78 +175,162 @@ export default function ServiceShopCard({ clientId }) {
     setSelectedService(service);
     setShowServiceDialog(true);
   };
+
+  // Abrir modal de seleção de quantidade
+  const handleBuyService = () => {
+    setQuantity(1); // Reset quantidade para 1
+    setShowServiceDialog(false);
+    setShowQuantityDialog(true);
+  };
   
-  // Iniciar processo de compra
-  const handleBuyService = async () => {
-    if (!selectedService || !clientData) {
-      console.error('Serviço ou dados do cliente não disponíveis');
-      return;
+  // Adicionar serviço ao carrinho
+  const addToCart = () => {
+    // Verificar se o serviço já está no carrinho
+    const existingItemIndex = cart.findIndex(item => item.id === selectedService.id);
+    
+    if (existingItemIndex !== -1) {
+      // Atualizar quantidade se o serviço já estiver no carrinho
+      const updatedCart = [...cart];
+      updatedCart[existingItemIndex].quantity += quantity;
+      setCart(updatedCart);
+    } else {
+      // Adicionar novo item ao carrinho
+      setCart([...cart, {
+        ...selectedService,
+        quantity: quantity
+      }]);
     }
     
+    // Fechar modal de quantidade e mostrar toast de confirmação
+    setShowQuantityDialog(false);
+    toast({
+      title: "Serviço adicionado ao carrinho",
+      description: `${quantity}x ${selectedService.name} adicionado ao carrinho.`,
+      duration: 3000,
+    });
+  };
+  
+  // Remover item do carrinho
+  const removeFromCart = (itemId) => {
+    setCart(cart.filter(item => item.id !== itemId));
+  };
+  
+  // Atualizar quantidade de um item no carrinho
+  const updateCartItemQuantity = (itemId, newQuantity) => {
+    if (newQuantity < 1) return;
+    
+    const updatedCart = cart.map(item => {
+      if (item.id === itemId) {
+        return { ...item, quantity: newQuantity };
+      }
+      return item;
+    });
+    
+    setCart(updatedCart);
+  };
+  
+  // Iniciar processo de pagamento para todos os itens no carrinho
+  const handleCheckout = async () => {
     try {
-      console.log('Iniciando processo de compra para serviço:', selectedService.name);
-      console.log('Dados do cliente:', clientData);
       setLoading(true);
+      console.log('Iniciando processo de pagamento para carrinho com', cart.length, 'itens');
       
-      // Verificar se o Mercado Pago está inicializado e inicializar se necessário
-      console.log('Buscando configurações de pagamento do Firestore...');
-      // Buscar configurações do documento company_settings
-      const companySettingsRef = doc(db, 'company_settings', 'nYF20n1wgCetPDsO8gEB');
-      const companySettingsDoc = await getDoc(companySettingsRef);
-      
-      if (companySettingsDoc.exists()) {
-        const companySettings = companySettingsDoc.data();
-        console.log('Documento company_settings encontrado');
+      // Verificar se temos os dados do cliente
+      if (!clientData) {
+        // Buscar dados do cliente
+        const clientRef = doc(db, 'clients', clientId);
+        const clientDoc = await getDoc(clientRef);
         
-        if (companySettings.payment_settings) {
-          console.log('Configurações de pagamento encontradas:', {
-            sandbox: companySettings.payment_settings.mercadopago_sandbox,
-            hasAccessToken: !!companySettings.payment_settings.mercadopago_access_token
-          });
-          
-          console.log('Inicializando serviço Mercado Pago...');
-          MercadoPagoService.initialize(companySettings.payment_settings);
-          console.log('Serviço Mercado Pago inicializado');
-        } else {
-          console.error('Configurações de pagamento não encontradas no documento company_settings');
-          throw new Error("Configurações de pagamento não encontradas no documento company_settings");
+        if (!clientDoc.exists()) {
+          console.error('Cliente não encontrado!');
+          return;
         }
-      } else {
-        console.error('Documento company_settings não encontrado');
-        throw new Error("Documento company_settings não encontrado");
+        
+        const clientDataFromDb = clientDoc.data();
+        setClientData(clientDataFromDb);
+        console.log('Dados do cliente:', clientDataFromDb);
       }
       
-      // Gerar referência externa única para o pagamento
-      const externalReference = `service_${selectedService.id}_client_${clientId}_${Date.now()}`;
+      // Buscar configurações do Mercado Pago
+      console.log('Buscando configurações de pagamento do Firestore...');
+      const settingsRef = doc(db, 'company_settings', 'nYF20n1wgCetPDsO8gEB');
+      const settingsDoc = await getDoc(settingsRef);
       
-      // Criar serviço pendente no Firestore
-      console.log('Preparando dados para serviço pendente...');
+      if (!settingsDoc.exists()) {
+        console.error('Configurações não encontradas!');
+        return;
+      }
+      
+      console.log('Documento company_settings encontrado');
+      const settings = settingsDoc.data();
+      
+      console.log('Configurações de pagamento encontradas:', {
+        sandbox: settings.mercadopago_sandbox,
+        hasAccessToken: !!settings.mercadopago_access_token
+      });
+      
+      // Inicializar o Mercado Pago
+      console.log('Inicializando serviço Mercado Pago...');
+      const mpInitialized = MercadoPagoService.initialize({
+        mercadopago_access_token: settings.mercadopago_access_token,
+        mercadopago_sandbox: settings.mercadopago_sandbox || false
+      });
+      
+      if (!mpInitialized) {
+        console.error('Falha ao inicializar Mercado Pago!');
+        return;
+      }
+      
+      console.log('Serviço Mercado Pago inicializado');
+      
+      // Gerar ID único para a transação
       const transactionId = `tx_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+      console.log('Preparando dados para serviços pendentes...');
       console.log('ID de transação gerado:', transactionId);
       
-      const pendingServiceData = {
-        client_id: clientId,
-        service_id: selectedService.id,
-        service_name: selectedService.name,
-        amount: selectedService.price,
-        status: 'pending',
-        created_at: new Date(),
-        external_reference: transactionId
-      };
+      // Criar serviços pendentes no Firestore para cada item do carrinho
+      const pendingServiceIds = [];
       
-      console.log('Criando registro de serviço pendente no Firestore:', pendingServiceData);
-      const pendingService = await PendingService.create(pendingServiceData);
-      console.log('Serviço pendente criado com ID:', pendingService.id);
+      for (const item of cart) {
+        const pendingServiceData = {
+          client_id: clientId,
+          service_id: item.id,
+          service_name: item.name,
+          amount: item.price,
+          quantity: item.quantity,
+          total_amount: item.price * item.quantity,
+          status: 'pending',
+          created_at: new Date(),
+          external_reference: transactionId
+        };
+        
+        console.log(`Criando registro de serviço pendente para ${item.quantity}x ${item.name}`);
+        const pendingServiceId = await PendingService.create(pendingServiceData);
+        pendingServiceIds.push(pendingServiceId);
+      }
       
-      // Criar link de pagamento
+      console.log('Serviços pendentes criados com IDs:', pendingServiceIds);
+      
+      // Preparar dados para criação do link de pagamento
       console.log('Preparando dados para criação do link de pagamento...');
       const baseUrl = window.location.origin + window.location.pathname;
       console.log('URL base para redirecionamento:', baseUrl);
       
+      // Criar itens para o Mercado Pago
+      const items = cart.map(item => ({
+        id: item.id,
+        title: item.name,
+        description: item.description || item.name,
+        quantity: item.quantity,
+        currency_id: 'BRL',
+        unit_price: item.price
+      }));
+      
       const paymentData = {
-        plan_name: selectedService.name,
-        amount: selectedService.price,
-        payer_email: clientData.email,
+        items: items,
+        plan_name: `Compra de Serviços (${cart.length} itens)`,
+        amount: cartTotal,
+        payer_email: clientData.email || 'evandromromero@gmail.com',
         external_reference: transactionId,
         success_url: `${baseUrl}?status=success&ref=${transactionId}`,
         failure_url: `${baseUrl}?status=failure&ref=${transactionId}`,
@@ -249,49 +340,43 @@ export default function ServiceShopCard({ clientId }) {
       console.log('Dados de pagamento preparados:', JSON.stringify(paymentData, null, 2));
       console.log('Chamando MercadoPagoService.createPaymentLink...');
       
+      // Criar link de pagamento
+      console.log('Tentando criar link de pagamento com Mercado Pago...');
       try {
-        console.log('Tentando criar link de pagamento com Mercado Pago...');
-        const paymentResult = await MercadoPagoService.createPaymentLink(paymentData);
-        console.log('Resultado da criação do link de pagamento:', paymentResult);
+        const paymentResponse = await MercadoPagoService.createPaymentLink(paymentData);
         
-        if (paymentResult && paymentResult.url) {
-          console.log('Link de pagamento gerado com sucesso:', paymentResult.url);
+        if (paymentResponse && paymentResponse.url) {
+          console.log('Link de pagamento criado com sucesso:', paymentResponse.url);
+          setPaymentUrl(paymentResponse.url);
           
-          // Atualizar o serviço pendente com as informações do pagamento
-          console.log('Atualizando serviço pendente com informações do pagamento...');
-          await PendingService.update(pendingService.id, {
-            payment_id: paymentResult.payment_id || '',
-            preference_id: paymentResult.preference_id || '',
-            payment_url: paymentResult.url
-          });
+          // Atualizar serviços pendentes com ID da preferência
+          if (paymentResponse.preference_id) {
+            for (const id of pendingServiceIds) {
+              await PendingService.update(id, {
+                preference_id: paymentResponse.preference_id
+              });
+            }
+            console.log('Serviços pendentes atualizados com preference_id:', paymentResponse.preference_id);
+          }
           
-          setPaymentUrl(paymentResult.url);
-          console.log('Redirecionando para a página de pagamento...');
-          window.location.href = paymentResult.url;
+          // Fechar modal do carrinho
+          setShowCartDialog(false);
         } else {
-          console.error('Resultado inválido ao criar link de pagamento:', paymentResult);
-          throw new Error("Não foi possível gerar o link de pagamento");
+          console.error('Resposta do Mercado Pago não contém URL:', paymentResponse);
         }
-      } catch (error) {
-        console.error('Erro ao criar link de pagamento:', error);
-        console.error('Mensagem de erro:', error.message);
-        console.error('Stack trace:', error.stack);
-        throw error;
+      } catch (paymentError) {
+        console.error('Erro ao criar link de pagamento:', paymentError);
+        console.error('Mensagem de erro:', paymentError.message);
+        console.error('Stack trace:', paymentError.stack);
+        console.error('Objeto de erro completo:', paymentError);
+        
+        console.error('=== ERRO AO PROCESSAR PAGAMENTO ===');
+        console.error('Mensagem de erro:', paymentError.message);
+        console.error('Stack trace:', paymentError.stack);
+        console.error('Objeto de erro completo:', paymentError);
       }
     } catch (error) {
-      console.error("=== ERRO AO PROCESSAR PAGAMENTO ===");
-      console.error("Mensagem de erro:", error.message);
-      console.error("Stack trace:", error.stack);
-      console.error("Objeto de erro completo:", error);
-      
-      // Verificar se é um erro de resposta da API
-      if (error.response) {
-        console.error("Detalhes da resposta de erro:", {
-          status: error.response.status,
-          statusText: error.response.statusText,
-          data: error.response.data
-        });
-      }
+      console.error('Erro ao processar compra:', error);
       
       // Verificar se é um erro de requisição
       if (error.request) {
@@ -306,80 +391,78 @@ export default function ServiceShopCard({ clientId }) {
   
   // Renderizar cards de serviços
   const renderServiceCards = () => {
-    if (loading && services.length === 0) {
+    if (filteredServices.length === 0) {
       return (
-        <div className="col-span-full flex justify-center py-10">
-          <Loader2 className="h-8 w-8 animate-spin text-[#3475B8]" />
-        </div>
-      );
-    }
-    
-    if (displayedServices.length === 0) {
-      return (
-        <div className="col-span-full text-center py-10">
+        <div className="flex flex-col justify-center items-center h-40 text-center">
+          <Info className="h-12 w-12 text-gray-400 mb-2" />
           <p className="text-gray-500">Nenhum serviço encontrado.</p>
         </div>
       );
     }
     
-    return displayedServices.map((service) => (
-      <div 
-        key={service.id} 
-        className="bg-white rounded-lg shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition-shadow"
-        onClick={() => handleServiceClick(service)}
-      >
-        {service.image_url ? (
-          <div className="h-40 overflow-hidden">
-            <img 
-              src={service.image_url} 
-              alt={service.name} 
-              className="w-full h-full object-cover"
-            />
-          </div>
-        ) : (
-          <div className={`h-2 ${
-            service.category === 'facial' ? 'bg-pink-500' :
-            service.category === 'corporal' ? 'bg-blue-500' :
-            service.category === 'depilação' ? 'bg-purple-500' :
-            service.category === 'massagem' ? 'bg-green-500' :
-            'bg-gray-500'
-          }`} />
-        )}
-        
-        <div className="p-4">
-          <h3 className="font-medium text-lg text-[#294380]">{service.name}</h3>
-          
-          <div className="flex items-center text-sm text-gray-600 mt-1">
-            <Clock className="h-4 w-4 mr-2" />
-            {service.duration} minutos
-          </div>
-          
-          {service.description && (
-            <p className="text-sm text-gray-600 mt-2 line-clamp-2">{service.description}</p>
+    // Usar as variáveis de paginação já definidas anteriormente
+    const currentServices = filteredServices.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+    
+    return currentServices.map((service) => (
+        <div 
+          key={service.id} 
+          className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow"
+        >
+          {service.image_url ? (
+            <div className="h-40 overflow-hidden">
+              <img 
+                src={service.image_url} 
+                alt={service.name} 
+                className="w-full h-full object-cover"
+              />
+            </div>
+          ) : (
+            <div className="h-40 bg-gray-200 flex items-center justify-center">
+              <span className="text-gray-400 text-lg">Sem imagem</span>
+            </div>
           )}
           
-          <div className="flex justify-between items-center mt-4">
-            {service.show_price_on_website ? (
-              <p className="font-bold text-lg">{formatPrice(service.price)}</p>
-            ) : (
-              <p className="text-sm text-gray-500">Consulte o preço</p>
+          <div className="p-4">
+            <h3 className="font-medium text-lg mb-1">{service.name}</h3>
+            
+            <div className="flex justify-between items-center mb-2">
+              <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-purple-100 text-purple-700">
+                {service.category}
+              </span>
+              
+              <div className="flex items-center text-sm text-gray-600">
+                <Clock className="h-4 w-4 mr-1" />
+                {service.duration} minutos
+              </div>
+            </div>
+            
+            {service.show_price_on_website && (
+              <p className="font-bold text-xl mb-2">{formatPrice(service.price)}</p>
             )}
             
-            <Button 
-              size="sm"
-              className="bg-[#3475B8] hover:bg-[#2C64A0]"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleServiceClick(service);
-              }}
-            >
-              <ShoppingCart className="w-4 h-4 mr-1" />
-              Comprar
-            </Button>
+            <div className="flex justify-between items-center mt-4">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => handleServiceClick(service)}
+              >
+                Detalhes
+              </Button>
+              
+              <Button 
+                onClick={() => {
+                  setSelectedService(service);
+                  handleBuyService();
+                }}
+                className="bg-[#3475B8] hover:bg-[#2C64A0]"
+              >
+                <ShoppingCart className="w-4 h-4 mr-1" />
+                Comprar
+              </Button>
+            </div>
           </div>
         </div>
-      </div>
-    ));
+      ));
   };
   
   return (
@@ -393,6 +476,18 @@ export default function ServiceShopCard({ clientId }) {
       
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h2 className="text-2xl font-semibold text-[#294380]">Serviços Disponíveis</h2>
+        
+        {/* Botão do carrinho */}
+        {cart.length > 0 && (
+          <Button 
+            onClick={() => setShowCartDialog(true)}
+            className="bg-[#3475B8] hover:bg-[#2C64A0] flex items-center gap-2"
+          >
+            <ShoppingBag className="w-4 h-4" />
+            Carrinho
+            <Badge className="ml-1 bg-white text-[#3475B8]">{cart.length}</Badge>
+          </Button>
+        )}
       </div>
       
       <div className="p-4">
@@ -485,37 +580,168 @@ export default function ServiceShopCard({ clientId }) {
                   <p className="font-bold text-xl">{formatPrice(selectedService.price)}</p>
                 )}
                 
-                {paymentUrl ? (
-                  <div className="space-y-4">
-                    <p className="text-sm text-green-600">Link de pagamento gerado com sucesso!</p>
-                    <div className="flex flex-col space-y-2">
-                      <Button 
-                        onClick={() => window.open(paymentUrl, '_blank')}
-                        className="bg-[#3475B8] hover:bg-[#2C64A0]"
-                      >
-                        Pagar com Mercado Pago
-                      </Button>
-                      <Button 
-                        variant="outline" 
-                        onClick={() => {
-                          setPaymentUrl(null);
-                          setShowServiceDialog(false);
-                        }}
-                      >
-                        Fechar
-                      </Button>
-                    </div>
+                <div className="flex justify-end space-x-2">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setShowServiceDialog(false)}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button 
+                    onClick={handleBuyService}
+                    className="bg-[#3475B8] hover:bg-[#2C64A0]"
+                  >
+                    <ShoppingCart className="w-4 h-4 mr-1" />
+                    Comprar Agora
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+      
+      {/* Modal de seleção de quantidade */}
+      <Dialog open={showQuantityDialog} onOpenChange={setShowQuantityDialog}>
+        <DialogContent className="max-w-md">
+          {selectedService && (
+            <>
+              <DialogHeader>
+                <DialogTitle>Selecione a quantidade</DialogTitle>
+              </DialogHeader>
+              
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-medium">{selectedService.name}</h3>
+                    {selectedService.show_price_on_website && (
+                      <p className="text-sm text-gray-600">{formatPrice(selectedService.price)} cada</p>
+                    )}
                   </div>
-                ) : (
+                  
+                  <div className="flex items-center space-x-2">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => quantity > 1 && setQuantity(quantity - 1)}
+                      disabled={quantity <= 1}
+                    >
+                      <Minus className="h-4 w-4" />
+                    </Button>
+                    <span className="w-8 text-center">{quantity}</span>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => setQuantity(quantity + 1)}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+                
+                {selectedService.show_price_on_website && (
+                  <div className="flex justify-between items-center pt-4 border-t">
+                    <span className="font-medium">Total:</span>
+                    <span className="font-bold text-xl">{formatPrice(selectedService.price * quantity)}</span>
+                  </div>
+                )}
+                
+                <div className="flex justify-end space-x-2 pt-4">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setShowQuantityDialog(false)}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button 
+                    onClick={addToCart}
+                    className="bg-[#3475B8] hover:bg-[#2C64A0]"
+                  >
+                    <ShoppingCart className="w-4 h-4 mr-1" />
+                    Adicionar ao Carrinho
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+      
+      {/* Modal do carrinho */}
+      <Dialog open={showCartDialog} onOpenChange={setShowCartDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Seu Carrinho</DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {cart.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8">
+                <ShoppingBag className="h-12 w-12 text-gray-400 mb-2" />
+                <p className="text-gray-500">Seu carrinho está vazio</p>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-4 max-h-[300px] overflow-y-auto">
+                  {cart.map((item) => (
+                    <div key={item.id} className="flex justify-between items-center border-b pb-3">
+                      <div className="flex-1">
+                        <h4 className="font-medium">{item.name}</h4>
+                        <div className="flex items-center text-sm text-gray-600">
+                          <span>{formatPrice(item.price)} × {item.quantity}</span>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center space-x-2">
+                        <div className="flex items-center border rounded-md">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => updateCartItemQuantity(item.id, Math.max(1, item.quantity - 1))}
+                            disabled={item.quantity <= 1}
+                          >
+                            <Minus className="h-3 w-3" />
+                          </Button>
+                          <span className="w-8 text-center text-sm">{item.quantity}</span>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => updateCartItemQuantity(item.id, item.quantity + 1)}
+                          >
+                            <Plus className="h-3 w-3" />
+                          </Button>
+                        </div>
+                        
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-red-500 hover:text-red-700 h-8 w-8"
+                          onClick={() => removeFromCart(item.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                <div className="pt-4 border-t">
+                  <div className="flex justify-between items-center mb-4">
+                    <span className="font-medium">Total:</span>
+                    <span className="font-bold text-xl">{formatPrice(cartTotal)}</span>
+                  </div>
+                  
                   <div className="flex justify-end space-x-2">
                     <Button 
                       variant="outline" 
-                      onClick={() => setShowServiceDialog(false)}
+                      onClick={() => setShowCartDialog(false)}
                     >
-                      Cancelar
+                      Continuar Comprando
                     </Button>
                     <Button 
-                      onClick={handleBuyService}
+                      onClick={handleCheckout}
                       className="bg-[#3475B8] hover:bg-[#2C64A0]"
                       disabled={loading}
                     >
@@ -525,17 +751,14 @@ export default function ServiceShopCard({ clientId }) {
                           Processando...
                         </>
                       ) : (
-                        <>
-                          <ShoppingCart className="w-4 h-4 mr-1" />
-                          Comprar Agora
-                        </>
+                        <>Pagar Agora</>
                       )}
                     </Button>
                   </div>
-                )}
-              </div>
-            </>
-          )}
+                </div>
+              </>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>
