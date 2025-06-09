@@ -9,7 +9,8 @@ import {
   Inventory as FirebaseInventory,
   User as FirebaseUser, 
   Role as FirebaseRole,
-  SystemConfig as FirebaseSystemConfig
+  SystemConfig as FirebaseSystemConfig,
+  PendingService as FirebasePendingService
 } from '../firebase/entities';
 
 // Entidades do Firebase
@@ -21,6 +22,7 @@ export const Inventory = FirebaseInventory; // Usando a versão do Firebase
 export const User = FirebaseUser; // Usando a versão do Firebase
 export const Role = FirebaseRole; // Usando a versão do Firebase
 export const SystemConfig = FirebaseSystemConfig;
+export const PendingService = FirebasePendingService;
 
 // Entidades do Base44
 // export const Appointment = base44.entities.Appointment; // Comentado para usar a versão do Firebase

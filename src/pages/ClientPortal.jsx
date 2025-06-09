@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CalendarDays, Package as PackageIcon, Gift, Clock, LogOut, User, Calendar, ShoppingBag, Receipt } from "lucide-react";
+import { CalendarDays, Package as PackageIcon, Gift, Clock, LogOut, User, Calendar, ShoppingBag, Receipt, ShoppingCart } from "lucide-react";
 import ClientLoginForm from "../components/client-portal/ClientLoginForm";
 import AppointmentCard from "../components/client-portal/AppointmentCard";
 import PackageCard from "../components/client-portal/PackageCard";
 import SubscriptionCard from "../components/client-portal/SubscriptionCard";
 import GiftCardCard from "../components/client-portal/GiftCardCard";
 import HistoryCard from "../components/client-portal/HistoryCard";
+import ServiceShopCard from "../components/client-portal/ServiceShopCard";
 import { Client } from "@/firebase/entities";
 import { Appointment } from "@/firebase/entities";
 import { ClientPackage } from "@/firebase/entities";
@@ -358,6 +359,10 @@ export default function ClientPortal() {
               <Receipt className="w-4 h-4 mr-2" />
               Histórico
             </TabsTrigger>
+            <TabsTrigger value="buyservices" className="data-[state=active]:bg-amber-100 data-[state=active]:text-amber-700">
+              <ShoppingCart className="w-4 h-4 mr-2" />
+              Comprar Serviços
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="appointments" className="space-y-4">
@@ -378,6 +383,10 @@ export default function ClientPortal() {
 
           <TabsContent value="history" className="space-y-4">
             <HistoryCard sales={salesHistory} />
+          </TabsContent>
+
+          <TabsContent value="buyservices" className="space-y-4">
+            <ServiceShopCard clientId={currentClient?.id} />
           </TabsContent>
         </Tabs>
       </main>
