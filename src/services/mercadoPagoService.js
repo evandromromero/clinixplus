@@ -46,28 +46,40 @@ class MercadoPagoService {
    * Inicializa o serviço com as credenciais do Mercado Pago
    * @param {Object} config - Configurações do Mercado Pago
    */
-  initialize(config) {
+  initialize(config = {}) {
     console.log('Iniciando inicialização do Mercado Pago com config:', {
       hasConfig: !!config,
-      hasAccessToken: config && !!config.mercadopago_access_token,
-      sandbox: config && config.mercadopago_sandbox
+      hasAccessToken: !!config.mercadopago_access_token,
+      hasPublicKey: !!config.mercadopago_public_key,
+      enabled: config.mercadopago_enabled,
+      sandbox: config.mercadopago_sandbox
     });
     
-    if (!config) {
-      console.error('Configurações do Mercado Pago não fornecidas');
-      return false;
-    }
-
+    this.config = config;
+    
+    // Verificar se estamos em ambiente de desenvolvimento (localhost)
+    const isDevelopment = typeof window !== 'undefined' && 
+      (window.location.hostname === 'localhost' || 
+       window.location.hostname === '127.0.0.1');
+    
+    // Verificar se o token de acesso está disponível
     if (!config.mercadopago_access_token) {
       console.error('Access token do Mercado Pago não fornecido');
       return false;
+    }
+    
+    // Verificar se o Mercado Pago está habilitado
+    if (config.mercadopago_enabled === false) {
+      console.warn('Mercado Pago está desabilitado nas configurações');
+      // Continuar mesmo assim para não quebrar o fluxo
     }
 
     try {
       // Na SDK v2, MercadoPagoConfig é o cliente em si
       console.log('Criando instância do MercadoPagoConfig com token:', 
-                 config.mercadopago_access_token.substring(0, 10) + '...');
+                 config.mercadopago_access_token ? `${config.mercadopago_access_token.substring(0, 10)}...` : 'não disponível');
       
+      // Criar instância com o token correto
       this.client = new MercadoPagoConfig({
         accessToken: config.mercadopago_access_token
       });
@@ -81,7 +93,7 @@ class MercadoPagoService {
       this.config = config;
       
       console.log('Mercado Pago inicializado com sucesso:', {
-        token: config.mercadopago_access_token.substring(0, 10) + '...',
+        token: config.mercadopago_access_token ? `${config.mercadopago_access_token.substring(0, 10)}...` : 'não disponível',
         sandbox: config.mercadopago_sandbox ? 'Ativado' : 'Desativado'
       });
       return true;
@@ -150,14 +162,21 @@ class MercadoPagoService {
         isInitialized: this.isInitialized,
         hasClient: !!this.client,
         hasConfig: !!this.config,
-        accessToken: this.config ? this.config.mercadopago_access_token.substring(0, 10) + '...' : 'não disponível'
+        accessToken: (this.config && this.config.mercadopago_access_token) ? 
+          `${this.config.mercadopago_access_token.substring(0, 10)}...` : 
+          'não disponível'
       });
       
       // Verificar se estamos em ambiente de desenvolvimento
       const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
       
-      if (isDevelopment) {
-        console.log('Ambiente de desenvolvimento detectado. Usando modo de simulação para Mercado Pago.');
+      // NUNCA usar simulação em produção, apenas em desenvolvimento quando explicitamente solicitado
+      // ou quando não houver token válido
+      if (isDevelopment && (!this.config || !this.config.mercadopago_access_token || 
+          (this.config.mercadopago_sandbox === true && 
+           this.config.mercadopago_access_token && 
+           this.config.mercadopago_access_token.startsWith('TEST-')))) {
+        console.log('Ambiente de desenvolvimento com sandbox ativado. Usando modo de simulação para Mercado Pago.');
         
         // Simular uma resposta de sucesso para ambiente de desenvolvimento
         const mockPreferenceId = `MOCK_PREF_${transactionId}`;
@@ -183,6 +202,11 @@ class MercadoPagoService {
       }
       
       try {
+        // Verificar se o cliente foi inicializado corretamente
+        if (!this.client || !this.config || !this.config.mercadopago_access_token) {
+          throw new Error('Cliente Mercado Pago não inicializado corretamente ou token de acesso ausente');
+        }
+        
         // Na SDK v2, precisamos criar a instância de Preference com o client
         console.log('Criando instância de Preference com client...');
         const preference = new Preference(this.client);
@@ -206,7 +230,8 @@ class MercadoPagoService {
         });
         
         // Determinar a URL correta com base no ambiente
-        const paymentUrl = this.config.mercadopago_sandbox 
+        const useSandbox = this.config && this.config.mercadopago_sandbox === true;
+        const paymentUrl = useSandbox
           ? response.sandbox_init_point 
           : response.init_point;
         

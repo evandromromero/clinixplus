@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Spinner } from "@/components/ui/spinner";
 import { Badge } from "@/components/ui/badge";
 import { db } from "@/firebase/config";
-import { collection, getDocs, query, where, addDoc, doc, getDoc } from "firebase/firestore";
+import { collection, getDocs, query, where, addDoc, doc, getDoc, updateDoc } from "firebase/firestore";
 import MercadoPagoService from "@/services/mercadoPagoService";
 import { PendingService } from "@/api/entities";
 import { toast } from "@/components/ui/use-toast";
@@ -264,20 +264,79 @@ export default function ServiceShopCard({ clientId }) {
       console.log('Documento company_settings encontrado');
       const settings = settingsDoc.data();
       
+      // Verificar e garantir que os campos do Mercado Pago existam
+      // Log completo das configurações para debug
+      console.log('Configurações completas:', settings);
+      
+      // Acessar os campos conforme a estrutura exata vista no Firestore
+      // As configurações estão dentro do objeto payment_settings
+      const paymentSettings = settings.payment_settings || {};
+      console.log('Configurações de pagamento encontradas:', paymentSettings);
+      
+      // Verificar se temos as configurações necessárias
+      if (!paymentSettings || !paymentSettings.mercadopago_access_token) {
+        console.error('Configurações do Mercado Pago não encontradas ou token de acesso ausente');
+        toast({
+          title: "Erro de configuração",
+          description: "Não foi possível processar o pagamento. Entre em contato com o suporte.",
+          variant: "destructive"
+        });
+        setLoading(false);
+        return;
+      }
+      
+      const accessToken = paymentSettings.mercadopago_access_token;
+      const publicKey = paymentSettings.mercadopago_public_key;
+      const clientId = paymentSettings.mercadopago_client_id;
+      const clientSecret = paymentSettings.mercadopago_client_secret;
+      const sandboxMode = paymentSettings.mercadopago_sandbox === false ? false : true; // Default para true se não especificado
+      const enabled = paymentSettings.mercadopago_enabled !== false; // Default para true se não especificado
+      
+      // Configurar o Mercado Pago com os dados corretos do Firestore
+      const mpConfig = {
+        mercadopago_access_token: accessToken,
+        mercadopago_public_key: publicKey,
+        mercadopago_client_id: clientId,
+        mercadopago_client_secret: clientSecret,
+        mercadopago_sandbox: sandboxMode,
+        mercadopago_enabled: enabled
+      };
+      
+      // Verificar se o token de acesso está presente
+      if (!mpConfig.mercadopago_access_token) {
+        console.error('Token de acesso do Mercado Pago não encontrado nas configurações');
+        toast({
+          title: "Erro de configuração",
+          description: "Token de acesso do Mercado Pago não encontrado. Entre em contato com o suporte.",
+          variant: "destructive"
+        });
+        setLoading(false);
+        return;
+      }
+      
       console.log('Configurações de pagamento encontradas:', {
-        sandbox: settings.mercadopago_sandbox,
-        hasAccessToken: !!settings.mercadopago_access_token
+        sandbox: mpConfig.mercadopago_sandbox,
+        hasAccessToken: !!mpConfig.mercadopago_access_token,
+        hasPublicKey: !!mpConfig.mercadopago_public_key,
+        hasClientId: !!mpConfig.mercadopago_client_id,
+        hasClientSecret: !!mpConfig.mercadopago_client_secret,
+        enabled: mpConfig.mercadopago_enabled,
+        tokenLength: mpConfig.mercadopago_access_token ? mpConfig.mercadopago_access_token.length : 0,
+        tokenPrefix: mpConfig.mercadopago_access_token ? mpConfig.mercadopago_access_token.substring(0, 10) : 'N/A'
       });
       
       // Inicializar o Mercado Pago
       console.log('Inicializando serviço Mercado Pago...');
-      const mpInitialized = MercadoPagoService.initialize({
-        mercadopago_access_token: settings.mercadopago_access_token,
-        mercadopago_sandbox: settings.mercadopago_sandbox || false
-      });
+      const mpInitialized = MercadoPagoService.initialize(mpConfig);
       
       if (!mpInitialized) {
         console.error('Falha ao inicializar Mercado Pago!');
+        toast({
+          title: "Erro de inicialização",
+          description: "Não foi possível inicializar o serviço de pagamento. Tente novamente mais tarde.",
+          variant: "destructive"
+        });
+        setLoading(false);
         return;
       }
       
@@ -351,12 +410,20 @@ export default function ServiceShopCard({ clientId }) {
           
           // Atualizar serviços pendentes com ID da preferência
           if (paymentResponse.preference_id) {
-            for (const id of pendingServiceIds) {
-              await PendingService.update(id, {
-                preference_id: paymentResponse.preference_id
-              });
+            try {
+              for (const id of pendingServiceIds) {
+                if (typeof id === 'string' && id.trim() !== '') {
+                  const docRef = doc(db, 'pending_services', id);
+                  await updateDoc(docRef, {
+                    preference_id: paymentResponse.preference_id
+                  });
+                }
+              }
+              console.log('Serviços pendentes atualizados com preference_id:', paymentResponse.preference_id);
+            } catch (updateError) {
+              console.error('Erro ao atualizar serviços pendentes:', updateError);
+              // Continuar mesmo com erro na atualização
             }
-            console.log('Serviços pendentes atualizados com preference_id:', paymentResponse.preference_id);
           }
           
           // Fechar modal do carrinho
