@@ -429,16 +429,13 @@ export default function ServiceShopCard({ clientId }) {
               <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-purple-100 text-purple-700">
                 {service.category}
               </span>
-              
               <div className="flex items-center text-sm text-gray-600">
                 <Clock className="h-4 w-4 mr-1" />
                 {service.duration} minutos
               </div>
             </div>
             
-            {service.show_price_on_website && (
-              <p className="font-bold text-xl mb-2">{formatPrice(service.price)}</p>
-            )}
+            <p className="font-bold text-xl mb-2">{formatPrice(service.price)}</p>
             
             <div className="flex justify-between items-center mt-4">
               <Button 
@@ -576,9 +573,7 @@ export default function ServiceShopCard({ clientId }) {
                   <p className="text-sm text-gray-600">{selectedService.description}</p>
                 )}
                 
-                {selectedService.show_price_on_website && (
-                  <p className="font-bold text-xl">{formatPrice(selectedService.price)}</p>
-                )}
+                <p className="font-bold text-xl">{formatPrice(selectedService.price)}</p>
                 
                 <div className="flex justify-end space-x-2">
                   <Button 
@@ -614,9 +609,7 @@ export default function ServiceShopCard({ clientId }) {
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="font-medium">{selectedService.name}</h3>
-                    {selectedService.show_price_on_website && (
-                      <p className="text-sm text-gray-600">{formatPrice(selectedService.price)} cada</p>
-                    )}
+                    <p className="text-sm text-gray-600">{formatPrice(selectedService.price)} cada</p>
                   </div>
                   
                   <div className="flex items-center space-x-2">
@@ -639,12 +632,10 @@ export default function ServiceShopCard({ clientId }) {
                   </div>
                 </div>
                 
-                {selectedService.show_price_on_website && (
-                  <div className="flex justify-between items-center pt-4 border-t">
-                    <span className="font-medium">Total:</span>
-                    <span className="font-bold text-xl">{formatPrice(selectedService.price * quantity)}</span>
-                  </div>
-                )}
+                <div className="flex justify-between items-center pt-4 border-t">
+                  <span className="font-medium">Total:</span>
+                  <span className="font-bold text-xl">{formatPrice(selectedService.price * quantity)}</span>
+                </div>
                 
                 <div className="flex justify-end space-x-2 pt-4">
                   <Button 
