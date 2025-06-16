@@ -43,7 +43,8 @@ import {
   PackageCheck, 
   ChevronUp, 
   ChevronDown,
-  FileText
+  FileText,
+  AlertTriangle
 } from "lucide-react";
 import { collection, query, where, limit, getDocs, doc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/firebase/config';
@@ -2328,8 +2329,13 @@ export default function ClientPackages() {
                           {getPackageName(clientPkg.id)}
                         </h3>
                         <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2">
-                          <p className="text-sm text-gray-600">
+                          <p className="text-sm text-gray-600 flex items-center gap-1">
                             Cliente: {getClientName(clientPkg.client_id)}
+                            {clients.find(c => c.id === clientPkg.client_id)?._missing && (
+                              <span title="Cliente não encontrado no banco de dados" className="text-amber-500">
+                                <AlertTriangle className="w-4 h-4" />
+                              </span>
+                            )}
                           </p>
                           {clientPkg.package_snapshot?.total_price && (
                             <p className="text-sm font-medium text-emerald-600">

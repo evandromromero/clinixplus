@@ -267,10 +267,17 @@ export const Client = {
           ...docSnap.data()
         };
       } else {
-        throw new Error('Cliente não encontrado');
+        // Em vez de lançar um erro, retornar um objeto temporário
+        console.warn(`Cliente ${id} não encontrado ou inacessível. Criando referência temporária.`);
+        return {
+          id,
+          name: `Cliente Indisponível (ID: ${id.substring(0, 5)}...)`,
+          _missing: true // Flag para identificar clientes não encontrados
+        };
       }
     } catch (error) {
       console.error(`Erro ao buscar cliente ${id}:`, error);
+      // Para outros erros (não relacionados a cliente não encontrado), ainda lançamos o erro
       throw error;
     }
   },
