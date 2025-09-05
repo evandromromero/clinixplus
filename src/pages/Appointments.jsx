@@ -1,5 +1,116 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Clock, Plus, Check, X, Filter, ArrowRight, User, DollarSign, History, Phone, Mail, FileText, Package as PackageIcon, Scissors, CalendarPlus, Trash2, AlertTriangle, CheckCircle, XCircle, Edit, MoreVertical } from "lucide-react";
+import { 
+  Users,
+  Calendar,
+  Package as PackageIcon,
+  ArrowUpRight,
+  ArrowDownRight,
+  DollarSign,
+  Clock,
+  Plus,
+  TrendingUp,
+  TrendingDown,
+  ShoppingBag,
+  AlertTriangle,
+  Cake,
+  Award,
+  CalendarDays,
+  BarChart2,
+  Mail,
+  Loader2,
+  Eye,
+  EyeOff,
+  X,
+  Check,
+  Edit,
+  Trash2,
+  FileText,
+  User,
+  Phone,
+  MapPin,
+  Calendar as CalendarIcon,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  ChevronDown,
+  Filter,
+  Search,
+  Download,
+  Upload,
+  RefreshCw,
+  Settings,
+  MoreHorizontal,
+  MoreVertical,
+  Star,
+  Heart,
+  MessageSquare,
+  Share2,
+  Bookmark,
+  Flag,
+  Archive,
+  Copy,
+  ExternalLink,
+  Info,
+  AlertCircle,
+  CheckCircle,
+  XCircle,
+  HelpCircle,
+  Zap,
+  Target,
+  Layers,
+  Grid,
+  List,
+  BarChart,
+  PieChart,
+  Activity,
+  Briefcase,
+  CreditCard,
+  DollarSign as DollarSignIcon,
+  Gift,
+  Home,
+  Inbox,
+  Key,
+  Lock,
+  LogOut,
+  Menu,
+  Minus,
+  Move,
+  Navigation,
+  Paperclip,
+  Play,
+  Power,
+  Save,
+  Send,
+  Shuffle,
+  Sidebar,
+  SkipBack,
+  SkipForward,
+  Slash,
+  Speaker,
+  Square,
+  Sun,
+  Sunrise,
+  Sunset,
+  Tag,
+  Thermometer,
+  ToggleLeft,
+  ToggleRight,
+  Wrench,
+  Truck,
+  Tv,
+  Umbrella,
+  Unlock,
+  Upload as UploadIcon,
+  Volume,
+  Volume1,
+  Volume2,
+  VolumeX,
+  Wifi,
+  WifiOff,
+  Wind,
+  ZoomIn,
+  ZoomOut
+} from "lucide-react";
 import { format, parseISO, addDays, isAfter, isBefore, isEqual, getDay, addMonths, setHours, setMinutes } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import showToast from '@/utils/toast';
@@ -42,7 +153,7 @@ import {
   PendingService,
   User as UserEntity
 } from "@/firebase/entities";
-import { Calendar } from "@/components/ui/calendar"; 
+import { Calendar as CalendarComponent } from "@/components/ui/calendar"; 
 import {
   Tabs,
   TabsContent,
@@ -102,6 +213,8 @@ export default function Appointments() {
   const [employees, setEmployees] = useState([]);
   const [selectedEmployees, setSelectedEmployees] = useState([]);
   const [hideCancelled, setHideCancelled] = useState(false);
+  const [employeeSort, setEmployeeSort] = useState('name');
+  const [customEmployeeOrder, setCustomEmployeeOrder] = useState([]);
   const [newAppointment, setNewAppointment] = useState({
     client_id: "",
     employee_id: "",
@@ -270,6 +383,28 @@ export default function Appointments() {
   useEffect(() => {
     loadData();
   }, []);
+
+  // Carregar preferências do localStorage
+  useEffect(() => {
+    const savedSort = localStorage.getItem('employeeSort');
+    const savedOrder = localStorage.getItem('customEmployeeOrder');
+    
+    if (savedSort) {
+      setEmployeeSort(savedSort);
+    }
+    if (savedOrder) {
+      setCustomEmployeeOrder(JSON.parse(savedOrder));
+    }
+  }, []);
+
+  // Salvar preferências no localStorage
+  useEffect(() => {
+    localStorage.setItem('employeeSort', employeeSort);
+  }, [employeeSort]);
+
+  useEffect(() => {
+    localStorage.setItem('customEmployeeOrder', JSON.stringify(customEmployeeOrder));
+  }, [customEmployeeOrder]);
 
   // Array de cores predefinidas para funcionários
   const predefinedColors = [
@@ -602,7 +737,71 @@ export default function Appointments() {
     });
   };
 
-  const filteredEmployees = employees.filter(emp => selectedEmployees.includes(emp.id));
+  // Função para ordenar funcionários
+  const getSortedEmployees = (employees, sortType) => {
+    const sorted = [...employees];
+    switch(sortType) {
+      case 'name-asc':
+        return sorted.sort((a, b) => a.name.localeCompare(b.name));
+      case 'name-desc':
+        return sorted.sort((a, b) => b.name.localeCompare(a.name));
+      case 'color':
+        return sorted.sort((a, b) => (a.color || '').localeCompare(b.color || ''));
+      case 'custom':
+        return getCustomOrderedEmployees(employees, customEmployeeOrder);
+      default:
+        return sorted;
+    }
+  };
+
+  // Função para aplicar ordem personalizada
+  const getCustomOrderedEmployees = (employees, customOrder) => {
+    if (!customOrder.length) return employees;
+    
+    const ordered = [];
+    const remaining = [...employees];
+    
+    // Adicionar funcionários na ordem personalizada
+    customOrder.forEach(empId => {
+      const empIndex = remaining.findIndex(emp => emp.id === empId);
+      if (empIndex !== -1) {
+        ordered.push(remaining.splice(empIndex, 1)[0]);
+      }
+    });
+    
+    // Adicionar funcionários restantes no final
+    return [...ordered, ...remaining];
+  };
+
+  // Funções para mover funcionários
+  const moveEmployeeUp = (employeeId) => {
+    const currentEmployees = getSortedEmployees(employees, employeeSort);
+    const currentIndex = currentEmployees.findIndex(emp => emp.id === employeeId);
+    
+    if (currentIndex > 0) {
+      const newOrder = currentEmployees.map(emp => emp.id);
+      [newOrder[currentIndex], newOrder[currentIndex - 1]] = [newOrder[currentIndex - 1], newOrder[currentIndex]];
+      
+      setCustomEmployeeOrder(newOrder);
+      setEmployeeSort('custom');
+    }
+  };
+
+  const moveEmployeeDown = (employeeId) => {
+    const currentEmployees = getSortedEmployees(employees, employeeSort);
+    const currentIndex = currentEmployees.findIndex(emp => emp.id === employeeId);
+    
+    if (currentIndex < currentEmployees.length - 1) {
+      const newOrder = currentEmployees.map(emp => emp.id);
+      [newOrder[currentIndex], newOrder[currentIndex + 1]] = [newOrder[currentIndex + 1], newOrder[currentIndex]];
+      
+      setCustomEmployeeOrder(newOrder);
+      setEmployeeSort('custom');
+    }
+  };
+
+  const sortedEmployees = getSortedEmployees(employees, employeeSort);
+  const filteredEmployees = sortedEmployees.filter(emp => selectedEmployees.includes(emp.id));
 
   const getEmployeeAvailability = (employeeId, hour) => {
     const employee = employees.find(emp => emp.id === employeeId);
@@ -1942,12 +2141,12 @@ export default function Appointments() {
                 </div>
                 
                 <div className="text-center mb-2">
-                  <h2 className="text-lg font-semibold">
+                  <h2 className="text-lg font-semibold text-gray-800">
                     {format(date, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
                   </h2>
                 </div>
                 
-                <Calendar
+                <CalendarComponent
                   mode="single"
                   selected={date}
                   onSelect={(newDate) => newDate && setDate(newDate)}
@@ -1966,28 +2165,69 @@ export default function Appointments() {
                   <Button 
                     variant="ghost" 
                     size="sm" 
-                    onClick={() => setSelectedEmployees(employees.map(e => e.id))}
+                    onClick={() => setSelectedEmployees(sortedEmployees.map(e => e.id))}
                   >
                     Todos
                   </Button>
                 </div>
 
+                <div className="flex items-center gap-2 mb-2">
+                  <Label htmlFor="employee-sort" className="text-sm text-gray-600">Ordenar por:</Label>
+                  <Select
+                    value={employeeSort}
+                    onValueChange={setEmployeeSort}
+                  >
+                    <SelectTrigger className="w-32 h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="name-asc">Nome (A-Z)</SelectItem>
+                      <SelectItem value="name-desc">Nome (Z-A)</SelectItem>
+                      <SelectItem value="color">Por Cor</SelectItem>
+                      <SelectItem value="custom">Personalizada</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 <div className="space-y-2">
-                  {employees.map(employee => (
-                    <div key={employee.id} className="flex items-center space-x-2">
-                    <Checkbox 
-                      id={`emp-${employee.id}`}
-                      checked={selectedEmployees.includes(employee.id)}
-                      onCheckedChange={() => toggleEmployeeFilter(employee.id)}
-                    />
-                    <Label htmlFor={`emp-${employee.id}`} className="flex items-center gap-2">
-                      <div 
-                        className="w-3 h-3 rounded-full"
-                        style={{ backgroundColor: employee.color || '#94a3b8' }}
-                      ></div>
-                      {employee.name.length > 16 ? employee.name.substring(0, 16) + '...' : employee.name}
-                    </Label>
-                  </div>
+                  {sortedEmployees.map((employee, index) => (
+                    <div key={employee.id} className="flex items-center space-x-2 group">
+                      <Checkbox 
+                        id={`emp-${employee.id}`}
+                        checked={selectedEmployees.includes(employee.id)}
+                        onCheckedChange={() => toggleEmployeeFilter(employee.id)}
+                      />
+                      <Label htmlFor={`emp-${employee.id}`} className="flex items-center gap-2 flex-1">
+                        <div 
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: employee.color || '#94a3b8' }}
+                        ></div>
+                        {employee.name.length > 16 ? employee.name.substring(0, 16) + '...' : employee.name}
+                      </Label>
+                      
+                      {employeeSort === 'custom' && (
+                        <div className="flex flex-col opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-4 w-4 p-0 hover:bg-gray-100"
+                            onClick={() => moveEmployeeUp(employee.id)}
+                            disabled={index === 0}
+                          >
+                            <ChevronUp className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-4 w-4 p-0 hover:bg-gray-100"
+                            onClick={() => moveEmployeeDown(employee.id)}
+                            disabled={index === sortedEmployees.length - 1}
+                          >
+                            <ChevronDown className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
                   ))}
                 </div>
                 
@@ -2540,7 +2780,7 @@ export default function Appointments() {
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0">
-                    <Calendar
+                    <CalendarComponent
                       mode="single"
                       selected={newAppointment.date}
                       onSelect={(date) => {
@@ -3165,7 +3405,7 @@ export default function Appointments() {
             <DialogTitle>
               Agendamentos do dia
               <div className="mt-2">
-                <Calendar
+                <CalendarComponent
                   mode="single"
                   selected={bulkActionsDate}
                   onSelect={(newDate) => newDate && setBulkActionsDate(newDate)}
