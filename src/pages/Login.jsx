@@ -19,10 +19,36 @@ export default function Login() {
   useEffect(() => {
     // Verificar se já existe um usuário logado
     const token = localStorage.getItem('accessToken');
-    const user = localStorage.getItem('user');
+    const userData = localStorage.getItem('user');
     
-    if (token && user) {
-      navigate('/dashboard');
+    if (token && userData) {
+      // Determinar rota de redirecionamento baseada nas permissões
+      const checkUserPermissions = async () => {
+        try {
+          const user = JSON.parse(userData);
+          let redirectPath = '/dashboard'; // Padrão
+          
+          if (user.roleId) {
+            const { Role } = await import('@/firebase/entities');
+            const roleData = await Role.get(user.roleId);
+            
+            if (roleData && roleData.permissions) {
+              // Se não tem permissão para dashboard, redirecionar para appointments
+              if (!roleData.permissions.includes('view_dashboard') && !roleData.permissions.includes('admin')) {
+                redirectPath = '/appointments';
+              }
+            }
+          }
+          
+          navigate(redirectPath);
+        } catch (error) {
+          console.error('Erro ao verificar permissões:', error);
+          // Em caso de erro, usar appointments como fallback seguro
+          navigate('/appointments');
+        }
+      };
+      
+      checkUserPermissions();
     }
   }, [navigate]);
 
@@ -51,8 +77,29 @@ export default function Login() {
       localStorage.setItem('user', JSON.stringify(user));
       localStorage.setItem('accessToken', 'token-simulado-' + Date.now()); // Em produção, usar JWT
       
-      // Redirecionar para o dashboard
-      navigate('/dashboard');
+      // Determinar rota de redirecionamento baseada nas permissões
+      let redirectPath = '/dashboard'; // Padrão
+      
+      if (user.roleId) {
+        try {
+          const { Role } = await import('@/firebase/entities');
+          const roleData = await Role.get(user.roleId);
+          
+          if (roleData && roleData.permissions) {
+            // Se não tem permissão para dashboard, redirecionar para appointments
+            if (!roleData.permissions.includes('view_dashboard') && !roleData.permissions.includes('admin')) {
+              redirectPath = '/appointments';
+            }
+          }
+        } catch (roleError) {
+          console.error('Erro ao carregar permissões do usuário:', roleError);
+          // Em caso de erro, usar appointments como fallback seguro
+          redirectPath = '/appointments';
+        }
+      }
+      
+      // Redirecionar para a rota apropriada
+      navigate(redirectPath);
     } catch (error) {
       console.error('Erro ao fazer login:', error);
       
