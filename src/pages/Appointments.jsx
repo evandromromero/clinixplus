@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Clock, Plus, Check, X, Filter, ArrowRight, User, DollarSign, History, Phone, Mail, FileText, Package as PackageIcon, Scissors, CalendarPlus, Trash2, AlertTriangle } from "lucide-react";
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Clock, Plus, Check, X, Filter, ArrowRight, User, DollarSign, History, Phone, Mail, FileText, Package as PackageIcon, Scissors, CalendarPlus, Trash2, AlertTriangle, CheckCircle, XCircle, Edit, MoreVertical } from "lucide-react";
 import { format, parseISO, addDays, isAfter, isBefore, isEqual, getDay, addMonths, setHours, setMinutes } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import showToast from '@/utils/toast';
@@ -155,6 +155,11 @@ export default function Appointments() {
     timeSlot: null,
     existingAppointments: []
   });
+
+  // Estados para modal rápida de ações
+  const [showQuickActionModal, setShowQuickActionModal] = useState(false);
+  const [quickActionAppointment, setQuickActionAppointment] = useState(null);
+  const [quickActionPosition, setQuickActionPosition] = useState({ x: 0, y: 0 });
   
   // Estado para controlar a visibilidade dos filtros
   const [showFilters, setShowFilters] = useState(true);
@@ -1150,6 +1155,81 @@ export default function Appointments() {
     }
   };
 
+  // Função para manipular clique direito nos agendamentos
+  const handleQuickAction = (appointment, event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    setQuickActionAppointment(appointment);
+    setQuickActionPosition({ 
+      x: event.clientX, 
+      y: event.clientY 
+    });
+    setShowQuickActionModal(true);
+  };
+
+  // Função para conclusão rápida
+  const handleQuickComplete = async (appointmentId) => {
+    try {
+      const appointment = appointments.find(a => a.id === appointmentId);
+      if (!appointment) {
+        console.error("Agendamento não encontrado");
+        return;
+      }
+      
+      await Appointment.update(appointmentId, { status: 'concluido' });
+      await updatePackageSession(appointment, 'concluido');
+      await loadData();
+      
+      setShowQuickActionModal(false);
+      setQuickActionAppointment(null);
+      showToast.success("Agendamento concluído com sucesso!");
+    } catch (error) {
+      console.error('Erro ao concluir agendamento:', error);
+      showToast.error("Erro ao concluir agendamento");
+    }
+  };
+
+  // Função para cancelamento rápido
+  const handleQuickCancel = async (appointmentId) => {
+    try {
+      const appointment = appointments.find(a => a.id === appointmentId);
+      if (!appointment) {
+        console.error("Agendamento não encontrado");
+        return;
+      }
+      
+      await Appointment.update(appointmentId, { status: 'cancelado' });
+      await updatePackageSession(appointment, 'cancelado');
+      await loadData();
+      
+      setShowQuickActionModal(false);
+      setQuickActionAppointment(null);
+      showToast.success("Agendamento cancelado com sucesso!");
+    } catch (error) {
+      console.error('Erro ao cancelar agendamento:', error);
+      showToast.error("Erro ao cancelar agendamento");
+    }
+  };
+
+  // Função para reagendamento rápido
+  const handleQuickReschedule = (appointment) => {
+    setNewAppointment({
+      client_id: appointment.client_id,
+      employee_id: appointment.employee_id,
+      service_id: appointment.service_id,
+      date: new Date(appointment.date),
+      status: "agendado",
+      notes: appointment.notes || "",
+      original_appointment_id: appointment.id,
+      pending_service_id: appointment.pending_service_id || null,
+      dependent_index: appointment.dependent_index || null
+    });
+    
+    setShowQuickActionModal(false);
+    setShowNewAppointmentDialog(true);
+  };
+
   // Função para validar se o horário escolhido respeita o intervalo do profissional
   const validateAppointmentInterval = (employeeId, selectedHour) => {
     if (!employeeId) return true;
@@ -2108,6 +2188,7 @@ export default function Appointments() {
                                             borderLeft: `3px solid ${employee.color}`
                                           } : {}}
                                           onClick={() => handleSelectAppointment(app)}
+                                          onContextMenu={(e) => handleQuickAction(app, e)}
                                           draggable={app.status === 'agendado'}
                                           onDragStart={(e) => {
                                             if (app.status !== 'agendado') return;
@@ -3171,6 +3252,115 @@ export default function Appointments() {
         onConfirm={handleMultiAppointmentConfirm}
         appointments={appointments}
       />
+
+      {/* Modal de Ações Rápidas */}
+      {showQuickActionModal && quickActionAppointment && (
+        <div
+          className="fixed inset-0 z-50"
+          onClick={() => setShowQuickActionModal(false)}
+        >
+          <div
+            className="absolute bg-white rounded-lg shadow-lg border border-gray-200 p-4 w-[240px]"
+            style={{
+              left: Math.min(quickActionPosition.x, window.innerWidth - 260),
+              top: Math.min(quickActionPosition.y, window.innerHeight - 200),
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 relative">
+              <h3 className="font-medium text-gray-900 mb-1 pr-6">Ações Rápidas</h3>
+              <button
+                onClick={() => setShowQuickActionModal(false)}
+                className="absolute top-0 right-0 p-1 hover:bg-gray-100 rounded-full transition-colors"
+                aria-label="Fechar"
+              >
+                <X className="h-4 w-4 text-gray-500" />
+              </button>
+              <div className="text-sm text-gray-600">
+                <p className="font-medium">{clients.find(c => c.id === quickActionAppointment.client_id)?.name}</p>
+                <p>{services.find(s => s.id === quickActionAppointment.service_id)?.name}</p>
+                <p>{format(new Date(quickActionAppointment.date), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</p>
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              {quickActionAppointment.status === 'agendado' && (
+                <>
+                  <Button
+                    className="w-full justify-start bg-green-600 hover:bg-green-700 text-white"
+                    size="sm"
+                    onClick={() => handleQuickComplete(quickActionAppointment.id)}
+                  >
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    Concluir Agendamento
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start border-orange-200 hover:bg-orange-50"
+                    size="sm"
+                    onClick={() => handleQuickReschedule(quickActionAppointment)}
+                  >
+                    <Edit className="h-4 w-4 mr-2" />
+                    Reagendar
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start border-red-200 hover:bg-red-50"
+                    size="sm"
+                    onClick={() => handleQuickCancel(quickActionAppointment.id)}
+                  >
+                    <XCircle className="h-4 w-4 mr-2" />
+                    Cancelar Agendamento
+                  </Button>
+                </>
+              )}
+              
+              {quickActionAppointment.status !== 'agendado' && (
+                <div className="text-center py-2">
+                  <p className="text-sm text-gray-500">
+                    Agendamento já {quickActionAppointment.status === 'concluido' ? 'concluído' : 'cancelado'}
+                  </p>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start border-orange-200 hover:bg-orange-50 mt-2"
+                    size="sm"
+                    onClick={() => handleQuickReschedule(quickActionAppointment)}
+                  >
+                    <Edit className="h-4 w-4 mr-2" />
+                    Reagendar
+                  </Button>
+                </div>
+              )}
+              
+              <Button
+                variant="ghost"
+                className="w-full justify-start"
+                size="sm"
+                onClick={() => {
+                  setShowQuickActionModal(false);
+                  handleSelectAppointment(quickActionAppointment);
+                }}
+              >
+                <MoreVertical className="h-4 w-4 mr-2" />
+                Ver Detalhes Completos
+              </Button>
+            </div>
+            
+            <div className="mt-3 pt-3 border-t border-gray-200">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full text-gray-500 hover:text-gray-700"
+                onClick={() => setShowQuickActionModal(false)}
+              >
+                Fechar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
