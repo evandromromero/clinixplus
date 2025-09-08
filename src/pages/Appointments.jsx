@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Users,
   Calendar,
+  CalendarPlus,
   Package as PackageIcon,
   ArrowUpRight,
   ArrowDownRight,
