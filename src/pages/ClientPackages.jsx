@@ -1436,6 +1436,15 @@ export default function ClientPackages() {
       await ClientPackage.delete(packageId);
       console.log('[DELETE PACKAGE] Pacote do cliente removido com sucesso. packageId:', packageId);
 
+      // Disparar evento global para notificar outras páginas
+      window.dispatchEvent(new CustomEvent('clientPackageDeleted', {
+        detail: { 
+          packageId, 
+          clientId: pkgToDelete.client_id 
+        }
+      }));
+      console.log('[DELETE PACKAGE] Evento clientPackageDeleted disparado para clientId:', pkgToDelete.client_id);
+
       toast({
         title: "Sucesso",
         description: "Pacote do cliente removido com sucesso",

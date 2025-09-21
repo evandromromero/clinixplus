@@ -53,6 +53,26 @@ export default function ClientPortal() {
     setLoading(false);
   }, []);
 
+  // Listener para exclusão de pacotes
+  useEffect(() => {
+    const handlePackageDeleted = (event) => {
+      const { packageId, clientId: deletedClientId } = event.detail;
+      const currentClientId = currentClient?.id;
+      
+      if (deletedClientId === currentClientId) {
+        console.log('[ClientPortal] Pacote excluído detectado:', packageId);
+        setClientPackages(prev => {
+          const updated = prev.filter(pkg => pkg.id !== packageId);
+          console.log('[ClientPortal] Pacotes atualizados:', updated.length);
+          return updated;
+        });
+      }
+    };
+
+    window.addEventListener('clientPackageDeleted', handlePackageDeleted);
+    return () => window.removeEventListener('clientPackageDeleted', handlePackageDeleted);
+  }, [currentClient?.id]);
+
   const loadClientData = async (clientData) => {
     const clientId = clientData.client.id;
     setCurrentClient(clientData.client);

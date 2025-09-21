@@ -106,6 +106,18 @@ export default function EmployeeAppointmentCard({ appointments, onAction, curren
       
       console.log("[EmployeePortal][updatePackageSession] Pacote relevante encontrado:", relevantPackage.id);
       
+      // ADICIONAR validação se o pacote ainda existe antes de atualizar
+      try {
+        const packageExists = await ClientPackage.get(relevantPackage.id);
+        if (!packageExists) {
+          console.error("[EmployeePortal][updatePackageSession] Pacote não existe mais:", relevantPackage.id);
+          return;
+        }
+      } catch (error) {
+        console.error("[EmployeePortal][updatePackageSession] Erro ao validar existência do pacote:", error);
+        return;
+      }
+      
       // Obter nome do profissional
       const employeeName = currentEmployee?.name || "Profissional não encontrado";
       
@@ -199,15 +211,20 @@ export default function EmployeeAppointmentCard({ appointments, onAction, curren
         updatedSessionHistory.push(sessionHistoryEntry);
       }
       
-      // Atualizar o pacote
-      await ClientPackage.update(relevantPackage.id, {
-        session_history: updatedSessionHistory,
-        sessions_used: Math.max(0, (relevantPackage.sessions_used || 0) + sessionsUsedDelta)
-      });
-      
-      console.log("[EmployeePortal][updatePackageSession] Pacote atualizado com sucesso");
+      // Atualizar o pacote com validação adicional
+      try {
+        await ClientPackage.update(relevantPackage.id, {
+          session_history: updatedSessionHistory,
+          sessions_used: Math.max(0, (relevantPackage.sessions_used || 0) + sessionsUsedDelta)
+        });
+        console.log("[EmployeePortal][updatePackageSession] Pacote atualizado com sucesso");
+      } catch (updateError) {
+        console.error("[EmployeePortal][updatePackageSession] Erro ao atualizar pacote:", updateError);
+        throw updateError;
+      }
     } catch (error) {
-      console.error("[EmployeePortal][updatePackageSession] Erro ao atualizar pacote:", error);
+      console.error("[EmployeePortal][updatePackageSession] Erro geral:", error);
+      // Não quebrar o fluxo principal do agendamento
     }
   };
   

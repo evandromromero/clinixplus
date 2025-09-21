@@ -1259,13 +1259,33 @@ export default function SalesRegister() {
         }
 
         if (amount && clientPackageId) {
-          const packageData = await ClientPackage.get(clientPackageId);
-          if (packageData) {
+          try {
+            const packageData = await ClientPackage.get(clientPackageId);
+            if (!packageData) {
+              // Pacote não encontrado - mostrar erro e limpar URL
+              console.error("[SalesRegister] Pacote não encontrado:", clientPackageId);
+              toast({
+                title: "Erro",
+                description: "Pacote não encontrado. Redirecionando...",
+                variant: "destructive"
+              });
+              
+              // Limpar parâmetros da URL
+              const newUrl = window.location.pathname;
+              window.history.replaceState({}, document.title, newUrl);
+              return;
+            }
+            
             let originalPackage = null;
             if (packageData.package_id) {
               // Pacote padrão
-              originalPackage = await Package.get(packageData.package_id);
+              try {
+                originalPackage = await Package.get(packageData.package_id);
+              } catch (error) {
+                console.warn("[SalesRegister] Erro ao buscar pacote original:", error);
+              }
             }
+            
             // Para pacotes personalizados, use apenas o snapshot
             const cartItem = {
               item_id: packageData.id,
@@ -1275,12 +1295,20 @@ export default function SalesRegister() {
               price: parseFloat(amount),
               discount: 0
             };
+            
             setCartItems([cartItem]);
             setPaymentMethods([{
               methodId: "",
               amount: parseFloat(amount),
               installments: 1
             }]);
+          } catch (error) {
+            console.error("[SalesRegister] Erro ao carregar dados do pacote:", error);
+            toast({
+              title: "Erro",
+              description: "Erro ao carregar dados do pacote",
+              variant: "destructive"
+            });
           }
         }
 

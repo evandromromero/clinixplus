@@ -407,6 +407,33 @@ export default function Appointments() {
     localStorage.setItem('customEmployeeOrder', JSON.stringify(customEmployeeOrder));
   }, [customEmployeeOrder]);
 
+  // Listener para exclusão de pacotes
+  useEffect(() => {
+    const handlePackageDeleted = (event) => {
+      const { packageId, clientId: deletedClientId } = event.detail;
+      
+      // Atualizar lista de pacotes do cliente se for o cliente atual
+      if (newAppointment.client_id === deletedClientId) {
+        setClientPackages(prev => prev.filter(pkg => pkg.id !== packageId));
+        setFilteredPackages(prev => prev.filter(pkg => pkg.id !== packageId));
+        
+        // Se o pacote excluído estava selecionado, limpar seleção
+        if (selectedPackageId === packageId) {
+          setSelectedPackageId("");
+          setSelectedClientPackage(null);
+        }
+      }
+      
+      // Atualizar lista de pacotes do multi-cliente se aplicável
+      if (multiClientId === deletedClientId) {
+        setMultiClientPackages(prev => prev.filter(pkg => pkg.id !== packageId));
+      }
+    };
+
+    window.addEventListener('clientPackageDeleted', handlePackageDeleted);
+    return () => window.removeEventListener('clientPackageDeleted', handlePackageDeleted);
+  }, [newAppointment.client_id, selectedPackageId, multiClientId]);
+
   // Array de cores predefinidas para funcionários
   const predefinedColors = [
     "#4f46e5", // indigo
@@ -546,7 +573,14 @@ export default function Appointments() {
       // Se houver um pacote selecionado e o tipo de procedimento for pacote, atualiza o histórico
       if (procedimentoTipo === "pacote" && selectedPackageId && selectedPackageId !== "") {
         try {
+          // VALIDAR se o pacote ainda existe
           const currentPackage = await ClientPackage.get(selectedPackageId);
+          if (!currentPackage) {
+            showToast.error("Pacote selecionado não existe mais. Recarregando dados...");
+            // Recarregar pacotes do cliente
+            await handleClientSelection(newAppointment.client_id, newAppointment.client_name, newAppointment.client_type, newAppointment.dependent_index);
+            return;
+          }
           const serviceData = services.find(s => s.id === newAppointment.service_id);
           const employeeData = employees.find(e => e.id === newAppointment.employee_id);
 
@@ -1560,6 +1594,12 @@ export default function Appointments() {
         status: 'ativo'
       });
       console.log("[updatePackageSession] Pacotes ativos encontrados:", clientPackages);
+      
+      // ADICIONAR validação se não há pacotes
+      if (!clientPackages || clientPackages.length === 0) {
+        console.log("[updatePackageSession] Nenhum pacote ativo encontrado");
+        return;
+      }
       // Novo: buscar pacote relevante por id OU package_id OU serviços incluídos
       const relevantPackage = clientPackages.find(pkg => {
         // 1. Se não tem package_id (personalizado), verifica serviços e snapshot

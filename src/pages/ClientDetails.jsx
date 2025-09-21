@@ -170,6 +170,27 @@ export default function ClientDetails() {
     }
   }, [clientId]);
 
+  // Listener para exclusão de pacotes
+  useEffect(() => {
+    const handlePackageDeleted = (event) => {
+      const { packageId, clientId: deletedClientId } = event.detail;
+      if (deletedClientId === clientId) {
+        console.log('[ClientDetails] Pacote excluído detectado:', packageId);
+        setClientPackages(prev => {
+          const updated = prev.filter(pkg => pkg.id !== packageId);
+          console.log('[ClientDetails] Pacotes atualizados:', updated.length);
+          return updated;
+        });
+        
+        // Mostrar toast de confirmação
+        toast.success('Pacote removido da lista do cliente.');
+      }
+    };
+
+    window.addEventListener('clientPackageDeleted', handlePackageDeleted);
+    return () => window.removeEventListener('clientPackageDeleted', handlePackageDeleted);
+  }, [clientId]);
+
   useEffect(() => {
     // Limpar stream da câmera quando o componente desmontar
     return () => {
