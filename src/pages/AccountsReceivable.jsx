@@ -23,6 +23,8 @@ import { normalizeDate } from "@/utils/dateUtils";
 import { ptBR } from "date-fns/locale";
 import { Search, Filter, ChevronDown, ChevronUp, RefreshCw, FileText, Download, Printer, Plus, CalendarIcon, XCircle, Trash2, DollarSign, AlertCircle, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, Edit } from "lucide-react";
 import { FinancialTransaction, Client, PaymentMethod, Sale } from "@/firebase/entities";
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '@/firebase/config';
 import RateLimitHandler from '@/components/RateLimitHandler';
 import { toast } from "@/components/ui/use-toast";
 import html2pdf from 'html2pdf.js';
@@ -41,6 +43,10 @@ export default function AccountsReceivable() {
   const [clientFilter, setClientFilter] = useState("all");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  
+  // Estados para carregamento otimizado
+  const [totalTransactions, setTotalTransactions] = useState(0);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [sortField, setSortField] = useState("due_date");
   const [sortDirection, setSortDirection] = useState("asc");
   const [paymentMethods, setPaymentMethods] = useState([]);
@@ -93,7 +99,7 @@ export default function AccountsReceivable() {
       // Excluir a transação
       await FinancialTransaction.delete(transaction.id);
 
-      loadData();
+      loadPageData();
 
       toast({
         title: "Sucesso",
@@ -229,7 +235,7 @@ export default function AccountsReceivable() {
       });
 
       setShowReceiveDialog(false);
-      loadData();
+      loadPageData();
 
       toast({
         title: "Sucesso",
@@ -519,13 +525,18 @@ export default function AccountsReceivable() {
   
   useEffect(() => {
     // Carregar dados na montagem do componente
-    loadData();
+    loadPageData();
     
     // Limpar referência quando o componente for desmontado
     return () => {
       isMounted.current = false;
     };
   }, []);
+
+  // Recarregar quando página ou itens por página mudam
+  useEffect(() => {
+    loadPageData(currentPage, itemsPerPage);
+  }, [currentPage, itemsPerPage]);
 
   useEffect(() => {
     loadPaymentMethods();
@@ -943,7 +954,7 @@ export default function AccountsReceivable() {
       });
 
       // Recarregar os dados
-      loadData();
+      loadPageData();
     } catch (error) {
       console.error("Erro ao salvar conta a receber:", error);
       toast.error("Erro ao salvar conta a receber. Por favor, tente novamente.");
@@ -963,233 +974,137 @@ export default function AccountsReceivable() {
     }
   };
 
-  const loadData = async (forceRefresh = false) => {
+  // Função OTIMIZADA para carregar apenas dados da página atual
+  const loadPageData = async (page = currentPage, pageSize = itemsPerPage) => {
+    if (!isMounted.current) return;
+    
     try {
       setIsLoading(true);
       setError(null);
       
-      // Verificar se podemos usar o cache (se não for forçada atualização)
-      const now = new Date();
-      const cacheAge = dataCache.current.lastUpdate ? now - dataCache.current.lastUpdate : null;
-      const cacheValid = !forceRefresh && cacheAge && cacheAge < 5 * 60 * 1000; // Cache válido por 5 minutos
+      console.log(`[DEBUG] Carregando página ${page} com ${pageSize} itens por página`);
       
-      if (cacheValid && dataCache.current.transactions.length > 0) {
-        console.log('[AccountsReceivable] Usando dados em cache');
-        // Usar dados do cache
-        setPaymentMethods(dataCache.current.paymentMethods);
-        setClients(Array.from(dataCache.current.clients.values()));
-        setSales(Array.from(dataCache.current.sales.values()));
-        
-        // Processar transações do cache
-        setTransactions(dataCache.current.transactions);
-        setFilteredTransactions(dataCache.current.transactions);
-        setIsLoading(false);
-        return;
+      // Carregar métodos de pagamento (só uma vez)
+      if (!dataCache.current.paymentMethods) {
+        const paymentMethodsData = await PaymentMethod.list();
+        dataCache.current.paymentMethods = paymentMethodsData;
+        setPaymentMethods(paymentMethodsData);
       }
       
-      console.log('[AccountsReceivable] Carregando dados do Firebase');
+      // Carregar TODAS as transações apenas para contagem (sem dados relacionados)
+      let allTransactions = dataCache.current.allTransactions;
+      if (!allTransactions) {
+        console.log('[DEBUG] Primeira carga: buscando todas as transações...');
+        const transactionsData = await FinancialTransaction.filter({ type: 'receita' });
+        allTransactions = transactionsData.filter(t => t.type === 'receita' && t.category !== 'abertura_caixa');
+        dataCache.current.allTransactions = allTransactions;
+        setTotalTransactions(allTransactions.length);
+      }
       
-      // Carregar métodos de pagamento primeiro (são poucos)
-      const paymentMethodsData = await PaymentMethod.list();
-      dataCache.current.paymentMethods = paymentMethodsData;
-      setPaymentMethods(paymentMethodsData);
+      // Calcular transações da página atual
+      const startIndex = (page - 1) * pageSize;
+      const endIndex = startIndex + pageSize;
+      const pageTransactions = allTransactions.slice(startIndex, endIndex);
       
-      // Criar um mapa de métodos de pagamento para facilitar a busca
-      const paymentMethodsMap = paymentMethodsData.reduce((acc, method) => {
-        acc[method.id] = method;
-        return acc;
-      }, {});
+      console.log(`[DEBUG] Mostrando transações ${startIndex + 1}-${Math.min(endIndex, allTransactions.length)} de ${allTransactions.length}`);
       
-      // Carregar transações financeiras com filtro otimizado
-      const transactionsData = await FinancialTransaction.filter({
-        type: 'receita'
-      });
-      
-      // Filtrar transações irrelevantes
-      const relevantTransactions = transactionsData.filter(transaction => {
-        return transaction.type === 'receita' && transaction.category !== 'abertura_caixa';
-      });
-      
-      // Extrair IDs únicos para carregamento em lote
+      // Coletar apenas IDs necessários para esta página
       const clientIds = new Set();
       const saleIds = new Set();
       
-      // Coletar IDs únicos de clientes e vendas para carregamento otimizado
-      relevantTransactions.forEach(transaction => {
+      pageTransactions.forEach(transaction => {
         if (transaction.client_id) clientIds.add(transaction.client_id);
         if (transaction.sale_id) saleIds.add(transaction.sale_id);
       });
       
-      console.log(`[DEBUG] Carregando: ${relevantTransactions.length} transações, ${clientIds.size} clientes, ${saleIds.size} vendas`);
+      console.log(`[DEBUG] Página precisa de: ${clientIds.size} clientes, ${saleIds.size} vendas`);
       
-      // Inicializar caches se não existirem
+      // Inicializar caches
       if (!dataCache.current.clients) dataCache.current.clients = new Map();
       if (!dataCache.current.sales) dataCache.current.sales = new Map();
       
-      // Função otimizada para carregar entidades em lotes grandes
-      const loadEntitiesInBatches = async (ids, entityType) => {
-        if (ids.size === 0) return [];
-        
-        const batchSize = 40; // Tamanho do lote otimizado para reduzir número de requisições
+      // Função para carregar apenas dados não cacheados
+      const loadMissingData = async (ids, entityType) => {
         const idArray = Array.from(ids);
         const Entity = entityType === 'client' ? Client : Sale;
+        const collectionName = entityType === 'client' ? 'clients' : 'sales';
         const cacheMap = dataCache.current[entityType === 'client' ? 'clients' : 'sales'];
-        const results = [];
         
-        // Dividir em lotes para evitar consultas muito grandes
-        for (let i = 0; i < idArray.length; i += batchSize) {
-          // Verificar se o componente ainda está montado
-          if (!isMounted.current) break;
+        const missingIds = idArray.filter(id => !cacheMap.has(id));
+        
+        if (missingIds.length > 0) {
+          console.log(`[DEBUG] Carregando ${missingIds.length} ${entityType}s em falta`);
           
-          const batchIds = idArray.slice(i, i + batchSize);
-          
-          // Filtrar IDs que já estão no cache para evitar consultas desnecessárias
-          const idsToFetch = batchIds.filter(id => !cacheMap.has(id));
-          
-          if (idsToFetch.length > 0) {
-            console.log(`[DEBUG] Carregando lote de ${idsToFetch.length} ${entityType}s`);
+          // Dividir em chunks de 10 para WHERE IN
+          for (let i = 0; i < missingIds.length; i += 10) {
+            const chunk = missingIds.slice(i, i + 10);
             
-            // Carregar apenas os IDs que não estão no cache
-            const batchResults = await Promise.all(
-              idsToFetch.map(id => Entity.get(id))
-            );
-            
-            // Adicionar ao cache
-            batchResults.filter(Boolean).forEach(item => {
-              if (item && item.id) {
+            try {
+              const q = query(
+                collection(db, collectionName),
+                where('__name__', 'in', chunk)
+              );
+              
+              const snapshot = await getDocs(q);
+              snapshot.docs.forEach(doc => {
+                const item = { id: doc.id, ...doc.data() };
                 cacheMap.set(item.id, item);
-                results.push(item);
+              });
+              
+            } catch (error) {
+              console.warn(`[WARN] Erro no WHERE IN, usando fallback individual para ${entityType}s`);
+              // Fallback: carregar individualmente
+              for (const id of chunk) {
+                try {
+                  const item = await Entity.get(id);
+                  if (item) cacheMap.set(item.id, item);
+                } catch (err) {
+                  console.warn(`[WARN] Erro ao carregar ${entityType} ${id}`);
+                }
               }
-            });
-          } else {
-            console.log(`[DEBUG] Todos os ${batchIds.length} ${entityType}s já estão em cache`);
+            }
           }
-          
-          // Adicionar itens que já estão no cache aos resultados
-          batchIds.filter(id => cacheMap.has(id)).forEach(id => {
-            results.push(cacheMap.get(id));
-          });
         }
-        
-        return results;
       };
       
-      // Carregar clientes e vendas em paralelo para melhor performance
-      console.log('[DEBUG] Iniciando carregamento paralelo de clientes e vendas');
+      // Carregar apenas dados em falta
       await Promise.all([
-        loadEntitiesInBatches(clientIds, 'client').then(data => {
-          if (isMounted.current) {
-            setClients(Array.from(dataCache.current.clients.values()));
-          }
-        }),
-        loadEntitiesInBatches(saleIds, 'sale').then(data => {
-          if (isMounted.current) {
-            setSales(Array.from(dataCache.current.sales.values()));
-          }
-        })
+        loadMissingData(clientIds, 'client'),
+        loadMissingData(saleIds, 'sale')
       ]);
       
-      // Processar transações com os dados carregados
-      const processedTransactions = relevantTransactions.map(transaction => {
-        // Enriquece a transação com dados do cliente e venda
+      // Processar transações da página com dados carregados
+      const processedTransactions = pageTransactions.map(transaction => {
         const client = dataCache.current.clients.get(transaction.client_id) || { name: 'Cliente não encontrado' };
         const sale = dataCache.current.sales.get(transaction.sale_id) || { items: [] };
         
         return {
           ...transaction,
           client_name: client.name,
-          sale_items: sale.items,
-          formatted_amount: formatCurrency(transaction.amount),
-          formatted_due_date: transaction.due_date 
-            ? format(new Date(transaction.due_date), 'dd/MM/yyyy', { locale: ptBR })
-            : 'Sem data',
-          status_class: getStatusClass(transaction.status),
-          // Formata a descrição para mostrar informações mais úteis
-          formatted_description: formatTransactionDescription(transaction, sale)
+          client_phone: client.phone,
+          sale_items: sale.items || []
         };
       });
       
-      // Agrupar transações por sale_id
-      const groupedTransactions = [];
-      const transactionsBySaleId = {};
+      // Atualizar estados
+      setTransactions(processedTransactions);
+      setClients(Array.from(dataCache.current.clients.values()));
+      setSales(Array.from(dataCache.current.sales.values()));
       
-      // Primeiro, agrupar as transações pelo sale_id
-      processedTransactions.forEach(transaction => {
-        if (transaction.sale_id) {
-          if (!transactionsBySaleId[transaction.sale_id]) {
-            transactionsBySaleId[transaction.sale_id] = [];
-          }
-          transactionsBySaleId[transaction.sale_id].push(transaction);
-        } else {
-          // Se não tiver sale_id, adicionar diretamente ao resultado final
-          groupedTransactions.push(transaction);
-        }
-      });
+      console.log(`[DEBUG] ✅ Página ${page} carregada: ${processedTransactions.length} transações`);
       
-      // Depois, para cada grupo de transações com o mesmo sale_id, criar uma transação combinada
-      Object.keys(transactionsBySaleId).forEach(saleId => {
-        const saleTransactions = transactionsBySaleId[saleId];
-        
-        if (saleTransactions.length === 1) {
-          // Se só tem uma transação para esta venda, adicionar diretamente
-          groupedTransactions.push(saleTransactions[0]);
-        } else {
-          // Se tem múltiplas transações para a mesma venda, combinar em uma única entrada
-          const firstTransaction = saleTransactions[0];
-          const totalAmount = saleTransactions.reduce((sum, t) => sum + parseFloat(t.amount), 0);
-          
-          // Combinar os métodos de pagamento
-          const paymentMethods = saleTransactions.map(t => {
-            const method = paymentMethodsMap[t.payment_method];
-            return {
-              name: method ? method.name : 'Método não identificado',
-              amount: parseFloat(t.amount)
-            };
-          });
-          
-          // Criar uma transação combinada
-          const combinedTransaction = {
-            ...firstTransaction,
-            id: `${firstTransaction.id}_combined`,
-            amount: totalAmount,
-            formatted_amount: formatCurrency(totalAmount),
-            original_transactions: saleTransactions,
-            payment_methods: paymentMethods,
-            is_combined: true
-          };
-          
-          groupedTransactions.push(combinedTransaction);
-        }
-      });
-      
-      // Ordenar as transações agrupadas
-      const sortedTransactions = [...groupedTransactions].sort((a, b) => {
-        let aValue, bValue;
-        
-        if (sortField === "due_date") {
-          // Para datas, invertemos a comparação para mostrar as mais recentes primeiro
-          aValue = a.due_date ? new Date(a.due_date) : new Date(0);
-          bValue = b.due_date ? new Date(b.due_date) : new Date(0);
-          
-          // Inverte a ordenação para mostrar as datas mais recentes primeiro
-          if (sortDirection === "asc") {
-            return bValue - aValue; // Mais recentes primeiro
-          } else {
-            return aValue - bValue; // Mais antigas primeiro
-          }
-        } else if (sortField === "amount") {
-          aValue = a.amount || 0;
-          bValue = b.amount || 0;
-        } else if (sortField === "client_name") {
-          aValue = a.client_name || '';
-          bValue = b.client_name || '';
-        } else {
-          aValue = a[sortField] || '';
-          bValue = b[sortField] || '';
-        }
-        
-        if (sortDirection === "asc") {
-          return aValue > bValue ? 1 : -1;
+    } catch (error) {
+      console.error('[ERROR] Erro ao carregar página:', error);
+      setError('Erro ao carregar dados. Tente novamente.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadData = async (forceRefresh = false) => {
+    // Função mantida para compatibilidade - redireciona para loadPageData
+    return loadPageData();
+  };
         } else {
           return aValue < bValue ? 1 : -1;
         }

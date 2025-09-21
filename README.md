@@ -2,6 +2,58 @@
 
 Sistema de gerenciamento para clínicas estéticas desenvolvido com React e Firebase.
 
+## 🚀 OTIMIZAÇÃO CRÍTICA - CONTAS A RECEBER (21/09/2025)
+
+### **PROBLEMA RESOLVIDO: Performance Extremamente Lenta**
+- **Situação Original**: Página travava com 1.563 transações (1.897 consultas individuais ao Firebase)
+- **Causa**: Função `Entity.get(id)` sendo chamada individualmente para cada cliente/venda
+- **Impacto**: Interface inutilizável em computadores lentos, timeout em conexões ruins
+
+### **SOLUÇÃO IMPLEMENTADA: Paginação Inteligente + WHERE IN**
+
+#### **1. Nova Arquitetura de Carregamento**
+```javascript
+// ANTES: 1.897 consultas individuais
+idsToFetch.map(id => Entity.get(id))
+
+// DEPOIS: ~20-30 consultas WHERE IN por página
+query(collection(db, 'clients'), where('__name__', 'in', [id1, id2, ...]))
+```
+
+#### **2. Funcionalidades Implementadas**
+- ✅ **Paginação Real**: Carrega apenas dados da página atual (10-50 itens)
+- ✅ **Cache Inteligente**: Evita recarregar dados já obtidos
+- ✅ **WHERE IN Otimizado**: Máximo 10 IDs por consulta (limite Firebase)
+- ✅ **Fallback Automático**: Consultas individuais se WHERE IN falhar
+- ✅ **Compatibilidade**: Função `loadData()` redirecionada para nova implementação
+
+#### **3. Arquivos Modificados**
+- **`AccountsReceivable.jsx`**: Implementação completa da otimização
+- **Imports adicionados**: `collection, query, where, getDocs` do Firebase
+- **Estados novos**: `totalTransactions`, `isLoadingMore`
+- **useEffects**: Recarregamento automático ao mudar página/itens por página
+
+#### **4. Resultado Esperado**
+- **Performance**: 90% redução no número de consultas
+- **Carregamento Inicial**: < 2 segundos (vs. 30+ segundos antes)
+- **Navegação**: Instantânea entre páginas (cache)
+- **Experiência**: Sem travamentos em PCs lentos
+
+#### **5. Status da Implementação**
+- ✅ Função `loadPageData()` implementada
+- ✅ Estados e useEffects configurados
+- ✅ Imports Firebase adicionados
+- ⚠️ Código órfão precisa ser removido (linhas 1108-1140)
+- 🔄 Teste final necessário após limpeza
+
+### **PRÓXIMOS PASSOS**
+1. Limpar código órfão restante no arquivo
+2. Testar performance em ambiente real
+3. Ajustar tamanho da página se necessário (atual: 10 itens)
+4. Monitorar logs de performance
+
+---
+
 ## Melhorias Recentes (Maio 2025)
 
 ### Melhorias em Pacotes de Clientes (14/05/2025)
