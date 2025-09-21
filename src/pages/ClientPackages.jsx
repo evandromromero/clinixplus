@@ -77,6 +77,13 @@ export default function ClientPackages() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [packageToDelete, setPackageToDelete] = useState(null);
+  const [showAddSessionsDialog, setShowAddSessionsDialog] = useState(false);
+  const [packageToAddSessions, setPackageToAddSessions] = useState(null);
+  const [addSessionsForm, setAddSessionsForm] = useState({
+    services: [],
+    reason: '',
+    observations: ''
+  });
   const [anamnesisForm, setAnamnesisForm] = useState({
     skin_type: "",
     allergies: "",
@@ -1068,7 +1075,7 @@ export default function ClientPackages() {
           sale.status === 'pago' && sale.sale_id === unfinishedSale.sale_id
         );
         
-        if (paidSale && unfinishedSale.status !== 'concluida') {
+        if (paidSale && unfinishedSale.status !== 'concluida' && unfinishedSale.id) {
           console.log('Encontrada venda paga:', paidSale.sale_id);
           // Atualiza o status da venda não finalizada
           await UnfinishedSale.update(unfinishedSale.id, {
@@ -1362,6 +1369,140 @@ export default function ClientPackages() {
 
     setPackageToDelete(packageId);
     setShowDeleteDialog(true);
+  };
+
+  const openAddSessionsDialog = async (packageId) => {
+    if (!packageId) {
+      toast({
+        title: "Erro",
+        description: "Pacote não encontrado",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      // Buscar dados do pacote para mostrar os serviços
+      const packageData = await ClientPackage.get(packageId);
+      if (!packageData) {
+        toast({
+          title: "Erro",
+          description: "Dados do pacote não encontrados",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Processar serviços do pacote
+      let packageServices = [];
+      
+      if (packageData.package_snapshot?.services) {
+        // Pacote personalizado
+        for (const service of packageData.package_snapshot.services) {
+          const serviceData = services.find(s => s.id === service.service_id);
+          packageServices.push({
+            service_id: service.service_id,
+            service_name: serviceData?.name || 'Serviço não encontrado',
+            current_quantity: service.quantity || 0,
+            additional_quantity: 0
+          });
+        }
+      } else if (packageData.package_id) {
+        // Pacote regular
+        const packageInfo = packages.find(p => p.id === packageData.package_id);
+        if (packageInfo?.services) {
+          for (const service of packageInfo.services) {
+            const serviceData = services.find(s => s.id === service.service_id);
+            packageServices.push({
+              service_id: service.service_id,
+              service_name: serviceData?.name || 'Serviço não encontrado',
+              current_quantity: service.quantity || 0,
+              additional_quantity: 0
+            });
+          }
+        }
+      }
+
+      setPackageToAddSessions(packageData);
+      setAddSessionsForm({
+        services: packageServices,
+        reason: '',
+        observations: ''
+      });
+      setShowAddSessionsDialog(true);
+    } catch (error) {
+      console.error('Erro ao buscar dados do pacote:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao carregar dados do pacote",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleAddSessions = async () => {
+    try {
+      // Validar se há sessões para adicionar
+      const servicesWithAdditions = addSessionsForm.services.filter(s => s.additional_quantity > 0);
+      
+      if (servicesWithAdditions.length === 0) {
+        toast({
+          title: "Atenção",
+          description: "Adicione pelo menos uma sessão para algum serviço",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Validar motivo
+      if (!addSessionsForm.reason) {
+        toast({
+          title: "Atenção", 
+          description: "Selecione o motivo da adição",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      setLoading(true);
+
+      // Chamar função da entidade
+      const result = await ClientPackage.addSessionsToPackage(
+        packageToAddSessions.id,
+        servicesWithAdditions,
+        addSessionsForm.reason,
+        'Administrador' // TODO: Pegar nome do usuário logado
+      );
+
+      // Atualizar apenas o pacote específico na lista (sem recarregar tudo)
+      const updatedPackageData = await ClientPackage.get(packageToAddSessions.id);
+      
+      setClientPackages(prevPackages => 
+        prevPackages.map(pkg => 
+          pkg.id === packageToAddSessions.id ? updatedPackageData : pkg
+        )
+      );
+
+      // Fechar modal
+      setShowAddSessionsDialog(false);
+
+      // Mostrar sucesso
+      toast({
+        title: "Sucesso!",
+        description: `${result.sessionsAdded} sessões adicionadas com sucesso!`,
+        variant: "success"
+      });
+
+    } catch (error) {
+      console.error('Erro ao adicionar sessões:', error);
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao adicionar sessões. Tente novamente.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleDeletePackage = async (packageId) => {
@@ -2366,17 +2507,32 @@ export default function ClientPackages() {
                             Válido até {formatDateSafe(clientPkg.expiration_date)}
                           </span>
                         </div>
-                        <Button 
-                          variant="ghost" 
-                          size="icon"
-                          className="text-red-500 hover:bg-red-50"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            confirmDeletePackage(clientPkg.id);
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button 
+                            variant="ghost" 
+                            size="icon"
+                            className="text-green-600 hover:bg-green-50"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openAddSessionsDialog(clientPkg.id);
+                            }}
+                            title="Adicionar sessões"
+                          >
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon"
+                            className="text-red-500 hover:bg-red-50"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              confirmDeletePackage(clientPkg.id);
+                            }}
+                            title="Excluir pacote"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
                     </div>
 
@@ -3751,6 +3907,116 @@ export default function ClientPackages() {
               onClick={() => setShowSignatureModal(false)}
             >
               Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Adição de Sessões */}
+      <Dialog open={showAddSessionsDialog} onOpenChange={setShowAddSessionsDialog}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Adicionar Sessões ao Pacote</DialogTitle>
+            <DialogDescription>
+              Adicione mais sessões ao pacote do cliente. Esta ação não pode ser desfeita.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Serviços do Pacote</Label>
+              <div className="space-y-3 max-h-60 overflow-y-auto">
+                {addSessionsForm.services.map((service, index) => (
+                  <div key={service.service_id} className="border rounded-lg p-3 bg-gray-50">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="font-medium text-sm">{service.service_name}</span>
+                      <span className="text-xs text-gray-500">
+                        Atual: {service.current_quantity} sessões
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor={`service-${index}`} className="text-xs">
+                        Adicionar:
+                      </Label>
+                      <Input
+                        id={`service-${index}`}
+                        type="number"
+                        min="0"
+                        max="50"
+                        value={service.additional_quantity}
+                        onChange={(e) => {
+                          const newServices = [...addSessionsForm.services];
+                          newServices[index].additional_quantity = parseInt(e.target.value) || 0;
+                          setAddSessionsForm(prev => ({
+                            ...prev,
+                            services: newServices
+                          }));
+                        }}
+                        className="w-20 h-8 text-sm"
+                        placeholder="0"
+                      />
+                      <span className="text-xs text-gray-500">sessões</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {addSessionsForm.services.length === 0 && (
+                <p className="text-sm text-gray-500 text-center py-4">
+                  Nenhum serviço encontrado no pacote
+                </p>
+              )}
+            </div>
+            
+            <div>
+              <Label htmlFor="reason">Motivo</Label>
+              <select
+                id="reason"
+                className="w-full p-2 border border-gray-300 rounded-md"
+                value={addSessionsForm.reason}
+                onChange={(e) => setAddSessionsForm(prev => ({
+                  ...prev,
+                  reason: e.target.value
+                }))}
+              >
+                <option value="">Selecione o motivo</option>
+                <option value="Correção">Correção de quantidade</option>
+                <option value="Brinde">Brinde/Cortesia</option>
+                <option value="Promoção">Promoção especial</option>
+                <option value="Compensação">Compensação</option>
+                <option value="Outros">Outros</option>
+              </select>
+            </div>
+
+            <div>
+              <Label htmlFor="observations">Observações (opcional)</Label>
+              <Textarea
+                id="observations"
+                value={addSessionsForm.observations}
+                onChange={(e) => setAddSessionsForm(prev => ({
+                  ...prev,
+                  observations: e.target.value
+                }))}
+                placeholder="Adicione observações sobre esta adição..."
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddSessionsDialog(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              className="bg-green-600 hover:bg-green-700 text-white"
+              onClick={handleAddSessions}
+              disabled={loading}
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Adicionando...
+                </>
+              ) : (
+                'Adicionar Sessões'
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

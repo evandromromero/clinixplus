@@ -1424,14 +1424,107 @@ export const ClientPackage = {
         throw new Error('Índice de sessão inválido');
       }
       
-      // Atualizar o pacote com o novo histórico
+      // Atualizar o pacote com o novo histórico E decrementar sessions_used
       await this.update(packageId, {
-        session_history: updatedSessionHistory
+        session_history: updatedSessionHistory,
+        sessions_used: Math.max(0, (packageData.sessions_used || 0) - 1)
       });
       
       return { success: true };
     } catch (error) {
       console.error(`Erro ao remover sessão do pacote ${packageId}:`, error);
+      throw error;
+    }
+  },
+
+  async addSessionsToPackage(packageId, servicesAdditions, reason = '', employeeName = '') {
+    try {
+      if (!packageId) {
+        throw new Error('ID do pacote não fornecido');
+      }
+      
+      if (!servicesAdditions || !Array.isArray(servicesAdditions)) {
+        throw new Error('Lista de serviços não fornecida');
+      }
+
+      // Calcular total de sessões a adicionar
+      const totalAdditionalSessions = servicesAdditions.reduce((sum, service) => 
+        sum + (service.additional_quantity || 0), 0
+      );
+
+      if (totalAdditionalSessions <= 0) {
+        throw new Error('Nenhuma sessão foi adicionada');
+      }
+
+      if (totalAdditionalSessions > 100) {
+        throw new Error('Máximo de 100 sessões por vez');
+      }
+      
+      // Obter o pacote atual
+      const packageData = await this.get(packageId);
+      if (!packageData) {
+        throw new Error('Pacote não encontrado');
+      }
+      
+      // Calcular novo total de sessões
+      const currentTotal = packageData.total_sessions || 0;
+      const newTotal = currentTotal + totalAdditionalSessions;
+      
+      // Atualizar serviços no package_snapshot (se for pacote personalizado)
+      let updatedPackageSnapshot = packageData.package_snapshot;
+      if (updatedPackageSnapshot?.services) {
+        updatedPackageSnapshot = {
+          ...updatedPackageSnapshot,
+          services: updatedPackageSnapshot.services.map(service => {
+            const addition = servicesAdditions.find(add => add.service_id === service.service_id);
+            if (addition && addition.additional_quantity > 0) {
+              return {
+                ...service,
+                quantity: (service.quantity || 0) + addition.additional_quantity
+              };
+            }
+            return service;
+          })
+        };
+      }
+      
+      // Criar log da adição
+      const additionLog = {
+        date: new Date().toISOString(),
+        services_added: servicesAdditions.filter(s => s.additional_quantity > 0),
+        total_sessions_added: totalAdditionalSessions,
+        reason: reason || 'Não informado',
+        employee_name: employeeName || 'Não informado',
+        previous_total: currentTotal,
+        new_total: newTotal
+      };
+      
+      // Preparar dados para atualização
+      const updateData = {
+        total_sessions: newTotal,
+        sessions_addition_history: [
+          ...(packageData.sessions_addition_history || []),
+          additionLog
+        ]
+      };
+
+      // Adicionar package_snapshot atualizado se necessário
+      if (updatedPackageSnapshot) {
+        updateData.package_snapshot = updatedPackageSnapshot;
+      }
+      
+      // Atualizar o pacote
+      await this.update(packageId, updateData);
+      
+      return { 
+        success: true, 
+        previousTotal: currentTotal,
+        newTotal: newTotal,
+        sessionsAdded: totalAdditionalSessions,
+        servicesUpdated: servicesAdditions.filter(s => s.additional_quantity > 0)
+      };
+    } catch (error) {
+      console.error(`Erro ao adicionar sessões ao pacote ${packageId}:`, error);
       throw error;
     }
   }
