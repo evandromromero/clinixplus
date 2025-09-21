@@ -48,7 +48,7 @@ import { ptBR } from "date-fns/locale";
 import html2pdf from 'html2pdf.js';
 import DependentList from '@/components/clients/DependentList'; 
 import DependentForm from '@/components/clients/DependentForm'; 
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import RateLimitHandler from '@/components/RateLimitHandler';
 import toast from 'react-hot-toast';
 import { Label } from "@/components/ui/label";
@@ -113,6 +113,19 @@ export default function ClientDetails() {
   const [expandedPackages, setExpandedPackages] = useState({});
   const [signature, setSignature] = useState(null);
   const { openModal } = useSignatureModal();
+  const [showAddSessionsDialog, setShowAddSessionsDialog] = useState(false);
+  const [packageToAddSessions, setPackageToAddSessions] = useState(null);
+  const [addSessionsForm, setAddSessionsForm] = useState({
+    services: [],
+    reason: '',
+    observations: ''
+  });
+  const [showCancelPackageDialog, setShowCancelPackageDialog] = useState(false);
+  const [packageToCancel, setPackageToCancel] = useState(null);
+  const [cancelPackageForm, setCancelPackageForm] = useState({
+    reason: '',
+    observations: ''
+  });
   const sigCanvasRef = useRef();
   const urlParams = new URLSearchParams(window.location.search);
   const clientId = urlParams.get('id');
@@ -720,6 +733,168 @@ export default function ClientDetails() {
     setSelectedSubscription(subscription);
     setShowPaymentHistoryDialog(true);
   };
+
+  // Função para abrir modal de adicionar sessões
+  const openAddSessionsDialog = async (packageId) => {
+    if (!packageId) {
+      toast.error("Pacote não encontrado");
+      return;
+    }
+
+    try {
+      // Buscar dados do pacote para mostrar os serviços
+      const packageData = await ClientPackage.get(packageId);
+      if (!packageData) {
+        toast.error("Dados do pacote não encontrados");
+        return;
+      }
+
+      // Processar serviços do pacote
+      let packageServices = [];
+      
+      if (packageData.package_snapshot?.services) {
+        // Pacote personalizado
+        for (const service of packageData.package_snapshot.services) {
+          const serviceData = services.find(s => s.id === service.service_id);
+          packageServices.push({
+            service_id: service.service_id,
+            service_name: serviceData?.name || 'Serviço não encontrado',
+            current_quantity: service.quantity || 0,
+            additional_quantity: 0
+          });
+        }
+      } else if (packageData.package_id) {
+        // Pacote regular
+        const packageInfo = packages.find(p => p.id === packageData.package_id);
+        if (packageInfo?.services) {
+          for (const service of packageInfo.services) {
+            const serviceData = services.find(s => s.id === service.service_id);
+            packageServices.push({
+              service_id: service.service_id,
+              service_name: serviceData?.name || 'Serviço não encontrado',
+              current_quantity: service.quantity || 0,
+              additional_quantity: 0
+            });
+          }
+        }
+      }
+
+      setPackageToAddSessions(packageData);
+      setAddSessionsForm({
+        services: packageServices,
+        reason: '',
+        observations: ''
+      });
+      setShowAddSessionsDialog(true);
+    } catch (error) {
+      console.error('Erro ao buscar dados do pacote:', error);
+      toast.error("Erro ao carregar dados do pacote");
+    }
+  };
+
+  // Função para adicionar sessões
+  const handleAddSessions = async () => {
+    try {
+      // Validar se há sessões para adicionar
+      const servicesWithAdditions = addSessionsForm.services.filter(s => s.additional_quantity > 0);
+      
+      if (servicesWithAdditions.length === 0) {
+        toast.error("Adicione pelo menos uma sessão para algum serviço");
+        return;
+      }
+
+      // Validar motivo
+      if (!addSessionsForm.reason) {
+        toast.error("Selecione o motivo da adição");
+        return;
+      }
+
+      setIsLoading(true);
+
+      // Chamar função da entidade
+      const result = await ClientPackage.addSessionsToPackage(
+        packageToAddSessions.id,
+        servicesWithAdditions,
+        addSessionsForm.reason,
+        'Administrador' // TODO: Pegar nome do usuário logado
+      );
+
+      // Atualizar apenas o pacote específico na lista (sem recarregar tudo)
+      const updatedPackageData = await ClientPackage.get(packageToAddSessions.id);
+      
+      setClientPackages(prevPackages => 
+        prevPackages.map(pkg => 
+          pkg.id === packageToAddSessions.id ? updatedPackageData : pkg
+        )
+      );
+
+      // Fechar modal
+      setShowAddSessionsDialog(false);
+
+      // Mostrar sucesso
+      toast.success(`${result.sessionsAdded} sessões adicionadas com sucesso!`);
+
+    } catch (error) {
+      console.error('Erro ao adicionar sessões:', error);
+      toast.error(error.message || "Erro ao adicionar sessões. Tente novamente.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const openCancelPackageDialog = (packageId) => {
+    if (!packageId) {
+      toast.error("Pacote não encontrado");
+      return;
+    }
+
+    setPackageToCancel(packageId);
+    setCancelPackageForm({
+      reason: '',
+      observations: ''
+    });
+    setShowCancelPackageDialog(true);
+  };
+
+  const handleCancelPackage = async () => {
+    try {
+      // Validar motivo
+      if (!cancelPackageForm.reason) {
+        toast.error("Selecione o motivo do cancelamento");
+        return;
+      }
+
+      setIsLoading(true);
+
+      // Chamar função da entidade
+      const result = await ClientPackage.cancelPackage(
+        packageToCancel,
+        cancelPackageForm.reason,
+        'Administrador' // TODO: Pegar nome do usuário logado
+      );
+
+      // Atualizar apenas o pacote específico na lista (sem recarregar tudo)
+      const updatedPackageData = await ClientPackage.get(packageToCancel);
+      
+      setClientPackages(prevPackages => 
+        prevPackages.map(pkg => 
+          pkg.id === packageToCancel ? updatedPackageData : pkg
+        )
+      );
+
+      // Fechar modal
+      setShowCancelPackageDialog(false);
+
+      // Mostrar sucesso
+      toast.success("Pacote cancelado com sucesso!");
+
+    } catch (error) {
+      console.error('Erro ao cancelar pacote:', error);
+      toast.error(error.message || "Erro ao cancelar pacote. Tente novamente.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
   
   // Função para formatar valor monetário
   const formatCurrency = (value) => {
@@ -1303,10 +1478,16 @@ export default function ClientDetails() {
                               ? 'bg-[#518CD0] text-white border border-[#3475B8]'
                               : pkg.status === 'finalizado'
                               ? 'bg-gray-100 text-gray-800 border border-gray-200'
+                              : pkg.status === 'cancelado'
+                              ? 'bg-red-100 text-red-800 border border-red-200'
+                              : pkg.status === 'expirado'
+                              ? 'bg-amber-100 text-amber-800 border border-amber-200'
                               : 'bg-yellow-100 text-yellow-800 border border-yellow-200'
                           }`}>
                             {pkg.status === 'ativo' ? 'Ativo' : 
-                             pkg.status === 'finalizado' ? 'Finalizado' : 'Pendente'}
+                             pkg.status === 'finalizado' ? 'Finalizado' : 
+                             pkg.status === 'cancelado' ? 'Cancelado' :
+                             pkg.status === 'expirado' ? 'Expirado' : 'Pendente'}
                           </span>
                           {pkg.valid_until && (
                             <p className="text-sm text-[#3475B8] mt-1">
@@ -1427,14 +1608,36 @@ export default function ClientDetails() {
                           <span className="font-medium text-[#175EA0]">Valor Total:</span>
                           <span className="text-[#3475B8]"> R$ {pkg.total_price?.toFixed(2) || '0.00'}</span>
                         </div>
-                        {pkg.status === 'ativo' && pkg.sessions_used < pkg.total_sessions && (
-                          <Link to={createPageUrl("Appointments", { client_id: clientId, package_id: pkg.id })}>
-                            <Button variant="outline" size="sm" className="bg-[#8BBAFF]/10 border-[#6EA3E7] text-[#175EA0] hover:bg-[#8BBAFF]/20">
-                              <Plus className="w-4 h-4" />
-                              Agendar Sessão
+                        <div className="flex gap-2 flex-wrap">
+                          {pkg.status === 'ativo' && pkg.sessions_used < pkg.total_sessions && (
+                            <Link to={createPageUrl("Appointments", { client_id: clientId, package_id: pkg.id })}>
+                              <Button variant="outline" size="sm" className="bg-[#8BBAFF]/10 border-[#6EA3E7] text-[#175EA0] hover:bg-[#8BBAFF]/20">
+                                <Plus className="w-4 h-4" />
+                                Agendar Sessão
+                              </Button>
+                            </Link>
+                          )}
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="bg-green-50 border-green-300 text-green-700 hover:bg-green-100"
+                            onClick={() => openAddSessionsDialog(pkg.id)}
+                          >
+                            <Plus className="w-4 h-4" />
+                            Adicionar Sessões
+                          </Button>
+                          {pkg.status === 'ativo' && (
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="bg-orange-50 border-orange-300 text-orange-700 hover:bg-orange-100"
+                              onClick={() => openCancelPackageDialog(pkg.id)}
+                            >
+                              <X className="w-4 h-4" />
+                              Cancelar Pacote
                             </Button>
-                          </Link>
-                        )}
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -2455,6 +2658,166 @@ export default function ClientDetails() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowPaymentHistoryDialog(false)}>
               Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Adição de Sessões */}
+      <Dialog open={showAddSessionsDialog} onOpenChange={setShowAddSessionsDialog}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Adicionar Sessões ao Pacote</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Serviços do Pacote</Label>
+              <div className="space-y-3 max-h-60 overflow-y-auto">
+                {addSessionsForm.services.map((service, index) => (
+                  <div key={service.service_id} className="border rounded-lg p-3 bg-gray-50">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="font-medium text-sm">{service.service_name}</span>
+                      <span className="text-xs text-gray-500">
+                        Atual: {service.current_quantity} sessões
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor={`service-${index}`} className="text-xs">
+                        Adicionar:
+                      </Label>
+                      <Input
+                        id={`service-${index}`}
+                        type="number"
+                        min="0"
+                        max="50"
+                        value={service.additional_quantity}
+                        onChange={(e) => {
+                          const newServices = [...addSessionsForm.services];
+                          newServices[index].additional_quantity = parseInt(e.target.value) || 0;
+                          setAddSessionsForm(prev => ({
+                            ...prev,
+                            services: newServices
+                          }));
+                        }}
+                        className="w-20 h-8 text-sm"
+                        placeholder="0"
+                      />
+                      <span className="text-xs text-gray-500">sessões</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {addSessionsForm.services.length === 0 && (
+                <p className="text-sm text-gray-500 text-center py-4">
+                  Nenhum serviço encontrado no pacote
+                </p>
+              )}
+            </div>
+            
+            <div>
+              <Label htmlFor="reason">Motivo</Label>
+              <select
+                id="reason"
+                className="w-full p-2 border border-gray-300 rounded-md"
+                value={addSessionsForm.reason}
+                onChange={(e) => setAddSessionsForm(prev => ({
+                  ...prev,
+                  reason: e.target.value
+                }))}
+              >
+                <option value="">Selecione o motivo</option>
+                <option value="Correção">Correção de quantidade</option>
+                <option value="Brinde">Brinde/Cortesia</option>
+                <option value="Promoção">Promoção especial</option>
+                <option value="Compensação">Compensação</option>
+                <option value="Outros">Outros</option>
+              </select>
+            </div>
+
+            <div>
+              <Label htmlFor="observations">Observações (opcional)</Label>
+              <Textarea
+                id="observations"
+                value={addSessionsForm.observations}
+                onChange={(e) => setAddSessionsForm(prev => ({
+                  ...prev,
+                  observations: e.target.value
+                }))}
+                placeholder="Adicione observações sobre esta adição..."
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddSessionsDialog(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              className="bg-green-600 hover:bg-green-700 text-white"
+              onClick={handleAddSessions}
+              disabled={isLoading}
+            >
+              {isLoading ? 'Adicionando...' : 'Adicionar Sessões'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Cancelamento de Pacote */}
+      <Dialog open={showCancelPackageDialog} onOpenChange={setShowCancelPackageDialog}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Cancelar Pacote</DialogTitle>
+            <DialogDescription>
+              Esta ação cancelará o pacote e ele não aparecerá mais nos agendamentos. Esta ação não pode ser desfeita.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="cancel-reason">Motivo do Cancelamento</Label>
+              <select
+                id="cancel-reason"
+                className="w-full p-2 border border-gray-300 rounded-md"
+                value={cancelPackageForm.reason}
+                onChange={(e) => setCancelPackageForm(prev => ({
+                  ...prev,
+                  reason: e.target.value
+                }))}
+              >
+                <option value="">Selecione o motivo</option>
+                <option value="Cliente desistiu">Cliente desistiu</option>
+                <option value="Mudança de planos">Mudança de planos</option>
+                <option value="Problemas financeiros">Problemas financeiros</option>
+                <option value="Insatisfação com serviço">Insatisfação com serviço</option>
+                <option value="Mudança de endereço">Mudança de endereço</option>
+                <option value="Outros">Outros</option>
+              </select>
+            </div>
+
+            <div>
+              <Label htmlFor="cancel-observations">Observações (opcional)</Label>
+              <Textarea
+                id="cancel-observations"
+                value={cancelPackageForm.observations}
+                onChange={(e) => setCancelPackageForm(prev => ({
+                  ...prev,
+                  observations: e.target.value
+                }))}
+                placeholder="Adicione observações sobre o cancelamento..."
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCancelPackageDialog(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              className="bg-orange-600 hover:bg-orange-700 text-white"
+              onClick={handleCancelPackage}
+              disabled={isLoading}
+            >
+              {isLoading ? 'Cancelando...' : 'Confirmar Cancelamento'}
             </Button>
           </DialogFooter>
         </DialogContent>

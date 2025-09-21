@@ -30,7 +30,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Link, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { useToast } from "@/components/ui/use-toast";
+import toast from 'react-hot-toast';
 import RateLimitHandler from '@/components/RateLimitHandler';
 import { useSignatureModal } from '@/components/SignatureModal';
 import { 
@@ -44,14 +44,14 @@ import {
   ChevronUp, 
   ChevronDown,
   FileText,
-  AlertTriangle
+  AlertTriangle,
+  X
 } from "lucide-react";
 import { collection, query, where, limit, getDocs, doc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/firebase/config';
 import { Loader2 } from 'lucide-react';
 
 export default function ClientPackages() {
-  const { toast } = useToast();
   const navigate = useNavigate();
   const [clientPackages, setClientPackages] = useState([]);
   const [packages, setPackages] = useState([]);
@@ -81,6 +81,12 @@ export default function ClientPackages() {
   const [packageToAddSessions, setPackageToAddSessions] = useState(null);
   const [addSessionsForm, setAddSessionsForm] = useState({
     services: [],
+    reason: '',
+    observations: ''
+  });
+  const [showCancelPackageDialog, setShowCancelPackageDialog] = useState(false);
+  const [packageToCancel, setPackageToCancel] = useState(null);
+  const [cancelPackageForm, setCancelPackageForm] = useState({
     reason: '',
     observations: ''
   });
@@ -1505,6 +1511,60 @@ export default function ClientPackages() {
     }
   };
 
+  const openCancelPackageDialog = (packageId) => {
+    if (!packageId) {
+      toast.error("Pacote não encontrado");
+      return;
+    }
+
+    setPackageToCancel(packageId);
+    setCancelPackageForm({
+      reason: '',
+      observations: ''
+    });
+    setShowCancelPackageDialog(true);
+  };
+
+  const handleCancelPackage = async () => {
+    try {
+      // Validar motivo
+      if (!cancelPackageForm.reason) {
+        toast.error("Selecione o motivo do cancelamento");
+        return;
+      }
+
+      setLoading(true);
+
+      // Chamar função da entidade
+      const result = await ClientPackage.cancelPackage(
+        packageToCancel,
+        cancelPackageForm.reason,
+        'Administrador' // TODO: Pegar nome do usuário logado
+      );
+
+      // Atualizar apenas o pacote específico na lista (sem recarregar tudo)
+      const updatedPackageData = await ClientPackage.get(packageToCancel);
+      
+      setClientPackages(prevPackages => 
+        prevPackages.map(pkg => 
+          pkg.id === packageToCancel ? updatedPackageData : pkg
+        )
+      );
+
+      // Fechar modal
+      setShowCancelPackageDialog(false);
+
+      // Mostrar sucesso
+      toast.success("Pacote cancelado com sucesso!");
+
+    } catch (error) {
+      console.error('Erro ao cancelar pacote:', error);
+      toast.error(error.message || "Erro ao cancelar pacote. Tente novamente.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleDeletePackage = async (packageId) => {
     console.log('[DELETE PACKAGE] Início da função. packageId:', packageId);
     try {
@@ -2520,6 +2580,20 @@ export default function ClientPackages() {
                           >
                             <Plus className="h-4 w-4" />
                           </Button>
+                          {clientPkg.status === 'ativo' && (
+                            <Button 
+                              variant="ghost" 
+                              size="icon"
+                              className="text-orange-600 hover:bg-orange-50"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openCancelPackageDialog(clientPkg.id);
+                              }}
+                              title="Cancelar pacote"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          )}
                           <Button 
                             variant="ghost" 
                             size="icon"
@@ -4016,6 +4090,73 @@ export default function ClientPackages() {
                 </>
               ) : (
                 'Adicionar Sessões'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Cancelamento de Pacote */}
+      <Dialog open={showCancelPackageDialog} onOpenChange={setShowCancelPackageDialog}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Cancelar Pacote</DialogTitle>
+            <DialogDescription>
+              Esta ação cancelará o pacote e ele não aparecerá mais nos agendamentos. Esta ação não pode ser desfeita.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="cancel-reason">Motivo do Cancelamento</Label>
+              <select
+                id="cancel-reason"
+                className="w-full p-2 border border-gray-300 rounded-md"
+                value={cancelPackageForm.reason}
+                onChange={(e) => setCancelPackageForm(prev => ({
+                  ...prev,
+                  reason: e.target.value
+                }))}
+              >
+                <option value="">Selecione o motivo</option>
+                <option value="Cliente desistiu">Cliente desistiu</option>
+                <option value="Mudança de planos">Mudança de planos</option>
+                <option value="Problemas financeiros">Problemas financeiros</option>
+                <option value="Insatisfação com serviço">Insatisfação com serviço</option>
+                <option value="Mudança de endereço">Mudança de endereço</option>
+                <option value="Outros">Outros</option>
+              </select>
+            </div>
+
+            <div>
+              <Label htmlFor="cancel-observations">Observações (opcional)</Label>
+              <Textarea
+                id="cancel-observations"
+                value={cancelPackageForm.observations}
+                onChange={(e) => setCancelPackageForm(prev => ({
+                  ...prev,
+                  observations: e.target.value
+                }))}
+                placeholder="Adicione observações sobre o cancelamento..."
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCancelPackageDialog(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              className="bg-orange-600 hover:bg-orange-700 text-white"
+              onClick={handleCancelPackage}
+              disabled={loading}
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Cancelando...
+                </>
+              ) : (
+                'Confirmar Cancelamento'
               )}
             </Button>
           </DialogFooter>

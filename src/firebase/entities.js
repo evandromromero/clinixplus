@@ -1527,6 +1527,59 @@ export const ClientPackage = {
       console.error(`Erro ao adicionar sessões ao pacote ${packageId}:`, error);
       throw error;
     }
+  },
+
+  async cancelPackage(packageId, reason = '', employeeName = '') {
+    try {
+      if (!packageId) {
+        throw new Error('ID do pacote não fornecido');
+      }
+      
+      // Obter o pacote atual
+      const packageData = await this.get(packageId);
+      if (!packageData) {
+        throw new Error('Pacote não encontrado');
+      }
+      
+      // Verificar se o pacote pode ser cancelado
+      if (packageData.status === 'cancelado') {
+        throw new Error('Pacote já está cancelado');
+      }
+      
+      if (packageData.status !== 'ativo') {
+        throw new Error('Apenas pacotes ativos podem ser cancelados');
+      }
+      
+      // Criar log do cancelamento
+      const cancellationLog = {
+        date: new Date().toISOString(),
+        reason: reason || 'Não informado',
+        employee_name: employeeName || 'Não informado',
+        previous_status: packageData.status,
+        sessions_used_at_cancellation: packageData.sessions_used || 0,
+        total_sessions: packageData.total_sessions || 0
+      };
+      
+      // Atualizar o pacote para cancelado
+      await this.update(packageId, {
+        status: 'cancelado',
+        cancellation_history: [
+          ...(packageData.cancellation_history || []),
+          cancellationLog
+        ],
+        cancelled_date: new Date().toISOString()
+      });
+      
+      return { 
+        success: true,
+        previousStatus: packageData.status,
+        newStatus: 'cancelado',
+        cancellationLog: cancellationLog
+      };
+    } catch (error) {
+      console.error(`Erro ao cancelar pacote ${packageId}:`, error);
+      throw error;
+    }
   }
 };
 
