@@ -1267,7 +1267,124 @@ export const Inventory = {
   }
 };
 
-export const Sale = createEnhancedEntity('sales', null); 
+export const Sale = {
+  ...createEnhancedEntity('sales', null),
+  
+  // Função para cancelar venda com auditoria completa
+  cancelSale: async function(saleId, cancelData) {
+    const { motivo, observacoes, usuario_id, usuario_nome } = cancelData;
+    
+    try {
+      // 1. Buscar a venda atual
+      const sale = await this.get(saleId);
+      if (!sale) {
+        throw new Error('Venda não encontrada');
+      }
+      
+      if (sale.status === 'cancelada') {
+        throw new Error('Venda já está cancelada');
+      }
+      
+      // 2. Atualizar status da venda
+      const updatedSale = await this.update(saleId, {
+        status: 'cancelada',
+        status_original: sale.status,
+        cancelamento: {
+          data: new Date().toISOString(),
+          motivo: motivo,
+          observacoes: observacoes || '',
+          usuario_id: usuario_id,
+          usuario_nome: usuario_nome,
+          valor_original: sale.total_amount || 0
+        }
+      });
+      
+      // 3. Buscar e cancelar pacotes relacionados
+      const relatedPackages = await ClientPackage.filter({ sale_id: saleId });
+      const canceledPackages = [];
+      
+      for (const pkg of relatedPackages) {
+        if (pkg.status !== 'cancelado') {
+          await ClientPackage.update(pkg.id, {
+            status: 'cancelado',
+            status_original: pkg.status,
+            cancelamento: {
+              data: new Date().toISOString(),
+              motivo: 'Venda cancelada',
+              motivo_venda: motivo,
+              observacoes: observacoes || '',
+              usuario_id: usuario_id,
+              usuario_nome: usuario_nome,
+              sessoes_restantes: pkg.total_sessions - (pkg.sessions_used || 0)
+            }
+          });
+          canceledPackages.push(pkg.id);
+        }
+      }
+      
+      // 4. Buscar e cancelar transações financeiras relacionadas
+      const relatedTransactions = await FinancialTransaction.filter({ sale_id: saleId });
+      const canceledTransactions = [];
+      
+      for (const transaction of relatedTransactions) {
+        if (transaction.status !== 'cancelada') {
+          await FinancialTransaction.update(transaction.id, {
+            status: 'cancelada',
+            status_original: transaction.status,
+            cancelamento: {
+              data: new Date().toISOString(),
+              motivo: 'Venda cancelada',
+              motivo_venda: motivo,
+              usuario_id: usuario_id,
+              usuario_nome: usuario_nome,
+              valor_original: transaction.amount || 0
+            }
+          });
+          canceledTransactions.push(transaction.id);
+        }
+      }
+      
+      // 5. Criar log de auditoria
+      const auditLog = {
+        acao: 'cancelamento_venda',
+        venda_id: saleId,
+        usuario_id: usuario_id,
+        usuario_nome: usuario_nome,
+        data: new Date().toISOString(),
+        motivo: motivo,
+        observacoes: observacoes || '',
+        itens_afetados: {
+          pacotes: canceledPackages,
+          transacoes: canceledTransactions,
+          valor_total: sale.total_amount || 0
+        }
+      };
+      
+      // Salvar log de auditoria
+      await addDoc(collection(db, 'audit_logs'), auditLog);
+      
+      console.log('[CANCEL SALE] Venda cancelada com sucesso:', {
+        saleId,
+        packagesAffected: canceledPackages.length,
+        transactionsAffected: canceledTransactions.length
+      });
+      
+      return {
+        success: true,
+        sale: updatedSale,
+        affectedItems: {
+          packages: canceledPackages,
+          transactions: canceledTransactions
+        },
+        auditLog
+      };
+      
+    } catch (error) {
+      console.error('[CANCEL SALE] Erro ao cancelar venda:', error);
+      throw error;
+    }
+  }
+}; 
 export const FinancialTransaction = createEnhancedEntity('financial_transactions', base44.entities.FinancialTransaction);
 
 // Implementação completa da entidade ClientPackage usando apenas Firebase

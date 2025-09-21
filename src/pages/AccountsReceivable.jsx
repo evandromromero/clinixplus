@@ -55,8 +55,14 @@ export default function AccountsReceivable() {
   // Estado para o diálogo de detalhes
   const [showDetailsDialog, setShowDetailsDialog] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState(null);
-  const [receiptHtml, setReceiptHtml] = useState('');
-  const receiptRef = useRef(null);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState(null);
+  
+  // Estados para cancelamento de venda
+  const [showCancelSaleDialog, setShowCancelSaleDialog] = useState(false);
+  const [saleToCancel, setSaleToCancel] = useState(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelObservations, setCancelObservations] = useState('');
 
   // Estado para o diálogo de nova conta a receber
   const [showNewReceivableDialog, setShowNewReceivableDialog] = useState(false);
@@ -67,7 +73,6 @@ export default function AccountsReceivable() {
   });
   
   // Estado para o diálogo de edição de transação
-  const [showEditDialog, setShowEditDialog] = useState(false);
   const [transactionToEdit, setTransactionToEdit] = useState(null);
 
   // Novo estado para busca de clientes sob demanda
@@ -86,30 +91,86 @@ export default function AccountsReceivable() {
     try {
       if (!transaction) return;
 
-      // Confirmar com o usuário
+      // Se tiver sale_id, abrir modal de cancelamento em vez de excluir diretamente
+      if (transaction.sale_id) {
+        setSaleToCancel({
+          id: transaction.sale_id,
+          transaction: transaction
+        });
+        setShowCancelSaleDialog(true);
+        return;
+      }
+
+      // Para transações sem venda, manter o comportamento de exclusão
       if (!window.confirm('Tem certeza que deseja excluir esta transação? Esta ação não pode ser desfeita.')) {
         return;
       }
 
-      // Se tiver sale_id, excluir a venda primeiro
-      if (transaction.sale_id) {
-        await Sale.delete(transaction.sale_id);
-      }
-
-      // Excluir a transação
       await FinancialTransaction.delete(transaction.id);
-
       loadPageData();
 
       toast({
         title: "Sucesso",
         description: "Transação excluída com sucesso",
+        variant: "success"
       });
     } catch (error) {
-      console.error("Erro ao excluir transação:", error);
+      console.error('Erro ao excluir transação:', error);
       toast({
         title: "Erro",
-        description: "Não foi possível excluir a transação",
+        description: "Erro ao excluir transação. Tente novamente.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleCancelSale = async () => {
+    try {
+      if (!saleToCancel || !cancelReason) {
+        toast({
+          title: "Erro",
+          description: "Selecione um motivo para o cancelamento",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Simular dados do usuário (em produção, pegar do contexto de autenticação)
+      const currentUser = {
+        id: 'admin-user-id',
+        nome: 'Administrador'
+      };
+
+      const cancelData = {
+        motivo: cancelReason,
+        observacoes: cancelObservations,
+        usuario_id: currentUser.id,
+        usuario_nome: currentUser.nome
+      };
+
+      const result = await Sale.cancelSale(saleToCancel.id, cancelData);
+
+      if (result.success) {
+        toast({
+          title: "Sucesso",
+          description: `Venda cancelada com sucesso. ${result.affectedItems.packages.length} pacote(s) e ${result.affectedItems.transactions.length} transação(ões) foram cancelados.`,
+          variant: "success"
+        });
+
+        // Fechar modal e limpar estados
+        setShowCancelSaleDialog(false);
+        setSaleToCancel(null);
+        setCancelReason('');
+        setCancelObservations('');
+
+        // Recarregar dados
+        loadPageData();
+      }
+    } catch (error) {
+      console.error('Erro ao cancelar venda:', error);
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao cancelar venda. Tente novamente.",
         variant: "destructive"
       });
     }
@@ -525,93 +586,36 @@ export default function AccountsReceivable() {
   
   useEffect(() => {
     // Carregar dados na montagem do componente
-    loadPageData();
+    loadPageData(1, itemsPerPage);
     
     // Limpar referência quando o componente for desmontado
     return () => {
       isMounted.current = false;
     };
-  }, []);
-
-  // Recarregar quando página ou itens por página mudam
-  useEffect(() => {
-    loadPageData(currentPage, itemsPerPage);
-  }, [currentPage, itemsPerPage]);
+  }, []); // Executar apenas uma vez ao montar o componente
 
   useEffect(() => {
     loadPaymentMethods();
   }, []);
 
   useEffect(() => {
-    // OTIMIZAÇÃO: Aplicar filtros de forma mais eficiente
-    if (!transactions.length) return;
-    
-    // Usar um único loop para aplicar todos os filtros de uma vez
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    const thisWeekStart = new Date(today);
-    thisWeekStart.setDate(today.getDate() - today.getDay()); // Domingo
-    
-    const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-    
-    // Preparar o termo de busca uma única vez
-    const term = searchTerm ? searchTerm.toLowerCase() : '';
-    
-    // Aplicar todos os filtros em uma única passagem
-    const filtered = transactions.filter(t => {
-      // Filtro de status
-      if (statusFilter !== 'all' && t.status !== statusFilter) {
-        return false;
-      }
-      
-      // Filtro de data
-      if (dateFilter !== 'all') {
-        if (!t.due_date) return false;
-        
-        const dueDate = new Date(t.due_date);
-        dueDate.setHours(0, 0, 0, 0);
-        
-        switch (dateFilter) {
-          case 'today':
-            if (dueDate.getTime() !== today.getTime()) return false;
-            break;
-          case 'thisWeek':
-            if (!(dueDate >= thisWeekStart && dueDate <= today)) return false;
-            break;
-          case 'thisMonth':
-            if (!(dueDate >= thisMonthStart && dueDate <= today)) return false;
-            break;
-          case 'overdue':
-            if (!(dueDate < today)) return false;
-            break;
-        }
-      }
-      
-      // Filtro de cliente
-      if (clientFilter !== 'all' && clientFilter !== 'sem_cliente' && t.client_id !== clientFilter) {
-        return false;
-      }
-      
-      // Filtro de busca
-      if (term) {
-        const descriptionMatch = t.description && t.description.toLowerCase().includes(term);
-        const clientNameMatch = t.client_name && t.client_name.toLowerCase().includes(term);
-        if (!descriptionMatch && !clientNameMatch) return false;
-      }
-      
-      return true;
-    });
-    
-    setFilteredTransactions(filtered);
-  }, [transactions, statusFilter, dateFilter, clientFilter, searchTerm]);
+    // Com paginação otimizada, os filtros devem ser aplicados no servidor
+    // Por enquanto, usar transactions diretamente até implementar filtros no servidor
+    setFilteredTransactions(transactions);
+  }, [transactions]);
+
+  // Recarregar dados quando filtros mudarem
+  useEffect(() => {
+    // Invalidar cache para forçar recálculo dos filtros
+    dataCache.current.allTransactions = null;
+    setCurrentPage(1); // Voltar para primeira página ao filtrar
+    loadPageData(1, itemsPerPage);
+  }, [statusFilter, dateFilter, clientFilter, searchTerm]);
 
   useEffect(() => {
-    // Calcular paginação sempre que os dados filtrados mudarem
-    setTotalPages(Math.ceil(filteredTransactions.length / itemsPerPage));
-    // Resetar para a primeira página quando os filtros mudarem
-    setCurrentPage(1);
-  }, [filteredTransactions, itemsPerPage]);
+    // Calcular paginação baseada no total de transações, não apenas as filtradas da página atual
+    setTotalPages(Math.ceil(totalTransactions / itemsPerPage));
+  }, [totalTransactions, itemsPerPage]);
 
   const toggleSort = (field) => {
     if (sortField === field) {
@@ -974,6 +978,105 @@ export default function AccountsReceivable() {
     }
   };
 
+  // Função para aplicar filtros e ordenação no servidor
+  const applyServerSideFilters = (transactions) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const thisWeekStart = new Date(today);
+    thisWeekStart.setDate(today.getDate() - today.getDay()); // Domingo
+    
+    const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    
+    // Preparar o termo de busca uma única vez
+    const term = searchTerm ? searchTerm.toLowerCase() : '';
+    
+    // Primeiro aplicar filtros
+    const filtered = transactions.filter(t => {
+      // Filtro de status
+      if (statusFilter !== 'all' && t.status !== statusFilter) {
+        return false;
+      }
+      
+      // Filtro de data (baseado na data de vencimento ou pagamento)
+      if (dateFilter !== 'all') {
+        let targetDate = null;
+        
+        // Priorizar data de pagamento se existir, senão usar data de vencimento
+        if (t.payment_date) {
+          targetDate = new Date(t.payment_date);
+        } else if (t.due_date) {
+          targetDate = new Date(t.due_date);
+        }
+        
+        if (!targetDate) return false;
+        
+        targetDate.setHours(0, 0, 0, 0);
+        
+        switch (dateFilter) {
+          case 'today':
+            if (targetDate.getTime() !== today.getTime()) return false;
+            break;
+          case 'thisWeek':
+            if (!(targetDate >= thisWeekStart && targetDate <= today)) return false;
+            break;
+          case 'thisMonth':
+            if (!(targetDate >= thisMonthStart && targetDate <= today)) return false;
+            break;
+          case 'overdue':
+            // Para vencidas, usar apenas data de vencimento
+            const dueDate = t.due_date ? new Date(t.due_date) : null;
+            if (!dueDate) return false;
+            dueDate.setHours(0, 0, 0, 0);
+            if (!(dueDate < today && t.status !== 'pago')) return false;
+            break;
+        }
+      }
+      
+      // Filtro de cliente
+      if (clientFilter !== 'all' && clientFilter !== 'sem_cliente' && t.client_id !== clientFilter) {
+        return false;
+      }
+      
+      // Filtro de busca (será aplicado após carregar dados do cliente)
+      // Por enquanto, aplicar apenas se já tiver client_name
+      if (term && t.client_name) {
+        const descriptionMatch = t.description && t.description.toLowerCase().includes(term);
+        const clientNameMatch = t.client_name && t.client_name.toLowerCase().includes(term);
+        if (!descriptionMatch && !clientNameMatch) return false;
+      }
+      
+      return true;
+    });
+    
+    // ORDENAÇÃO: Mais recentes primeiro (data de pagamento prioritária)
+    return filtered.sort((a, b) => {
+      // Obter data de referência para ordenação (priorizar payment_date)
+      const getDateForSort = (transaction) => {
+        if (transaction.payment_date) {
+          return new Date(transaction.payment_date);
+        } else if (transaction.due_date) {
+          return new Date(transaction.due_date);
+        }
+        return new Date(0); // Data muito antiga se não tiver nenhuma data
+      };
+      
+      const dateA = getDateForSort(a);
+      const dateB = getDateForSort(b);
+      
+      // Ordenar por data decrescente (mais recente primeiro)
+      if (dateB.getTime() !== dateA.getTime()) {
+        return dateB.getTime() - dateA.getTime();
+      }
+      
+      // Se as datas forem iguais, priorizar transações com payment_date
+      if (a.payment_date && !b.payment_date) return -1;
+      if (!a.payment_date && b.payment_date) return 1;
+      
+      return 0;
+    });
+  };
+
   // Função OTIMIZADA para carregar apenas dados da página atual
   const loadPageData = async (page = currentPage, pageSize = itemsPerPage) => {
     if (!isMounted.current) return;
@@ -998,13 +1101,18 @@ export default function AccountsReceivable() {
         const transactionsData = await FinancialTransaction.filter({ type: 'receita' });
         allTransactions = transactionsData.filter(t => t.type === 'receita' && t.category !== 'abertura_caixa');
         dataCache.current.allTransactions = allTransactions;
-        setTotalTransactions(allTransactions.length);
       }
       
-      // Calcular transações da página atual
+      // APLICAR FILTROS E ORDENAÇÃO NO SERVIDOR
+      const filteredTransactions = applyServerSideFilters(allTransactions);
+      setTotalTransactions(filteredTransactions.length);
+      
+      console.log(`[DEBUG] Transações filtradas e ordenadas: ${filteredTransactions.length} de ${allTransactions.length}`);
+      
+      // Calcular transações da página atual (já filtradas)
       const startIndex = (page - 1) * pageSize;
       const endIndex = startIndex + pageSize;
-      const pageTransactions = allTransactions.slice(startIndex, endIndex);
+      const pageTransactions = filteredTransactions.slice(startIndex, endIndex);
       
       console.log(`[DEBUG] Mostrando transações ${startIndex + 1}-${Math.min(endIndex, allTransactions.length)} de ${allTransactions.length}`);
       
@@ -1105,46 +1213,12 @@ export default function AccountsReceivable() {
     // Função mantida para compatibilidade - redireciona para loadPageData
     return loadPageData();
   };
-        } else {
-          return aValue < bValue ? 1 : -1;
-        }
-      });
-      
-      // Atualizar cache global com timestamp para controle de validade
-      dataCache.current.transactions = sortedTransactions;
-      dataCache.current.lastUpdate = new Date();
-      console.log(`[DEBUG] Cache atualizado com ${sortedTransactions.length} transações`);
-      
-      // Atualizar estado apenas se o componente ainda estiver montado
-      if (isMounted.current) {
-        setTransactions(sortedTransactions);
-        setFilteredTransactions(sortedTransactions);
-        console.log('[DEBUG] Estados atualizados com sucesso');
-      }
-    } catch (error) {
-      console.error('[AccountsReceivable] Erro ao carregar dados:', error);
-      if (isMounted.current) {
-        setError(error);
-        
-        // Exibe mensagem de erro para o usuário
-        toast({
-          title: "Erro ao carregar dados",
-          description: "Não foi possível carregar as transações. Tente novamente mais tarde.",
-          variant: "destructive",
-          duration: 5000,
-        });
-      }
-    } finally {
-      if (isMounted.current) {
-        setIsLoading(false);
-      }
-    }
-  };
 
   // Função para mudar de página com melhor performance
   const handlePageChange = (page) => {
-    // Verificar se é necessário carregar mais dados
     setCurrentPage(page);
+    // Carregar dados da nova página
+    loadPageData(page, itemsPerPage);
     
     // Rolar para o topo da tabela quando mudar de página
     window.scrollTo({ top: document.querySelector('table')?.offsetTop - 100 || 0, behavior: 'smooth' });
@@ -1152,16 +1226,15 @@ export default function AccountsReceivable() {
 
   // Função para mudar o número de itens por página
   const handleItemsPerPageChange = (value) => {
-    setItemsPerPage(parseInt(value));
+    const newItemsPerPage = parseInt(value);
+    setItemsPerPage(newItemsPerPage);
     setCurrentPage(1); // Voltar para a primeira página ao mudar itens por página
+    // Carregar dados com novo tamanho de página
+    loadPageData(1, newItemsPerPage);
   };
 
-  // OTIMIZAÇÃO: Obter os itens da página atual com melhor performance usando useMemo
-  const currentPageItems = React.useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    return filteredTransactions.slice(startIndex, endIndex);
-  }, [filteredTransactions, currentPage, itemsPerPage]);
+  // Com paginação otimizada, transactions já contém apenas os dados da página atual
+  const currentPageItems = transactions;
 
   if (isLoading) {
     return (
@@ -2022,6 +2095,84 @@ export default function AccountsReceivable() {
             </Button>
             <Button onClick={handleSaveEdit}>
               Salvar Alterações
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Cancelamento de Venda */}
+      <Dialog open={showCancelSaleDialog} onOpenChange={setShowCancelSaleDialog}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <XCircle className="h-5 w-5 text-red-500" />
+              Cancelar Venda
+            </DialogTitle>
+            <DialogDescription>
+              Esta ação irá cancelar a venda e todos os itens relacionados (pacotes, transações). 
+              Os dados serão mantidos para auditoria, mas marcados como cancelados.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Motivo do Cancelamento *</Label>
+              <Select value={cancelReason} onValueChange={setCancelReason}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o motivo..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="solicitacao_cliente">Solicitação do Cliente</SelectItem>
+                  <SelectItem value="problema_pagamento">Problema de Pagamento</SelectItem>
+                  <SelectItem value="servico_indisponivel">Serviço Indisponível</SelectItem>
+                  <SelectItem value="erro_dados">Erro nos Dados</SelectItem>
+                  <SelectItem value="duplicacao">Venda Duplicada</SelectItem>
+                  <SelectItem value="outros">Outros</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-2">
+              <Label>Observações (Opcional)</Label>
+              <Textarea 
+                value={cancelObservations}
+                onChange={(e) => setCancelObservations(e.target.value)}
+                placeholder="Descreva detalhes sobre o cancelamento..."
+                rows={3}
+              />
+            </div>
+            
+            {saleToCancel && (
+              <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <h4 className="font-medium text-yellow-800 mb-2">Itens que serão cancelados:</h4>
+                <ul className="text-sm text-yellow-700 space-y-1">
+                  <li>• Venda ID: {saleToCancel.id}</li>
+                  <li>• Transação: {saleToCancel.transaction?.description}</li>
+                  <li>• Valor: R$ {saleToCancel.transaction?.amount?.toFixed(2)}</li>
+                  <li>• Pacotes relacionados serão cancelados automaticamente</li>
+                </ul>
+              </div>
+            )}
+          </div>
+          
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setShowCancelSaleDialog(false);
+                setSaleToCancel(null);
+                setCancelReason('');
+                setCancelObservations('');
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={handleCancelSale}
+              disabled={!cancelReason}
+            >
+              Confirmar Cancelamento
             </Button>
           </DialogFooter>
         </DialogContent>

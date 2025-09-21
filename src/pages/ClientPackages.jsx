@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { format, addDays, isBefore } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
@@ -30,7 +30,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Link, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import toast from 'react-hot-toast';
+import { toast } from "@/components/ui/use-toast";
 import RateLimitHandler from '@/components/RateLimitHandler';
 import { useSignatureModal } from '@/components/SignatureModal';
 import { 
@@ -45,7 +45,8 @@ import {
   ChevronDown,
   FileText,
   AlertTriangle,
-  X
+  X,
+  XCircle
 } from "lucide-react";
 import { collection, query, where, limit, getDocs, doc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/firebase/config';
@@ -75,6 +76,23 @@ export default function ClientPackages() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [searchQuery, setSearchQuery] = useState("");
+  
+  // Estados para paginação otimizada
+  const [totalPackages, setTotalPackages] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  
+  // Cache para dados otimizados
+  const dataCache = useRef({
+    allPackages: null,
+    clients: new Map(),
+    packages: [],
+    services: [],
+    employees: [],
+    lastUpdate: null
+  });
+  
+  const isMounted = useRef(true);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [packageToDelete, setPackageToDelete] = useState(null);
   const [showAddSessionsDialog, setShowAddSessionsDialog] = useState(false);
@@ -990,51 +1008,181 @@ export default function ClientPackages() {
   };
   // ----- Fim Função de Validação -----
   
-  const loadData = async () => {
+  // Função OTIMIZADA para carregar apenas dados da página atual
+  const loadPageData = async (page = currentPage, pageSize = itemsPerPage) => {
+    if (!isMounted.current) return;
+    
     try {
       setLoading(true);
-      const [clientPackagesData, packagesData, servicesData, employeesData] = await Promise.all([
-        ClientPackage.list(),
-        Package.list(),
-        Service.list(),
-        Employee.list()
-      ]);
-
-      // Carregar apenas os clientes que têm pacotes
-      const uniqueClientIds = new Set(clientPackagesData.map(pkg => pkg.client_id));
-      const clientsData = [];
       
-      // Buscar clientes em lotes de 10 para evitar limites do Firestore
-      const clientIdBatches = Array.from(uniqueClientIds).reduce((acc, curr, i) => {
-        const batchIndex = Math.floor(i / 10);
-        if (!acc[batchIndex]) acc[batchIndex] = [];
-        acc[batchIndex].push(curr);
-        return acc;
-      }, []);
-
-      // Buscar cada lote de clientes
-      for (const batch of clientIdBatches) {
-        const batchClients = await Promise.all(
-          batch.map(id => Client.get(id))
-        );
-        clientsData.push(...batchClients.filter(Boolean));
+      console.log(`[DEBUG] Carregando página ${page} com ${pageSize} itens por página`);
+      
+      // Carregar dados auxiliares apenas uma vez (cache)
+      if (!dataCache.current.packages.length) {
+        console.log('[DEBUG] Primeira carga: buscando dados auxiliares...');
+        const [packagesData, servicesData, employeesData] = await Promise.all([
+          Package.list(),
+          Service.list(),
+          Employee.list()
+        ]);
+        
+        dataCache.current.packages = packagesData;
+        dataCache.current.services = servicesData;
+        dataCache.current.employees = employeesData;
+        
+        setPackages(packagesData);
+        setServices(servicesData);
+        setEmployees(employeesData);
       }
-
-      setClientPackages(clientPackagesData);
-      setPackages(packagesData);
-      setClients(clientsData);
-      setServices(servicesData);
-      setEmployees(employeesData);
+      
+      // Carregar TODOS os pacotes apenas para contagem (sem dados relacionados)
+      let allPackages = dataCache.current.allPackages;
+      if (!allPackages) {
+        console.log('[DEBUG] Primeira carga: buscando todos os pacotes...');
+        const packagesData = await ClientPackage.list();
+        allPackages = packagesData;
+        dataCache.current.allPackages = allPackages;
+        setTotalPackages(allPackages.length);
+      }
+      
+      // ORDENAÇÃO: Mais recentes primeiro (por data de compra)
+      const sortedPackages = [...allPackages].sort((a, b) => {
+        // Obter data de compra para ordenação
+        const getDateForSort = (pkg) => {
+          if (pkg.purchase_date) {
+            return new Date(pkg.purchase_date);
+          }
+          // Fallback para created_at se não tiver purchase_date
+          if (pkg.created_at) {
+            return new Date(pkg.created_at);
+          }
+          return new Date(0); // Data muito antiga se não tiver nenhuma data
+        };
+        
+        const dateA = getDateForSort(a);
+        const dateB = getDateForSort(b);
+        
+        // Ordenar por data decrescente (mais recente primeiro)
+        return dateB.getTime() - dateA.getTime();
+      });
+      
+      console.log(`[DEBUG] Pacotes ordenados por data de compra (mais recentes primeiro)`);
+      
+      // Calcular pacotes da página atual (já ordenados)
+      const startIndex = (page - 1) * pageSize;
+      const endIndex = startIndex + pageSize;
+      const pagePackages = sortedPackages.slice(startIndex, endIndex);
+      
+      console.log(`[DEBUG] Mostrando pacotes ${startIndex + 1}-${Math.min(endIndex, allPackages.length)} de ${allPackages.length}`);
+      
+      // Coletar apenas IDs de clientes necessários para esta página
+      const clientIds = new Set();
+      pagePackages.forEach(pkg => {
+        if (pkg.client_id) clientIds.add(pkg.client_id);
+      });
+      
+      console.log(`[DEBUG] Página precisa de: ${clientIds.size} clientes`);
+      
+      // Inicializar cache de clientes se necessário
+      if (!dataCache.current.clients) dataCache.current.clients = new Map();
+      
+      // Identificar clientes em falta
+      const missingClientIds = Array.from(clientIds).filter(id => !dataCache.current.clients.has(id));
+      
+      if (missingClientIds.length > 0) {
+        console.log(`[DEBUG] Carregando ${missingClientIds.length} clientes em falta`);
+        
+        // Carregar clientes em lotes de 10 usando WHERE IN
+        for (let i = 0; i < missingClientIds.length; i += 10) {
+          const chunk = missingClientIds.slice(i, i + 10);
+          
+          try {
+            const q = query(
+              collection(db, 'clients'),
+              where('__name__', 'in', chunk)
+            );
+            
+            const snapshot = await getDocs(q);
+            snapshot.docs.forEach(doc => {
+              const client = { id: doc.id, ...doc.data() };
+              dataCache.current.clients.set(client.id, client);
+            });
+            
+          } catch (error) {
+            console.warn(`[WARN] Erro no WHERE IN, usando fallback individual para clientes`);
+            // Fallback: carregar individualmente
+            for (const id of chunk) {
+              try {
+                const client = await Client.get(id);
+                if (client) {
+                  dataCache.current.clients.set(client.id, client);
+                } else {
+                  // Cliente não encontrado - criar referência temporária
+                  dataCache.current.clients.set(id, {
+                    id: id,
+                    name: 'Cliente não encontrado',
+                    email: '',
+                    phone: '',
+                    isTemporary: true
+                  });
+                }
+              } catch (err) {
+                console.warn(`[WARN] Erro ao carregar cliente ${id}:`, err);
+                // Criar referência temporária para evitar travamento
+                dataCache.current.clients.set(id, {
+                  id: id,
+                  name: 'Cliente não encontrado',
+                  email: '',
+                  phone: '',
+                  isTemporary: true
+                });
+              }
+            }
+          }
+        }
+      }
+      
+      // Atualizar estados
+      setClientPackages(pagePackages);
+      setClients(Array.from(dataCache.current.clients.values()));
+      
+      console.log(`[DEBUG] ✅ Página ${page} carregada: ${pagePackages.length} pacotes`);
+      
     } catch (error) {
-      console.error("Erro ao carregar dados:", error);
+      console.error('[ERROR] Erro ao carregar página:', error);
       toast({
         title: "Erro",
-        description: error.message || "Erro ao carregar dados. Tente novamente.",
+        description: "Erro ao carregar dados. Tente novamente.",
         variant: "destructive"
       });
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadData = async (forceRefresh = false) => {
+    // Função mantida para compatibilidade - redireciona para loadPageData
+    if (forceRefresh) {
+      dataCache.current.allPackages = null;
+    }
+    return loadPageData();
+  };
+
+  // Função para mudar de página
+  const handlePageChange = (page) => {
+    setCurrentPage(page);
+    loadPageData(page, itemsPerPage);
+    
+    // Rolar para o topo da tabela quando mudar de página
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Função para mudar o número de itens por página
+  const handleItemsPerPageChange = (value) => {
+    const newItemsPerPage = parseInt(value);
+    setItemsPerPage(newItemsPerPage);
+    setCurrentPage(1); // Voltar para a primeira página ao mudar itens por página
+    loadPageData(1, newItemsPerPage);
   };
 
   const checkUnfinishedSales = async () => {
@@ -1295,13 +1443,10 @@ export default function ClientPackages() {
     return filtered;
   };
 
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const paginatedPackages = getFilteredPackages().slice(indexOfFirstItem, indexOfLastItem);
+  // Com paginação otimizada, clientPackages já contém apenas os dados da página atual
+  const paginatedPackages = getFilteredPackages();
 
-  const totalPages = Math.ceil(getFilteredPackages().length / itemsPerPage);
-
-  const paginate = (pageNumber) => setCurrentPage(pageNumber);
+  const paginate = (pageNumber) => handlePageChange(pageNumber);
 
   const getPackageInfo = (packageId) => {
     const clientPkg = clientPackages.find(cp => cp.id === packageId);
@@ -2202,7 +2347,7 @@ export default function ClientPackages() {
       }
     };
 
-  // ----- useEffect Hook for Initial Data Loading ----- 
+  // useEffect para carregamento inicial
   useEffect(() => {
     // Carregar o usuário atual do localStorage
     const userData = localStorage.getItem('user');
@@ -2220,18 +2365,26 @@ export default function ClientPackages() {
       console.log('Nenhum usuário encontrado no localStorage');
     }
 
-    loadData(); // Assuming this loads packages, services, etc.
-    checkUnfinishedSales(); // Check for pending sales on load
+    // Carregar dados da primeira página
+    loadPageData(1, itemsPerPage);
+    checkUnfinishedSales();
 
-    // Setup interval for checking unfinished sales status (optional, depends on workflow)
-    // Consider if this polling is necessary or if Firestore listeners are better
+    // Setup interval for checking unfinished sales status
     const interval = setInterval(() => {
-      checkUnfinishedSaleStatus(); // Assuming this function exists and checks status
-    }, 30000); // Poll every 30 seconds
+      checkUnfinishedSaleStatus();
+    }, 30000);
 
-    // Cleanup interval on component unmount
-    return () => clearInterval(interval);
-  }, []); // Run only on mount
+    // Cleanup
+    return () => {
+      clearInterval(interval);
+      isMounted.current = false;
+    };
+  }, []);
+
+  // useEffect para calcular total de páginas
+  useEffect(() => {
+    setTotalPages(Math.ceil(totalPackages / itemsPerPage));
+  }, [totalPackages, itemsPerPage]);
   // ----- Fim useEffect Hook -----
  
   return (
@@ -2518,8 +2671,22 @@ export default function ClientPackages() {
             <>
               <div className="flex justify-between items-center mb-4">
                 <p className="text-sm text-gray-500">
-                  Mostrando {Math.min(itemsPerPage, paginatedPackages.length)} de {getFilteredPackages().length} resultados
+                  Mostrando {paginatedPackages.length} de {totalPackages} resultados (Página {currentPage} de {totalPages})
                 </p>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-500">Itens por página:</span>
+                  <Select value={itemsPerPage.toString()} onValueChange={handleItemsPerPageChange}>
+                    <SelectTrigger className="w-20">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="20">20</SelectItem>
+                      <SelectItem value="30">30</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
               <div className="space-y-4">
@@ -2567,6 +2734,20 @@ export default function ClientPackages() {
                             Válido até {formatDateSafe(clientPkg.expiration_date)}
                           </span>
                         </div>
+                        
+                        {/* Informação de cancelamento */}
+                        {clientPkg.status === 'cancelado' && clientPkg.cancelamento && (
+                          <div className="flex items-center gap-1 text-sm text-red-600 bg-red-50 px-2 py-1 rounded">
+                            <XCircle className="w-4 h-4" />
+                            <span>
+                              Cancelado por {clientPkg.cancelamento.usuario_nome} em{' '}
+                              {clientPkg.cancelamento.data ? 
+                                format(new Date(clientPkg.cancelamento.data), "dd/MM/yyyy", { locale: ptBR }) :
+                                'data não informada'
+                              }
+                            </span>
+                          </div>
+                        )}
                         <div className="flex items-center gap-1">
                           <Button 
                             variant="ghost" 
@@ -2746,20 +2927,42 @@ export default function ClientPackages() {
                   <Button 
                     variant="outline" 
                     size="sm" 
-                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                    onClick={() => handlePageChange(Math.max(currentPage - 1, 1))}
                     disabled={currentPage === 1}
                   >
                     Anterior
                   </Button>
 
-                  <div className="text-sm">
-                    Página {currentPage} de {totalPages}
-                  </div>
+                  {/* Botões de páginas específicas */}
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum;
+                    if (totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1;
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNum = totalPages - 4 + i;
+                    } else {
+                      pageNum = currentPage - 2 + i;
+                    }
+                    
+                    return (
+                      <Button
+                        key={pageNum}
+                        variant={currentPage === pageNum ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => handlePageChange(pageNum)}
+                        className={currentPage === pageNum ? "bg-[#294380]" : ""}
+                      >
+                        {pageNum}
+                      </Button>
+                    );
+                  })}
 
                   <Button 
                     variant="outline" 
                     size="sm"
-                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                    onClick={() => handlePageChange(Math.min(currentPage + 1, totalPages))}
                     disabled={currentPage === totalPages}
                   >
                     Próxima
@@ -2822,6 +3025,46 @@ export default function ClientPackages() {
                       </Badge>
                     </div>
                   </div>
+
+                  {/* Informações de Cancelamento */}
+                  {selectedPackage.status === 'cancelado' && selectedPackage.cancelamento && (
+                    <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                      <h3 className="text-sm font-medium text-red-800 mb-3">Informações do Cancelamento</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="font-medium text-red-700">Data:</span>
+                          <p className="text-red-600">
+                            {selectedPackage.cancelamento.data ? 
+                              format(new Date(selectedPackage.cancelamento.data), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) :
+                              'Não informado'
+                            }
+                          </p>
+                        </div>
+                        <div>
+                          <span className="font-medium text-red-700">Cancelado por:</span>
+                          <p className="text-red-600">{selectedPackage.cancelamento.usuario_nome || 'Não informado'}</p>
+                        </div>
+                        <div>
+                          <span className="font-medium text-red-700">Motivo:</span>
+                          <p className="text-red-600">
+                            {selectedPackage.cancelamento.motivo_venda || selectedPackage.cancelamento.motivo || 'Não informado'}
+                          </p>
+                        </div>
+                        {selectedPackage.cancelamento.sessoes_restantes > 0 && (
+                          <div>
+                            <span className="font-medium text-red-700">Sessões não utilizadas:</span>
+                            <p className="text-red-600">{selectedPackage.cancelamento.sessoes_restantes}</p>
+                          </div>
+                        )}
+                      </div>
+                      {selectedPackage.cancelamento.observacoes && (
+                        <div className="mt-3">
+                          <span className="font-medium text-red-700">Observações:</span>
+                          <p className="text-red-600 mt-1">{selectedPackage.cancelamento.observacoes}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <div>
                     <h3 className="text-sm font-medium text-gray-500 mb-2">Progresso do Pacote</h3>
