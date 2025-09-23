@@ -404,8 +404,12 @@ export default function CashRegister() {
       console.log("[CashRegister] Transações retornadas:", transactions);
       console.log("[CashRegister] Número de transações:", transactions.length);
 
-      // Filtrar transações ativas
-      const activeTransactions = transactions.filter(t => !t.deleted);
+      // Filtrar transações ativas (excluir deletadas, canceladas e excluídas)
+      const activeTransactions = transactions.filter(t => 
+        !t.deleted && 
+        t.status !== "cancelada" && 
+        t.status !== "excluido"
+      );
       
       setTransactions(activeTransactions);
       processTransactions(activeTransactions);
@@ -727,7 +731,9 @@ export default function CashRegister() {
 
       return transactionDate === today && 
              t.category !== "abertura_caixa" && 
-             t.category !== "fechamento_caixa";
+             t.category !== "fechamento_caixa" &&
+             t.status !== "cancelada" &&
+             t.status !== "excluido";
     });
   };
   
@@ -1838,6 +1844,11 @@ export default function CashRegister() {
           return false;
         }
         
+        // Ignorar transações canceladas e excluídas
+        if (transaction.status === 'cancelada' || transaction.status === 'excluido') {
+          return false;
+        }
+        
         if (!transaction.payment_date) return false;
         
         // Normalizar a data da transação para comparação
@@ -1959,12 +1970,21 @@ export default function CashRegister() {
       // Definir a data de hoje
       const today = normalizeDate(new Date());
       
-      // Filtrar transações excluídas
+      // Filtrar transações excluídas e canceladas
       const activeTransactions = transactions.filter(transaction => 
-        transaction.status !== "excluido" && transaction.deleted !== true
+        transaction.status !== "excluido" && 
+        transaction.status !== "cancelada" &&
+        transaction.deleted !== true
       );
       
-      console.log(`Total de transações: ${transactions.length}, Ativas: ${activeTransactions.length}`);
+      console.log(`[CashRegister] Total de transações: ${transactions.length}, Ativas: ${activeTransactions.length}`);
+      console.log(`[CashRegister] Transações filtradas (excluídas canceladas e excluídas):`, activeTransactions.map(t => ({
+        id: t.id,
+        status: t.status,
+        amount: t.amount,
+        type: t.type,
+        description: t.description
+      })));
       
       // Encontrar todas as transações de abertura (ordenadas por data, mais recente primeiro)
       const openingTransactions = activeTransactions
@@ -2122,10 +2142,12 @@ export default function CashRegister() {
     // Usar a data selecionada ou a data atual
     const dateToUse = selectedDate || format(new Date(), "yyyy-MM-dd");
     
-    // Buscar transações para a data selecionada
+    // Buscar transações para a data selecionada (excluir canceladas e excluídas)
     const transactionsForDate = transactions.filter(t => {
       const transactionDate = t.payment_date ? t.payment_date.split('T')[0] : null;
-      return transactionDate === dateToUse;
+      return transactionDate === dateToUse && 
+             t.status !== 'cancelada' && 
+             t.status !== 'excluido';
     });
     
     // Buscar registros de abertura/fechamento para a data selecionada

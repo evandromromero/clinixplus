@@ -21,7 +21,7 @@ import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
 import { normalizeDate } from "@/utils/dateUtils";
 import { ptBR } from "date-fns/locale";
-import { Search, Filter, ChevronDown, ChevronUp, RefreshCw, FileText, Download, Printer, Plus, CalendarIcon, XCircle, Trash2, DollarSign, AlertCircle, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, Edit } from "lucide-react";
+import { Search, Filter, ChevronDown, ChevronUp, RefreshCw, FileText, Download, Printer, Plus, CalendarIcon, XCircle, Trash2, DollarSign, AlertCircle, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, Edit, X } from "lucide-react";
 import { FinancialTransaction, Client, PaymentMethod, Sale } from "@/firebase/entities";
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/firebase/config';
@@ -40,7 +40,11 @@ export default function AccountsReceivable() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [clientFilter, setClientFilter] = useState("all");
+  const [clientSearchTerm, setClientSearchTerm] = useState("");
+  const [clientSearchResults, setClientSearchResults] = useState([]);
+  const [showClientDropdown, setShowClientDropdown] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   
@@ -75,9 +79,7 @@ export default function AccountsReceivable() {
   // Estado para o diálogo de edição de transação
   const [transactionToEdit, setTransactionToEdit] = useState(null);
 
-  // Novo estado para busca de clientes sob demanda
-  const [clientSearchTerm, setClientSearchTerm] = useState("");
-  const [clientSearchResults, setClientSearchResults] = useState([]);
+  // Estados antigos para busca de clientes (mantidos para compatibilidade)
   const [isSearchingClients, setIsSearchingClients] = useState(false);
   const [clientSearchTimeout, setClientSearchTimeout] = useState(null);
   const [clientCache, setClientCache] = useState(new Map());
@@ -505,72 +507,6 @@ export default function AccountsReceivable() {
     source: 'cliente' // Nova propriedade para indicar a origem do recebimento
   });
 
-  const handleClientSearch = async (searchTerm) => {
-    console.log("[DEBUG] Buscando cliente:", searchTerm);
-    
-    if (!searchTerm || searchTerm.length < 2) {
-      setClientSearchResults([]);
-      return;
-    }
-
-    // Limpar timeout anterior
-    if (clientSearchTimeout) {
-      clearTimeout(clientSearchTimeout);
-    }
-
-    // Criar novo timeout (debounce)
-    const newTimeout = setTimeout(async () => {
-      try {
-        setIsSearchingClients(true);
-        const startTime = performance.now();
-
-        // Normalizar o termo de busca
-        const normalizedTerm = searchTerm.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-        console.log("[DEBUG] Termo normalizado:", normalizedTerm);
-        
-        // Verificar cache
-        if (clientCache.has(normalizedTerm)) {
-          console.log("[DEBUG] Usando cache para:", normalizedTerm);
-          setClientSearchResults(clientCache.get(normalizedTerm));
-          setIsSearchingClients(false);
-          return;
-        }
-
-        // Buscar clientes do Firebase
-        const clientsRef = collection(db, 'clients');
-        const nameQuery = query(
-          clientsRef,
-          where('name', '>=', normalizedTerm),
-          where('name', '<=', normalizedTerm + '\uf8ff'),
-          limit(20)
-        );
-
-        const snapshot = await getDocs(nameQuery);
-        const results = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        
-        console.log("[DEBUG] Resultados encontrados:", results.length);
-        console.log("[DEBUG] Tempo de busca:", Math.round(performance.now() - startTime), "ms");
-
-        // Atualizar cache
-        setClientCache(prev => new Map(prev).set(normalizedTerm, results));
-        setClientSearchResults(results);
-      } catch (error) {
-        console.error("Erro na busca:", error);
-        toast({
-          title: "Erro",
-          description: "Erro ao buscar clientes",
-          variant: "destructive"
-        });
-      } finally {
-        setIsSearchingClients(false);
-      }
-    }, 300); // 300ms de debounce
-
-    setClientSearchTimeout(newTimeout);
-  };
 
   // Referência para controlar se o componente está montado
   const isMounted = useRef(true);
@@ -604,18 +540,40 @@ export default function AccountsReceivable() {
     setFilteredTransactions(transactions);
   }, [transactions]);
 
+  // Debounce para busca
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
   // Recarregar dados quando filtros mudarem
   useEffect(() => {
     // Invalidar cache para forçar recálculo dos filtros
     dataCache.current.allTransactions = null;
     setCurrentPage(1); // Voltar para primeira página ao filtrar
     loadPageData(1, itemsPerPage);
-  }, [statusFilter, dateFilter, clientFilter, searchTerm]);
+  }, [statusFilter, dateFilter, clientFilter, debouncedSearchTerm]);
 
   useEffect(() => {
     // Calcular paginação baseada no total de transações, não apenas as filtradas da página atual
     setTotalPages(Math.ceil(totalTransactions / itemsPerPage));
   }, [totalTransactions, itemsPerPage]);
+
+  // Fechar dropdown de clientes ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showClientDropdown && !event.target.closest('.relative')) {
+        setShowClientDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showClientDropdown]);
 
   const toggleSort = (field) => {
     if (sortField === field) {
@@ -640,11 +598,11 @@ export default function AccountsReceivable() {
     }).format(value);
   };
 
-  const formatStatus = (status) => {
+  const getStatusLabel = (status) => {
     switch (status) {
       case "pendente": return "Pendente";
       case "pago": return "Pago";
-      case "cancelado": return "Cancelado";
+      case "cancelada": return "Cancelado";
       default: return status;
     }
   };
@@ -653,7 +611,7 @@ export default function AccountsReceivable() {
     switch (status) {
       case "pendente": return "bg-yellow-100 text-yellow-800";
       case "pago": return "bg-green-100 text-green-800";
-      case "cancelado": return "bg-red-100 text-red-800";
+      case "cancelada": return "bg-red-100 text-red-800";
       default: return "bg-gray-100 text-gray-800";
     }
   };
@@ -855,7 +813,7 @@ export default function AccountsReceivable() {
           <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
             <div style="width: 48%;">
               ${paymentMethodsHtml}
-              <p><strong>Status:</strong> ${formatStatus(transaction.status)}</p>
+              <p><strong>Status:</strong> ${getStatusLabel(transaction.status)}</p>
             </div>
             <div style="width: 48%;">
               <h3 style="margin-top: 0;">INFORMAÇÕES ADICIONAIS</h3>
@@ -978,6 +936,60 @@ export default function AccountsReceivable() {
     }
   };
 
+  // Função para limpar todos os filtros
+  const clearAllFilters = () => {
+    setStatusFilter("all");
+    setDateFilter("all");
+    setClientFilter("all");
+    setClientSearchTerm("");
+    setSearchTerm("");
+    setDebouncedSearchTerm("");
+    setShowClientDropdown(false);
+  };
+
+  // Função para buscar clientes
+  const handleClientSearch = async (searchValue) => {
+    setClientSearchTerm(searchValue);
+    
+    if (!searchValue || searchValue.length < 2) {
+      setClientSearchResults([]);
+      setShowClientDropdown(false);
+      return;
+    }
+
+    try {
+      // Buscar nos clientes já carregados primeiro
+      const filteredClients = clients.filter(client =>
+        normalizeText(client.name).includes(normalizeText(searchValue))
+      ).slice(0, 10);
+
+      setClientSearchResults(filteredClients);
+      setShowClientDropdown(true);
+    } catch (error) {
+      console.error('Erro ao buscar clientes:', error);
+    }
+  };
+
+  // Função para selecionar cliente
+  const handleSelectClient = (client) => {
+    setClientFilter(client.id);
+    setClientSearchTerm(client.name);
+    setShowClientDropdown(false);
+  };
+
+  // Função para limpar seleção de cliente
+  const handleClearClientFilter = () => {
+    setClientFilter("all");
+    setClientSearchTerm("");
+    setShowClientDropdown(false);
+  };
+
+  // Função auxiliar para normalizar texto (remove acentos)
+  const normalizeText = (text) => {
+    if (!text) return '';
+    return text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  };
+
   // Função para aplicar filtros e ordenação no servidor
   const applyServerSideFilters = (transactions) => {
     const today = new Date();
@@ -988,8 +1000,9 @@ export default function AccountsReceivable() {
     
     const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
     
-    // Preparar o termo de busca uma única vez
-    const term = searchTerm ? searchTerm.toLowerCase() : '';
+    // Preparar o termo de busca normalizado
+    const term = debouncedSearchTerm ? normalizeText(debouncedSearchTerm) : '';
+    
     
     // Primeiro aplicar filtros
     const filtered = transactions.filter(t => {
@@ -1038,12 +1051,44 @@ export default function AccountsReceivable() {
         return false;
       }
       
-      // Filtro de busca (será aplicado após carregar dados do cliente)
-      // Por enquanto, aplicar apenas se já tiver client_name
-      if (term && t.client_name) {
-        const descriptionMatch = t.description && t.description.toLowerCase().includes(term);
-        const clientNameMatch = t.client_name && t.client_name.toLowerCase().includes(term);
-        if (!descriptionMatch && !clientNameMatch) return false;
+      // ✅ BUSCA MELHORADA - Usa cache e múltiplos campos
+      if (term) {
+        const searchMatches = [];
+        
+        // 1. Buscar na descrição
+        if (t.description) {
+          searchMatches.push(normalizeText(t.description).includes(term));
+        }
+        
+        // 2. Buscar no nome do cliente (usando cache)
+        if (t.client_id && dataCache.current.clients && dataCache.current.clients.has(t.client_id)) {
+          const clientName = dataCache.current.clients.get(t.client_id).name;
+          searchMatches.push(normalizeText(clientName).includes(term));
+        }
+        
+        // 3. Buscar no valor (sem normalização para números)
+        if (t.amount) {
+          searchMatches.push(t.amount.toString().includes(debouncedSearchTerm));
+        }
+        
+        // 4. Buscar na categoria
+        if (t.category) {
+          searchMatches.push(normalizeText(t.category.replace(/_/g, ' ')).includes(term));
+        }
+        
+        // 5. Buscar no status
+        if (t.status) {
+          const statusText = t.status === 'pago' ? 'pago' : 
+                            t.status === 'pendente' ? 'pendente' : 
+                            t.status === 'vencido' ? 'vencido' : 
+                            t.status === 'cancelada' ? 'cancelado' : t.status;
+          searchMatches.push(normalizeText(statusText).includes(term));
+        }
+        
+        // Retornar true se algum campo corresponder
+        if (!searchMatches.some(match => match)) {
+          return false;
+        }
       }
       
       return true;
@@ -1327,7 +1372,28 @@ export default function AccountsReceivable() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Filtros</CardTitle>
+          <div className="flex justify-between items-center">
+            <CardTitle>Filtros</CardTitle>
+            <div className="flex items-center gap-4">
+              <div className="text-sm text-gray-500">
+                {totalTransactions > 0 && (
+                  <span>
+                    {transactions.length} de {totalTransactions} transações
+                    {debouncedSearchTerm && ` • Buscando: "${debouncedSearchTerm}"`}
+                  </span>
+                )}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={clearAllFilters}
+                className="flex items-center gap-2"
+              >
+                <XCircle className="h-4 w-4" />
+                Limpar Filtros
+              </Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1341,7 +1407,7 @@ export default function AccountsReceivable() {
                   <SelectItem value="all">Todos os status</SelectItem>
                   <SelectItem value="pendente">Pendente</SelectItem>
                   <SelectItem value="pago">Pago</SelectItem>
-                  <SelectItem value="cancelado">Cancelado</SelectItem>
+                  <SelectItem value="cancelada">Cancelado</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1362,21 +1428,55 @@ export default function AccountsReceivable() {
               </Select>
             </div>
             
-            <div>
+            <div className="relative">
               <label className="text-sm font-medium mb-1 block">Cliente</label>
-              <Select value={clientFilter} onValueChange={setClientFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Todos os clientes" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="sem_cliente">Sem cliente</SelectItem>
-                  {clients.map(client => (
-                    <SelectItem key={client.id} value={client.id}>
-                      {client.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="relative">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
+                <Input
+                  placeholder="Buscar cliente..."
+                  value={clientSearchTerm}
+                  onChange={(e) => handleClientSearch(e.target.value)}
+                  onFocus={() => clientSearchTerm.length >= 2 && setShowClientDropdown(true)}
+                  className="pl-8 pr-8"
+                />
+                {clientSearchTerm && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleClearClientFilter}
+                    className="absolute right-1 top-1 h-auto p-1 text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                )}
+              </div>
+              
+              {/* Dropdown de resultados */}
+              {showClientDropdown && clientSearchResults.length > 0 && (
+                <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                  <div className="p-2">
+                    <div
+                      className="px-3 py-2 text-sm cursor-pointer hover:bg-gray-100 rounded"
+                      onClick={() => {
+                        setClientFilter("all");
+                        setClientSearchTerm("");
+                        setShowClientDropdown(false);
+                      }}
+                    >
+                      Todos os clientes
+                    </div>
+                    {clientSearchResults.map(client => (
+                      <div
+                        key={client.id}
+                        className="px-3 py-2 text-sm cursor-pointer hover:bg-gray-100 rounded"
+                        onClick={() => handleSelectClient(client)}
+                      >
+                        {client.name}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
             
             <div>
@@ -1384,12 +1484,33 @@ export default function AccountsReceivable() {
               <div className="relative">
                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
                 <Input
-                  placeholder="Descrição ou cliente..."
+                  placeholder="Descrição, cliente, valor, categoria, status..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-8"
+                  className="pl-8 pr-8"
                 />
+                {searchTerm && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSearchTerm("")}
+                    className="absolute right-1 top-1 h-auto p-1 text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                )}
               </div>
+              {/* Feedback de busca */}
+              {debouncedSearchTerm && (
+                <div className="text-xs text-gray-500 mt-1">
+                  Buscando por "{debouncedSearchTerm}"...
+                </div>
+              )}
+              {searchTerm !== debouncedSearchTerm && searchTerm && (
+                <div className="text-xs text-blue-500 mt-1">
+                  Digitando...
+                </div>
+              )}
             </div>
           </div>
         </CardContent>
@@ -1504,7 +1625,7 @@ export default function AccountsReceivable() {
                     </TableCell>
                     <TableCell>
                       <span className={getStatusClass(transaction.status)}>
-                        {formatStatus(transaction.status)}
+                        {getStatusLabel(transaction.status)}
                       </span>
                     </TableCell>
                     <TableCell>
@@ -1690,7 +1811,7 @@ export default function AccountsReceivable() {
                           selectedTransaction.status === 'pendente' ? 'bg-yellow-100 text-yellow-800' : 
                           'bg-red-100 text-red-800'}`}
                     >
-                      {formatStatus(selectedTransaction.status)}
+                      {getStatusLabel(selectedTransaction.status)}
                     </span>
                   </div>
                   <div>
