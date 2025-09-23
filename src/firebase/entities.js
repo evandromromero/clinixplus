@@ -1300,7 +1300,34 @@ export const Sale = {
       });
       
       // 3. Buscar e cancelar pacotes relacionados
-      const relatedPackages = await ClientPackage.filter({ sale_id: saleId });
+      console.log('[CANCEL SALE] Buscando pacotes com sale_id:', saleId);
+      let relatedPackages = await ClientPackage.filter({ sale_id: saleId });
+      console.log('[CANCEL SALE] Pacotes encontrados por sale_id:', relatedPackages.length);
+      
+      // FALLBACK: Se não encontrou por sale_id, buscar por client_id + data
+      if (relatedPackages.length === 0) {
+        console.log('[CANCEL SALE] Tentando busca alternativa por client_id + data...');
+        const allClientPackages = await ClientPackage.filter({ client_id: sale.client_id });
+        console.log('[CANCEL SALE] Todos os pacotes do cliente:', allClientPackages.length);
+        
+        // Filtrar pacotes criados próximos à data da venda (±2 dias)
+        relatedPackages = allClientPackages.filter(pkg => {
+          const packageDate = new Date(pkg.purchase_date);
+          const saleDate = new Date(sale.date);
+          const diffDays = Math.abs((packageDate - saleDate) / (1000 * 60 * 60 * 24));
+          
+          console.log('[CANCEL SALE] Comparando datas:', pkg.purchase_date, 'vs', sale.date, '- Diferença:', diffDays, 'dias');
+          
+          // Buscar pacotes ativos criados até 2 dias antes ou depois da venda
+          const isNearDate = diffDays <= 2;
+          const isActive = pkg.status !== 'cancelado' && pkg.status !== 'expirado' && pkg.status !== 'finalizado';
+          
+          console.log('[CANCEL SALE] Pacote', pkg.id, '- Data próxima:', isNearDate, '- Ativo:', isActive);
+          
+          return isNearDate && isActive;
+        });
+        console.log('[CANCEL SALE] Pacotes encontrados por data:', relatedPackages.length, relatedPackages);
+      }
       const canceledPackages = [];
       
       for (const pkg of relatedPackages) {

@@ -13,12 +13,20 @@ import { normalizeDate } from "@/utils/dateUtils";
 import { Plus, Search, AlertCircle, FileText, TrendingUp, CalendarIcon, CheckCircle, XCircle } from "lucide-react";
 import { FinancialTransaction } from "@/api/entities";
 import { Client } from "@/api/entities";
+import { Sale } from "@/firebase/entities";
+import { toast } from "@/components/ui/use-toast";
 
 export default function AccountsReceivable() {
   const [transactions, setTransactions] = useState([]);
   const [clients, setClients] = useState([]);
   const [filteredTransactions, setFilteredTransactions] = useState([]);
   const [showNewTransactionDialog, setShowNewTransactionDialog] = useState(false);
+  const [showCancelSaleDialog, setShowCancelSaleDialog] = useState(false);
+  const [transactionToCancel, setTransactionToCancel] = useState(null);
+  const [cancelForm, setCancelForm] = useState({
+    motivo: '',
+    observacoes: ''
+  });
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [newTransaction, setNewTransaction] = useState({
@@ -108,6 +116,73 @@ export default function AccountsReceivable() {
       loadData();
     } catch (error) {
       console.error("Error updating transaction:", error);
+    }
+  };
+
+  const handleCancelClick = (transaction) => {
+    if (transaction.sale_id) {
+      // Se tem venda relacionada, abrir modal de cancelamento completo
+      setTransactionToCancel(transaction);
+      setShowCancelSaleDialog(true);
+    } else {
+      // Se é transação avulsa, cancelar apenas a transação
+      handleStatusChange(transaction, 'cancelado');
+    }
+  };
+
+  const handleCancelSale = async () => {
+    if (!transactionToCancel || !cancelForm.motivo) {
+      toast({
+        title: "Erro",
+        description: "Selecione um motivo para o cancelamento",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      
+      if (transactionToCancel.sale_id) {
+        // Cancelar venda completa (cancela pacotes e transações automaticamente)
+        await Sale.cancelSale(transactionToCancel.sale_id, {
+          motivo: cancelForm.motivo,
+          observacoes: cancelForm.observacoes,
+          usuario_id: 'admin', // TODO: pegar do contexto de usuário
+          usuario_nome: 'Administrador' // TODO: pegar do contexto de usuário
+        });
+        
+        toast({
+          title: "Venda Cancelada",
+          description: "A venda e todos os itens relacionados foram cancelados com sucesso"
+        });
+      } else {
+        // Cancelar apenas transação
+        await handleStatusChange(transactionToCancel, 'cancelado');
+        
+        toast({
+          title: "Transação Cancelada",
+          description: "A transação foi cancelada com sucesso"
+        });
+      }
+      
+      // Fechar modal e limpar form
+      setShowCancelSaleDialog(false);
+      setTransactionToCancel(null);
+      setCancelForm({ motivo: '', observacoes: '' });
+      
+      // Recarregar dados
+      loadData();
+      
+    } catch (error) {
+      console.error('Erro ao cancelar:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao cancelar. Tente novamente.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -297,7 +372,7 @@ export default function AccountsReceivable() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={() => handleStatusChange(transaction, 'cancelado')}
+                                onClick={() => handleCancelClick(transaction)}
                                 title="Cancelar"
                               >
                                 <XCircle className="h-4 w-4 text-red-600" />
@@ -428,6 +503,94 @@ export default function AccountsReceivable() {
             </Button>
             <Button onClick={handleCreateTransaction} className="bg-[#294380] hover:bg-[#0D0F36]">
               Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Cancelamento de Venda */}
+      <Dialog open={showCancelSaleDialog} onOpenChange={setShowCancelSaleDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <XCircle className="h-5 w-5 text-red-600" />
+              {transactionToCancel?.sale_id ? 'Cancelar Venda' : 'Cancelar Transação'}
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {transactionToCancel?.sale_id && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                <p className="text-sm text-yellow-800">
+                  <strong>Atenção:</strong> Esta ação irá cancelar a venda e todos os itens relacionados 
+                  (pacotes, transações). Os dados serão mantidos para auditoria, mas marcados como cancelados.
+                </p>
+              </div>
+            )}
+            
+            <div>
+              <Label htmlFor="motivo">Motivo do Cancelamento *</Label>
+              <Select 
+                value={cancelForm.motivo} 
+                onValueChange={(value) => setCancelForm(prev => ({ ...prev, motivo: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione um motivo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Solicitação do Cliente">Solicitação do Cliente</SelectItem>
+                  <SelectItem value="Problema de Pagamento">Problema de Pagamento</SelectItem>
+                  <SelectItem value="Erro na Venda">Erro na Venda</SelectItem>
+                  <SelectItem value="Serviço Indisponível">Serviço Indisponível</SelectItem>
+                  <SelectItem value="Duplicação">Duplicação</SelectItem>
+                  <SelectItem value="Outros">Outros</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div>
+              <Label htmlFor="observacoes">Observações (Opcional)</Label>
+              <textarea
+                id="observacoes"
+                className="w-full p-2 border border-gray-300 rounded-md resize-none"
+                rows={3}
+                placeholder="Descreva detalhes sobre o cancelamento..."
+                value={cancelForm.observacoes}
+                onChange={(e) => setCancelForm(prev => ({ ...prev, observacoes: e.target.value }))}
+              />
+            </div>
+            
+            {transactionToCancel && (
+              <div className="bg-gray-50 border rounded-lg p-3">
+                <h4 className="font-medium text-sm mb-2">Itens que serão cancelados:</h4>
+                <ul className="text-sm text-gray-600 space-y-1">
+                  <li>• Transação: {transactionToCancel.description}</li>
+                  <li>• Valor: R$ {transactionToCancel.amount?.toFixed(2)}</li>
+                  {transactionToCancel.sale_id && (
+                    <li>• Pacotes relacionados serão cancelados automaticamente</li>
+                  )}
+                </ul>
+              </div>
+            )}
+          </div>
+          
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setShowCancelSaleDialog(false);
+                setTransactionToCancel(null);
+                setCancelForm({ motivo: '', observacoes: '' });
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleCancelSale}
+              disabled={!cancelForm.motivo || isLoading}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {isLoading ? 'Cancelando...' : 'Confirmar Cancelamento'}
             </Button>
           </DialogFooter>
         </DialogContent>

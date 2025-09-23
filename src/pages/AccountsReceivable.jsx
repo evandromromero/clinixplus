@@ -89,6 +89,10 @@ export default function AccountsReceivable() {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [totalPages, setTotalPages] = useState(1);
 
+  // Estado para geração de recibo
+  const [receiptHtml, setReceiptHtml] = useState('');
+  const receiptRef = useRef(null);
+
   const handleDelete = async (transaction) => {
     try {
       if (!transaction) return;
