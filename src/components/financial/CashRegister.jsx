@@ -41,6 +41,12 @@ import RateLimitHandler from '@/components/RateLimitHandler';
 import html2pdf from 'html2pdf.js';
 import { generateCorrectedReportHtml } from './CashRegisterReportCorrection';
 
+// Sistema de debug condicional
+const DEBUG = process.env.NODE_ENV === 'development';
+const debugLog = (...args) => {
+  if (DEBUG) console.log(...args);
+};
+
 export default function CashRegister() {
   const [transactions, setTransactions] = useState([]);
   const [cashRegisters, setCashRegisters] = useState([]);
@@ -250,14 +256,23 @@ export default function CashRegister() {
 
   const checkCashStatus = async () => {
     try {
-      console.log("[CashRegister] Verificando status do caixa...");
+      debugLog("[CashRegister] Verificando status do caixa...");
 
-      // Buscar todas as transações
-      const allTransactions = await FinancialTransaction.list();
-      
       // Obter a data atual usando normalizeDate para consistência
       const today = normalizeDate(new Date());
-      console.log("[CashRegister] Filtrando transações para:", today);
+      debugLog("[CashRegister] Verificando caixa para:", today);
+      
+      // Para detectar caixas anteriores, buscar todas as transações recentes
+      // (necessário para verificar aberturas sem fechamentos correspondentes)
+      const allTransactions = await FinancialTransaction.list();
+      
+      // Filtrar apenas transações dos últimos 15 dias para performance
+      const fifteenDaysAgo = subDays(new Date(), 15);
+      const recentTransactions = allTransactions.filter(t => {
+        if (!t.payment_date) return false;
+        const transactionDate = new Date(t.payment_date);
+        return transactionDate >= fifteenDaysAgo;
+      });
       
       // Criar um cache de datas normalizadas para evitar recálculos
       const dateCache = new Map();
@@ -292,33 +307,53 @@ export default function CashRegister() {
         // Armazenar no cache para uso futuro
         dateCache.set(transaction.id, normalizedDate);
         
-        console.log("[CashRegister] Data normalizada para transação", transaction.id, {
-          normalizedDate,
-          sourceField,
-          originalValue: transaction[sourceField]
-        });
+        debugLog("[CashRegister] Data normalizada para transação", transaction.id, "->", normalizedDate);
         
         return normalizedDate;
       };
       
-      // Filtrar e ordenar todas as transações de abertura e fechamento
-      const openingTransactions = allTransactions
+      // Filtrar e ordenar transações de abertura e fechamento dos últimos 15 dias
+      const openingTransactions = recentTransactions
         .filter(t => t.category === "abertura_caixa" && t.type === "receita")
         .sort((a, b) => new Date(b.created_date || b.created_at) - new Date(a.created_date || a.created_at));
         
-      const closingTransactions = allTransactions
+      const closingTransactions = recentTransactions
         .filter(t => t.category === "fechamento_caixa")
         .sort((a, b) => new Date(b.created_date || b.created_at) - new Date(a.created_date || a.created_at));
       
-      console.log("[CashRegister] Total de transações:", allTransactions.length, "Ativas:", allTransactions.filter(t => !t.deleted).length);
+      debugLog("[CashRegister] Transações recentes:", recentTransactions.length, "Aberturas:", openingTransactions.length, "Fechamentos:", closingTransactions.length);
       
       // Encontrar a última transação de abertura
       const lastOpeningTransaction = openingTransactions[0];
-      console.log("[CashRegister] Última transação de abertura encontrada:", lastOpeningTransaction);
+      debugLog("[CashRegister] Última transação de abertura encontrada:", lastOpeningTransaction?.payment_date);
       
       // Verificar se existe uma transação de abertura para hoje
       const todayOpeningTransaction = openingTransactions.find(t => getTransactionDate(t) === today);
-      console.log("[CashRegister] Caixa aberto encontrado para a data:", today, todayOpeningTransaction ? "Sim" : "Não");
+      debugLog("[CashRegister] Caixa aberto para hoje:", todayOpeningTransaction ? "Sim" : "Não");
+      
+      // LÓGICA ESPECÍFICA PARA DETECTAR CAIXAS ANTERIORES NÃO FECHADOS
+      for (const opening of openingTransactions) {
+        const openingDate = getTransactionDate(opening);
+        if (!openingDate || openingDate === today) continue;
+        
+        // Verificar se há fechamento para esta abertura
+        const hasClosing = closingTransactions.some(closing => 
+          getTransactionDate(closing) === openingDate
+        );
+        
+        if (!hasClosing) {
+          // Encontrou caixa anterior não fechado
+          setHasPreviousDayOpenCash(true);
+          setPreviousOpenDate(openingDate);
+          debugLog("[CashRegister] ⚠️ CAIXA ANTERIOR NÃO FECHADO:", openingDate);
+          return; // Sair da função para mostrar o banner
+        }
+      }
+      
+      // Se chegou até aqui, não há caixas anteriores não fechados
+      setHasPreviousDayOpenCash(false);
+      setPreviousOpenDate(null);
+      debugLog("[CashRegister] ✅ Nenhum caixa anterior não fechado encontrado");
       
       // Verificar se existe uma transação de fechamento para hoje
       const todayClosingTransaction = closingTransactions.find(t => getTransactionDate(t) === today);
@@ -472,16 +507,19 @@ export default function CashRegister() {
       setErrorMessage("");
       
       const today = format(new Date(), "yyyy-MM-dd");
-      console.log("[CashRegister] Data de hoje formatada:", today);
+      debugLog("[CashRegister] Data de hoje formatada:", today);
       
-      // Buscar transações, métodos de pagamento e clientes
+      // Buscar apenas transações do dia atual, métodos de pagamento e clientes
       const [transactionsData, paymentMethodsData, clientsData] = await Promise.all([
-        FinancialTransaction.list(),
+        FinancialTransaction.filter({ 
+          payment_date: today,
+          limit: 200 // Limitar a 200 transações por segurança
+        }),
         PaymentMethod.list(),
         Client.list()
       ]);
       
-      console.log("[CashRegister] Dados carregados:", {
+      debugLog("[CashRegister] Dados carregados:", {
         transacoes: transactionsData.length,
         metodosPagamento: paymentMethodsData.length,
         clientes: clientsData.length
@@ -526,7 +564,7 @@ export default function CashRegister() {
         };
       });
 
-      console.log("[CashRegister] Transações processadas:", processedTransactions);
+      debugLog("[CashRegister] Transações processadas:", processedTransactions.length, "transações");
       
       setTransactions(processedTransactions);
       setPaymentMethods(paymentMethodsData);
@@ -1251,7 +1289,6 @@ export default function CashRegister() {
               <tr>
                 <td style="padding: 8px; border: 1px solid #ddd;">${(() => {
                   let desc = t.description || '-';
-                  console.log('Original:', desc);
                   
                   // Limpar descrições antigas
                   if (desc.includes('Venda #')) {
@@ -1271,7 +1308,6 @@ export default function CashRegister() {
                     }
                   }
                   
-                  console.log('Limpo:', desc);
                   return desc;
                 })()}</td>
                 <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${categoryMap[t.category] || t.category || '-'}</td>
@@ -1427,7 +1463,6 @@ export default function CashRegister() {
               <tr>
                 <td style="padding: 8px; border: 1px solid #ddd;">${(() => {
                   let desc = t.description || '-';
-                  console.log('Original:', desc);
                   
                   // Limpar descrições antigas
                   if (desc.includes('Venda #')) {
@@ -1447,7 +1482,6 @@ export default function CashRegister() {
                     }
                   }
                   
-                  console.log('Limpo:', desc);
                   return desc;
                 })()}</td>
                 <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${categoryMap[t.category] || t.category || '-'}</td>
@@ -1881,34 +1915,35 @@ export default function CashRegister() {
       const displayDate = format(parseISO(queryDate), "dd/MM/yyyy");
       console.log("[CashRegister] Visualizando caixa da data:", displayDate);
       
-      // Buscar todas as transações
+      // Buscar todas as transações e filtrar pela data (mesma abordagem do checkCashStatus)
       const allTransactions = await FinancialTransaction.list();
-      console.log(`[CashRegister] Total de ${allTransactions.length} transações carregadas`);
+      console.log(`[CashRegister] ${allTransactions.length} transações carregadas do Firebase`);
       
-      // Filtrar transações para a data selecionada
-      const transactionsForDate = allTransactions.filter(transaction => {
-        // Ignorar transações de fechamento de caixa
-        if (transaction.category === 'fechamento_caixa') {
-          return false;
-        }
-        
-        // Ignorar transações canceladas e excluídas
-        if (transaction.status === 'cancelada' || transaction.status === 'excluido') {
-          return false;
-        }
-        
+      // Filtrar transações para a data selecionada E excluir canceladas/fechamentos
+      const filteredTransactions = allTransactions.filter(transaction => {
+        // 1. Verificar se tem data de pagamento
         if (!transaction.payment_date) return false;
         
-        // Normalizar a data da transação para comparação
+        // 2. Verificar se é da data selecionada
         const transactionDate = normalizeDate(transaction.payment_date);
+        if (transactionDate !== queryDate) return false;
         
-        return transactionDate === queryDate;
+        // 3. Ignorar transações de fechamento de caixa
+        if (transaction.category === 'fechamento_caixa') return false;
+        
+        // 4. Ignorar transações canceladas e excluídas
+        if (transaction.status === 'cancelada' || transaction.status === 'excluido') return false;
+        
+        // 5. Ignorar transações deletadas
+        if (transaction.deleted) return false;
+        
+        return true;
       });
       
-      console.log(`[CashRegister] ${transactionsForDate.length} transações encontradas para a data ${queryDate}`);
+      console.log(`[CashRegister] ${filteredTransactions.length} transações válidas encontradas para ${displayDate}`);
       
       // Processar transações com métodos de pagamento e clientes
-      const processedTransactions = transactionsForDate.map(t => {
+      const processedTransactions = filteredTransactions.map(t => {
         const paymentMethod = paymentMethods.find(pm => pm.id === t.payment_method);
         const client = clients.find(c => c.id === t.client_id);
         
@@ -1920,35 +1955,27 @@ export default function CashRegister() {
       });
       
       // Filtrar registros de abertura para a data selecionada
-      const openingTransactions = allTransactions.filter(transaction => {
+      const openingTransactions = filteredTransactions.filter(transaction => {
         if (transaction.category !== 'abertura_caixa') return false;
         
         if (transaction.payment_date) {
           // Normalizar a data da transação
           const transactionDate = normalizeDate(transaction.payment_date);
           
-          const match = transactionDate === queryDate;
-          if (match) {
-            console.log("[CashRegister] Registro de abertura encontrado para a data", queryDate, ":", transaction.id);
-          }
-          return match;
+          return transactionDate === queryDate;
         }
         return false;
       });
       
       // Filtrar registros de fechamento para a data selecionada
-      const closingTransactions = allTransactions.filter(transaction => {
+      const closingTransactions = filteredTransactions.filter(transaction => {
         if (transaction.category !== 'fechamento_caixa') return false;
         
         if (transaction.payment_date) {
           // Normalizar a data da transação
           const transactionDate = normalizeDate(transaction.payment_date);
           
-          const match = transactionDate === queryDate;
-          if (match) {
-            console.log("[CashRegister] Registro de fechamento encontrado para a data", queryDate, ":", transaction.id);
-          }
-          return match;
+          return transactionDate === queryDate;
         }
         return false;
       });
