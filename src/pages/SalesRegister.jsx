@@ -1020,11 +1020,21 @@ export default function SalesRegister() {
         const paymentDate = createISODateWithoutTimezone(saleDate);
         console.log("[SalesRegister] Usando data ISO sem fuso horário para transação:", paymentDate);
         
+        // Gerar descrição limpa baseada no tipo de venda
+        const getCleanDescription = (saleType) => {
+          switch(saleType) {
+            case 'pacote': return 'Venda de Pacote';
+            case 'produto': return 'Venda de Produto';  
+            case 'servico': return 'Venda de Serviço';
+            default: return 'Venda';
+          }
+        };
+
         // Criar transação financeira
         await FinancialTransaction.create({
           type: "receita",
           category: "venda",
-          description: `Venda #${createdSale.id} - ${saleType}`,
+          description: getCleanDescription(saleType),
           amount: parseFloat(payment.amount) || 0,
           payment_method: payment.methodId,
           status: isPaid ? "pago" : "pendente", // Aqui é o ponto!
@@ -1032,6 +1042,7 @@ export default function SalesRegister() {
           payment_date: isPaid ? paymentDate : null,
           sale_id: createdSale.id,
           client_id: selectedClient.id,
+          client_name: selectedClient?.name || 'Cliente não identificado',
           employee_id: salesEmployee,
           is_installment: payment.installments > 1,
           installments: payment.installments > 1 ? payment.installments : null,

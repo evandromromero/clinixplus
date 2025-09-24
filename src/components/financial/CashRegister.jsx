@@ -1249,7 +1249,31 @@ export default function CashRegister() {
 
             return `
               <tr>
-                <td style="padding: 8px; border: 1px solid #ddd;">${t.description || '-'}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${(() => {
+                  let desc = t.description || '-';
+                  console.log('Original:', desc);
+                  
+                  // Limpar descrições antigas
+                  if (desc.includes('Venda #')) {
+                    if (desc.includes('pacote')) {
+                      desc = 'Venda de Pacote';
+                    } else if (desc.includes('produto')) {
+                      desc = 'Venda de Produto';
+                    } else if (desc.includes('servico')) {
+                      desc = 'Venda de Serviço';
+                    } else {
+                      desc = 'Venda';
+                    }
+                    
+                    // Adicionar (Cancelada) se necessário
+                    if (t.status === 'cancelada') {
+                      desc += ' (Cancelada)';
+                    }
+                  }
+                  
+                  console.log('Limpo:', desc);
+                  return desc;
+                })()}</td>
                 <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${categoryMap[t.category] || t.category || '-'}</td>
                 <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">R$ ${Number(t.amount || 0).toFixed(2)}</td>
                 <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${formatDate(t.payment_date)}</td>
@@ -1263,7 +1287,7 @@ export default function CashRegister() {
 
         <div style="margin-top: 50px; text-align: center;">
           <div style="border-top: 1px solid #000; display: inline-block; padding-top: 10px; min-width: 200px;">
-            (Assinaturaa)
+            (Assinatura)
           </div>
         </div>
 
@@ -1401,7 +1425,31 @@ export default function CashRegister() {
 
             return `
               <tr>
-                <td style="padding: 8px; border: 1px solid #ddd;">${t.description || '-'}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${(() => {
+                  let desc = t.description || '-';
+                  console.log('Original:', desc);
+                  
+                  // Limpar descrições antigas
+                  if (desc.includes('Venda #')) {
+                    if (desc.includes('pacote')) {
+                      desc = 'Venda de Pacote';
+                    } else if (desc.includes('produto')) {
+                      desc = 'Venda de Produto';
+                    } else if (desc.includes('servico')) {
+                      desc = 'Venda de Serviço';
+                    } else {
+                      desc = 'Venda';
+                    }
+                    
+                    // Adicionar (Cancelada) se necessário
+                    if (t.status === 'cancelada') {
+                      desc += ' (Cancelada)';
+                    }
+                  }
+                  
+                  console.log('Limpo:', desc);
+                  return desc;
+                })()}</td>
                 <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${categoryMap[t.category] || t.category || '-'}</td>
                 <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">R$ ${Number(t.amount || 0).toFixed(2)}</td>
                 <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${formatDate(t.payment_date)}</td>

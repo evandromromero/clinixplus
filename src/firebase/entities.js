@@ -1355,9 +1355,28 @@ export const Sale = {
       
       for (const transaction of relatedTransactions) {
         if (transaction.status !== 'cancelada') {
+          // Atualizar descrição para mostrar que foi cancelada
+          let newDescription = transaction.description;
+          if (transaction.description && transaction.description.includes('Venda #')) {
+            // Se for descrição antiga com código, limpar
+            if (transaction.description.includes('- pacote')) {
+              newDescription = 'Venda de Pacote (Cancelada)';
+            } else if (transaction.description.includes('- produto')) {
+              newDescription = 'Venda de Produto (Cancelada)';
+            } else if (transaction.description.includes('- servico')) {
+              newDescription = 'Venda de Serviço (Cancelada)';
+            } else {
+              newDescription = 'Venda Cancelada';
+            }
+          } else if (transaction.description && !transaction.description.includes('Cancelada')) {
+            // Se já tem descrição limpa, adicionar (Cancelada)
+            newDescription = transaction.description.replace('Venda de ', 'Venda de ') + ' (Cancelada)';
+          }
+
           await FinancialTransaction.update(transaction.id, {
             status: 'cancelada',
             status_original: transaction.status,
+            description: newDescription,
             cancelamento: {
               data: new Date().toISOString(),
               motivo: 'Venda cancelada',
