@@ -412,18 +412,62 @@ export function createEnhancedEntity(entityName, baseEntity) {
               
               console.log(`[Firebase] ${items.length} documentos brutos de ${entityName} recuperados`);
               
+              // Log de debug para verificar formato das datas
+              if (isDateFilter && items.length > 0) {
+                console.log(`[Firebase] Exemplo de formato de data em ${dateField}:`, items[0][dateField], typeof items[0][dateField]);
+              }
+              
               // Aplica os filtros em memória
               for (const key in criteria) {
+                // Ignorar campos especiais que não são filtros de dados
+                if (key === 'limit' || key === 'offset' || key === 'orderBy') {
+                  continue;
+                }
+                
                 if (isDateFilter && key === dateField) {
                   // Para filtros de data, compara apenas a parte da data (yyyy-MM-dd)
                   items = items.filter(item => {
                     if (!item[key]) return false;
                     
-                    // Extrai apenas a parte da data do formato ISO
-                    const itemDate = item[key].split('T')[0];
-                    console.log(`[EnhancedEntity] Comparando datas: item[${key}]=${itemDate} vs criteria=${dateValue}`);
-                    return itemDate === dateValue;
+                    try {
+                      // Extrai apenas a parte da data do formato ISO
+                      let itemDate;
+                      
+                      // Se for string, tenta extrair a data
+                      if (typeof item[key] === 'string') {
+                        itemDate = item[key].split('T')[0];
+                      } 
+                      // Se for objeto Date, converte para string
+                      else if (item[key] instanceof Date) {
+                        const year = item[key].getFullYear();
+                        const month = String(item[key].getMonth() + 1).padStart(2, '0');
+                        const day = String(item[key].getDate()).padStart(2, '0');
+                        itemDate = `${year}-${month}-${day}`;
+                      }
+                      // Se for timestamp do Firestore
+                      else if (item[key].toDate && typeof item[key].toDate === 'function') {
+                        const date = item[key].toDate();
+                        const year = date.getFullYear();
+                        const month = String(date.getMonth() + 1).padStart(2, '0');
+                        const day = String(date.getDate()).padStart(2, '0');
+                        itemDate = `${year}-${month}-${day}`;
+                      }
+                      else {
+                        console.warn(`[EnhancedEntity] Formato de data não reconhecido para ${key}:`, item[key]);
+                        return false;
+                      }
+                      
+                      const matches = itemDate === dateValue;
+                      if (matches) {
+                        console.log(`[EnhancedEntity] ✅ MATCH: item[${key}]=${itemDate} === criteria=${dateValue}`);
+                      }
+                      return matches;
+                    } catch (error) {
+                      console.error(`[EnhancedEntity] Erro ao processar data para ${key}:`, error, item[key]);
+                      return false;
+                    }
                   });
+                  console.log(`[EnhancedEntity] Após filtro de data ${dateField}: ${items.length} itens restantes`);
                 } else if (Array.isArray(criteria[key])) {
                   // Para filtros com arrays (como category: ["abertura_caixa", "fechamento_caixa"])
                   console.log(`[EnhancedEntity] Filtrando por array de valores para ${key}:`, criteria[key]);
@@ -438,6 +482,13 @@ export function createEnhancedEntity(entityName, baseEntity) {
               }
               
               console.log(`[Firebase] ${items.length} documentos de ${entityName} filtrados do cache`);
+              
+              // Aplicar limit se especificado
+              if (criteria.limit && typeof criteria.limit === 'number') {
+                items = items.slice(0, criteria.limit);
+                console.log(`[Firebase] Aplicado limit de ${criteria.limit}, retornando ${items.length} documentos`);
+              }
+              
               return items;
             } else if (isFirebaseOnlyEntity(entityName)) {
               // Se a entidade é Firebase-only e não há dados, retorna array vazio
