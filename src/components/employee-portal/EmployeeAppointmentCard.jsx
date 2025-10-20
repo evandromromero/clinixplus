@@ -1,6 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Check, User, Clock, CalendarCheck2 } from 'lucide-react';
+import { Check, User, Clock, CalendarCheck2, CheckCircle, FileText, AlertTriangle, X } from 'lucide-react';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { Appointment, ClientPackage, PendingService, Service } from '@/firebase/entities';
 import AnamneseActionCard from './AnamneseActionCard';
 import { Client } from '@/firebase/entities';
@@ -38,6 +40,10 @@ export default function EmployeeAppointmentCard({ appointments, onAction, curren
   const [serviceColorMap, setServiceColorMap] = useState({});
   const [services, setServices] = useState([]);
   const [packages, setPackages] = useState([]);
+  
+  // Estados para visualização de assinatura
+  const [selectedSignature, setSelectedSignature] = useState(null);
+  const [showSignatureViewModal, setShowSignatureViewModal] = useState(false);
   
   // Carregar serviços para referência
   useEffect(() => {
@@ -317,43 +323,46 @@ export default function EmployeeAppointmentCard({ appointments, onAction, curren
     );
   }
 
+  // Separar agendamentos pendentes e concluídos
+  const pendingAppointments = appointments.filter(app => app.status !== 'concluido');
+  const completedAppointments = appointments.filter(app => app.status === 'concluido');
+
   return (
     <>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-        {appointments.map(app => {
-          const cardColor = getServiceColor(app.service_name, serviceColorMap, CARD_COLORS);
-          return (
-            <div
-              key={app.id}
-              className={`flex flex-col justify-between rounded-2xl shadow-lg px-5 py-4 border hover:shadow-xl transition-shadow duration-200 min-h-[150px] ${cardColor}`}
-            >
-              <div className="flex-1 flex flex-col gap-2 min-w-0">
-                <span className="flex items-center gap-1 font-semibold text-blue-900 truncate">
-                  <User className="w-4 h-4 text-blue-400" />
-                  <span className="truncate">{app.client_name || 'Cliente não encontrado'}</span>
-                </span>
-                <span className="flex items-center gap-1 text-sm text-blue-700 font-medium truncate">
-                  <CalendarCheck2 className="w-4 h-4 text-blue-300" />
-                  <span className="truncate">{app.service_name || 'Serviço não encontrado'}</span>
-                </span>
-                <div className="flex items-center gap-1 text-sm text-blue-700 font-bold mt-2">
-                  <Clock className="w-4 h-4 text-blue-300" />
-                  {new Date(app.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+      {/* Agendamentos Pendentes */}
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold text-blue-900">Agendamentos Pendentes</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {pendingAppointments.map(app => {
+            const cardColor = getServiceColor(app.service_name, serviceColorMap, CARD_COLORS);
+            return (
+              <div
+                key={app.id}
+                className={`flex flex-col justify-between rounded-2xl shadow-lg px-5 py-4 border hover:shadow-xl transition-shadow duration-200 min-h-[150px] ${cardColor}`}
+              >
+                <div className="flex-1 flex flex-col gap-2 min-w-0">
+                  <span className="flex items-center gap-1 font-semibold text-blue-900 truncate">
+                    <User className="w-4 h-4 text-blue-400" />
+                    <span className="truncate">{app.client_name || 'Cliente não encontrado'}</span>
+                  </span>
+                  <span className="flex items-center gap-1 text-sm text-blue-700 font-medium truncate">
+                    <CalendarCheck2 className="w-4 h-4 text-blue-300" />
+                    <span className="truncate">{app.service_name || 'Serviço não encontrado'}</span>
+                  </span>
+                  <div className="flex items-center gap-1 text-sm text-blue-700 font-bold mt-2">
+                    <Clock className="w-4 h-4 text-blue-300" />
+                    {new Date(app.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-2 mt-4">
-                <div className={`text-xs px-3 py-1 rounded-full font-semibold ${app.status === 'concluido' ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-blue-50 text-blue-700 border border-blue-200'}`}>
-                  {app.status || 'pendente'}
-                </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="flex items-center gap-2 border-blue-400 text-blue-700"
-                  onClick={() => setAnamneseModal({ open: true, clientId: app.client_id, clientName: app.client_name })}
-                >
-                  Anamnese
-                </Button>
-                {app.status !== 'concluido' && (
+                <div className="flex items-center gap-2 mt-4">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="flex items-center gap-2 border-blue-400 text-blue-700"
+                    onClick={() => setAnamneseModal({ open: true, clientId: app.client_id, clientName: app.client_name })}
+                  >
+                    Anamnese
+                  </Button>
                   <Button
                     size="sm"
                     className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white shadow-md px-4 py-1"
@@ -362,12 +371,86 @@ export default function EmployeeAppointmentCard({ appointments, onAction, curren
                   >
                     {loadingId === app.id ? 'Salvando...' : <><Check className="w-4 h-4 mr-1 inline" /> Concluir</>}
                   </Button>
-                )}
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
+
+      {/* Procedimentos Concluídos */}
+      {completedAppointments.length > 0 && (
+        <div className="space-y-4 mt-8">
+          <h3 className="text-lg font-semibold text-green-900 flex items-center gap-2">
+            <CheckCircle className="h-5 w-5" />
+            Procedimentos Concluídos Hoje
+          </h3>
+          
+          <div className="space-y-3">
+            {completedAppointments.map(app => (
+              <div 
+                key={app.id} 
+                className="bg-white rounded-lg shadow-md p-4 border-l-4 border-green-500"
+              >
+                <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Clock className="h-4 w-4 text-gray-500" />
+                      <span className="text-sm text-gray-600">
+                        {format(new Date(app.date), "HH:mm")}
+                      </span>
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                      <span className="text-sm text-green-600 font-medium">
+                        Concluído
+                      </span>
+                    </div>
+                    
+                    <h4 className="font-semibold text-gray-900 mb-1">
+                      {app.client_name}
+                    </h4>
+                    <p className="text-sm text-gray-600">
+                      {app.service_name}
+                    </p>
+                    
+                    {/* Indicador de Assinatura */}
+                    <div className="mt-3 flex items-center gap-2">
+                      {app.signature ? (
+                        <>
+                          <div className="flex items-center gap-1 text-purple-600">
+                            <FileText className="h-4 w-4" />
+                            <span className="text-sm font-medium">
+                              Assinado pelo cliente
+                            </span>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                            onClick={() => {
+                              setSelectedSignature(app.signature);
+                              setShowSignatureViewModal(true);
+                            }}
+                          >
+                            <FileText className="h-4 w-4 mr-1" />
+                            Ver Assinatura
+                          </Button>
+                        </>
+                      ) : (
+                        <div className="flex items-center gap-1 text-amber-600">
+                          <AlertTriangle className="h-4 w-4" />
+                          <span className="text-sm">
+                            Procedimento concluído sem assinatura
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       {anamneseModal.open && (
         <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-lg p-4 max-w-xl w-full relative max-h-[90vh] overflow-y-auto">
@@ -443,6 +526,48 @@ export default function EmployeeAppointmentCard({ appointments, onAction, curren
               </div>
             </div>
             <Button size="md" variant="primary" className="w-full" onClick={handleConfirmSignature} disabled={!signature}>Confirmar</Button>
+          </div>
+        </div>
+      )}
+      
+      {/* Modal para Visualizar Assinatura */}
+      {showSignatureViewModal && selectedSignature && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">
+                Assinatura do Cliente
+              </h3>
+              <button
+                onClick={() => {
+                  setShowSignatureViewModal(false);
+                  setSelectedSignature(null);
+                }}
+                className="p-1 hover:bg-gray-100 rounded-full"
+              >
+                <X className="h-5 w-5 text-gray-500" />
+              </button>
+            </div>
+            
+            <div className="border rounded-lg p-4 bg-gray-50">
+              <img 
+                src={selectedSignature} 
+                alt="Assinatura do cliente" 
+                className="w-full max-h-40 object-contain"
+              />
+            </div>
+            
+            <div className="mt-4">
+              <Button
+                onClick={() => {
+                  setShowSignatureViewModal(false);
+                  setSelectedSignature(null);
+                }}
+                className="w-full"
+              >
+                Fechar
+              </Button>
+            </div>
           </div>
         </div>
       )}

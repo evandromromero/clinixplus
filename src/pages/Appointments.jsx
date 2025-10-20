@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import SignatureCanvas from 'react-signature-canvas';
 import { 
   Users,
   Calendar,
@@ -275,6 +276,12 @@ export default function Appointments() {
   const [showQuickActionModal, setShowQuickActionModal] = useState(false);
   const [quickActionAppointment, setQuickActionAppointment] = useState(null);
   const [quickActionPosition, setQuickActionPosition] = useState({ x: 0, y: 0 });
+  
+  // Estados para modal de assinatura
+  const [showSignatureModal, setShowSignatureModal] = useState(false);
+  const [signatureAppointment, setSignatureAppointment] = useState(null);
+  const [appointmentSignature, setAppointmentSignature] = useState(null);
+  const signatureCanvasRef = useRef(null);
   
   // Estado para controlar a visibilidade dos filtros
   const [showFilters, setShowFilters] = useState(true);
@@ -1418,24 +1425,83 @@ export default function Appointments() {
     setShowQuickActionModal(true);
   };
 
-  // Função para conclusão rápida
-  const handleQuickComplete = async (appointmentId) => {
+  // Função para conclusão rápida - abre modal de assinatura
+  const handleQuickComplete = (appointmentId) => {
+    const appointment = appointments.find(a => a.id === appointmentId);
+    if (!appointment) {
+      console.error("Agendamento não encontrado");
+      return;
+    }
+    
+    // Fechar modal de ações rápidas
+    setShowQuickActionModal(false);
+    setQuickActionAppointment(null);
+    
+    // Abrir modal de assinatura
+    setSignatureAppointment(appointment);
+    setShowSignatureModal(true);
+  };
+  
+  // Função para confirmar conclusão com assinatura
+  const handleConfirmComplete = async () => {
     try {
-      const appointment = appointments.find(a => a.id === appointmentId);
-      if (!appointment) {
-        console.error("Agendamento não encontrado");
-        return;
-      }
+      const appointmentId = signatureAppointment.id;
       
-      await Appointment.update(appointmentId, { status: 'concluido' });
-      await updatePackageSession(appointment, 'concluido');
+      // Atualizar agendamento com assinatura (se houver)
+      await Appointment.update(appointmentId, { 
+        status: 'concluido',
+        signature: appointmentSignature || null
+      });
+      
+      // Atualizar pacote com assinatura
+      const updatedAppointment = {
+        ...signatureAppointment,
+        status: 'concluido',
+        signature: appointmentSignature || null
+      };
+      
+      await updatePackageSession(updatedAppointment, 'concluido');
       await loadData();
       
-      setShowQuickActionModal(false);
-      setQuickActionAppointment(null);
+      // Limpar e fechar
+      setShowSignatureModal(false);
+      setSignatureAppointment(null);
+      setAppointmentSignature(null);
+      
       showToast.success("Agendamento concluído com sucesso!");
     } catch (error) {
       console.error('Erro ao concluir agendamento:', error);
+      showToast.error("Erro ao concluir agendamento");
+    }
+  };
+  
+  // Função para pular assinatura
+  const handleSkipSignature = async () => {
+    try {
+      const appointmentId = signatureAppointment.id;
+      
+      // Concluir SEM assinatura
+      await Appointment.update(appointmentId, { 
+        status: 'concluido',
+        signature: null
+      });
+      
+      const updatedAppointment = {
+        ...signatureAppointment,
+        status: 'concluido',
+        signature: null
+      };
+      
+      await updatePackageSession(updatedAppointment, 'concluido');
+      await loadData();
+      
+      setShowSignatureModal(false);
+      setSignatureAppointment(null);
+      setAppointmentSignature(null);
+      
+      showToast.success("Agendamento concluído!");
+    } catch (error) {
+      console.error('Erro ao concluir:', error);
       showToast.error("Erro ao concluir agendamento");
     }
   };
@@ -3850,6 +3916,132 @@ export default function Appointments() {
                 onClick={() => setShowQuickActionModal(false)}
               >
                 Fechar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Assinatura para Conclusão */}
+      {showSignatureModal && signatureAppointment && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-lg w-full mx-4">
+            {/* Cabeçalho */}
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Concluir Agendamento
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowSignatureModal(false);
+                    setSignatureAppointment(null);
+                    setAppointmentSignature(null);
+                  }}
+                  className="p-1 hover:bg-gray-100 rounded-full"
+                >
+                  <X className="h-5 w-5 text-gray-500" />
+                </button>
+              </div>
+              
+              <div className="text-sm text-gray-600 space-y-1">
+                <p><strong>Cliente:</strong> {clients.find(c => c.id === signatureAppointment.client_id)?.name}</p>
+                <p><strong>Serviço:</strong> {services.find(s => s.id === signatureAppointment.service_id)?.name}</p>
+                <p><strong>Data:</strong> {format(new Date(signatureAppointment.date), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</p>
+              </div>
+            </div>
+            
+            {/* Canvas de Assinatura */}
+            <div className="border-t pt-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="font-medium text-base flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  Assinatura do Cliente
+                </Label>
+                <span className="text-xs text-gray-500 italic flex items-center gap-1">
+                  <Info className="h-3 w-3" />
+                  (Opcional)
+                </span>
+              </div>
+              
+              <div className="border rounded-lg bg-gray-50 p-3">
+                <SignatureCanvas
+                  ref={signatureCanvasRef}
+                  penColor="#175EA0"
+                  canvasProps={{ 
+                    width: 450, 
+                    height: 150, 
+                    className: 'rounded bg-white border w-full' 
+                  }}
+                  onEnd={() => {
+                    if (signatureCanvasRef.current) {
+                      const signature = signatureCanvasRef.current.getCanvas().toDataURL('image/png');
+                      setAppointmentSignature(signature);
+                    }
+                  }}
+                />
+                <div className="flex gap-2 mt-2">
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    onClick={() => {
+                      if (signatureCanvasRef.current) {
+                        signatureCanvasRef.current.clear();
+                        setAppointmentSignature(null);
+                      }
+                    }}
+                  >
+                    Limpar
+                  </Button>
+                </div>
+              </div>
+              
+              {/* Feedback */}
+              {appointmentSignature ? (
+                <div className="p-2 bg-green-50 border border-green-200 rounded flex items-center gap-2">
+                  <Check className="h-4 w-4 text-green-600" />
+                  <span className="text-sm text-green-700">
+                    Assinatura capturada com sucesso
+                  </span>
+                </div>
+              ) : (
+                <p className="text-xs text-gray-500 flex items-center gap-1">
+                  <Info className="h-3 w-3" />
+                  A assinatura é opcional. Você pode pular esta etapa.
+                </p>
+              )}
+            </div>
+            
+            {/* Botões */}
+            <div className="flex gap-2 mt-6">
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setShowSignatureModal(false);
+                  setSignatureAppointment(null);
+                  setAppointmentSignature(null);
+                }}
+                className="flex-1"
+              >
+                Cancelar
+              </Button>
+              
+              {!appointmentSignature && (
+                <Button 
+                  variant="secondary"
+                  onClick={handleSkipSignature}
+                  className="flex-1"
+                >
+                  Pular Assinatura
+                </Button>
+              )}
+              
+              <Button 
+                onClick={handleConfirmComplete}
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+              >
+                <CheckCircle className="h-4 w-4 mr-2" />
+                {appointmentSignature ? 'Concluir com Assinatura' : 'Concluir'}
               </Button>
             </div>
           </div>
