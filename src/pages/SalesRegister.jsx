@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -30,7 +30,9 @@ import {
   RefreshCw,
   Printer,
   CalendarIcon,
-  Loader2
+  Loader2,
+  Info,
+  FileText
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -40,6 +42,7 @@ import { createPageUrl } from "@/utils";
 import { AlertTriangle } from "lucide-react";
 import RateLimitHandler from '@/components/RateLimitHandler';
 import html2pdf from 'html2pdf.js';
+import SignatureCanvas from 'react-signature-canvas';
 
 export default function SalesRegister() {
   // Layout específico para mobile
@@ -300,6 +303,10 @@ export default function SalesRegister() {
   const [showReceiptDialog, setShowReceiptDialog] = useState(false);
   const [saleReceipt, setSaleReceipt] = useState(null);
   const [unfinishedSaleId, setUnfinishedSaleId] = useState(null);
+  
+  // Estados para assinatura de compra do pacote
+  const [packageSignature, setPackageSignature] = useState(null);
+  const signatureCanvasRef = useRef(null);
   
   const [finalDiscount, setFinalDiscount] = useState(0);
   const [finalDiscountType, setFinalDiscountType] = useState("percentage");
@@ -1160,6 +1167,124 @@ export default function SalesRegister() {
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Função para salvar assinatura nos pacotes criados
+  const saveSignatureToPackages = async (signature) => {
+    try {
+      if (!signature || !saleReceipt?.sale_id) {
+        return;
+      }
+
+      console.log('[SalesRegister] Salvando assinatura no pacote...');
+      
+      // Buscar a venda criada
+      const sale = await Sale.get(saleReceipt.sale_id);
+      
+      if (!sale) {
+        console.error('[SalesRegister] Venda não encontrada:', saleReceipt.sale_id);
+        return;
+      }
+
+      // Buscar pacotes criados nesta venda (mesmo cliente e data)
+      const relatedPackages = await ClientPackage.filter({
+        client_id: sale.client_id
+      });
+
+      // Filtrar pacotes pela data de compra (mesmo dia da venda)
+      const saleDate = sale.date.split('T')[0]; // Pegar só a data sem hora
+      const packagesToUpdate = relatedPackages.filter(pkg => {
+        const pkgDate = pkg.purchase_date?.split('T')[0];
+        return pkgDate === saleDate;
+      });
+
+      console.log('[SalesRegister] Pacotes encontrados para atualizar:', packagesToUpdate.length);
+
+      // Atualizar cada pacote com a assinatura de compra
+      for (const pkg of packagesToUpdate) {
+        await ClientPackage.update(pkg.id, {
+          purchase_signature: signature,
+          purchase_signature_date: new Date().toISOString()
+        });
+        console.log('[SalesRegister] Assinatura salva no pacote:', pkg.id);
+      }
+
+      toast({
+        title: "Sucesso",
+        description: "Assinatura salva no pacote com sucesso!",
+        variant: "success"
+      });
+
+    } catch (error) {
+      console.error('[SalesRegister] Erro ao salvar assinatura:', error);
+      toast({
+        title: "Aviso",
+        description: "Assinatura não pôde ser salva, mas a venda foi concluída.",
+        variant: "default"
+      });
+    }
+  };
+
+  // Função para gerar PDF do recibo
+  const generateReceiptPDF = async () => {
+    try {
+      const element = document.getElementById('receipt');
+      if (!element) {
+        throw new Error('Elemento do recibo não encontrado');
+      }
+
+      const opt = {
+        margin: 10,
+        filename: `Comprovante-Venda-${saleReceipt.sale_id}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+
+      await html2pdf().from(element).set(opt).save();
+
+      toast({
+        title: "Sucesso",
+        description: "Comprovante gerado com sucesso!",
+        variant: "success"
+      });
+    } catch (error) {
+      console.error("Erro ao gerar comprovante:", error);
+      toast({
+        title: "Erro",
+        description: "Erro ao gerar comprovante. Tente novamente.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Função para salvar assinatura e imprimir
+  const handleSaveSignatureAndPrint = async () => {
+    try {
+      // Se for venda de pacote e tiver assinatura, salvar
+      const hasPackageInSale = saleReceipt?.items?.some(item => 
+        item.type === 'pacote' || saleType === 'pacote'
+      );
+
+      if (hasPackageInSale && packageSignature) {
+        await saveSignatureToPackages(packageSignature);
+      }
+
+      // Gerar PDF do recibo
+      await generateReceiptPDF();
+
+    } catch (error) {
+      console.error("Erro ao processar:", error);
+    }
+  };
+
+  // Função para imprimir sem assinatura
+  const handlePrintWithoutSignature = async () => {
+    try {
+      await generateReceiptPDF();
+    } catch (error) {
+      console.error("Erro ao gerar PDF:", error);
     }
   };
 
@@ -2176,10 +2301,18 @@ export default function SalesRegister() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showReceiptDialog} onOpenChange={setShowReceiptDialog}>
-        <DialogContent>
+      <Dialog open={showReceiptDialog} onOpenChange={(open) => {
+        setShowReceiptDialog(open);
+        if (!open) {
+          setPackageSignature(null);
+        }
+      }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Comprovante de Venda</DialogTitle>
+            <DialogDescription>
+              Revise os detalhes da venda
+            </DialogDescription>
           </DialogHeader>
           
           <div id="receipt" className="space-y-4 py-4">
@@ -2234,41 +2367,96 @@ export default function SalesRegister() {
             </div>
           </div>
           
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowReceiptDialog(false)}>
+          {/* Canvas de Assinatura - Apenas para vendas de pacote */}
+          {(saleType === 'pacote' || saleReceipt?.items?.some(item => item.type === 'pacote')) && (
+            <div className="border-t pt-4 mt-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="font-medium text-base flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  Assinatura do Cliente
+                </Label>
+                <span className="text-xs text-gray-500 italic flex items-center gap-1">
+                  <Info className="h-3 w-3" />
+                  (Opcional)
+                </span>
+              </div>
+              
+              <div className="border rounded-lg bg-gray-50 p-3">
+                <SignatureCanvas
+                  ref={signatureCanvasRef}
+                  penColor="#175EA0"
+                  canvasProps={{ 
+                    width: 500, 
+                    height: 150, 
+                    className: 'rounded bg-white border w-full' 
+                  }}
+                  onEnd={() => {
+                    if (signatureCanvasRef.current) {
+                      const signature = signatureCanvasRef.current.getCanvas().toDataURL('image/png');
+                      setPackageSignature(signature);
+                    }
+                  }}
+                />
+                <div className="flex gap-2 mt-2">
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    onClick={() => {
+                      if (signatureCanvasRef.current) {
+                        signatureCanvasRef.current.clear();
+                        setPackageSignature(null);
+                      }
+                    }}
+                  >
+                    Limpar
+                  </Button>
+                </div>
+              </div>
+              
+              {/* Feedback visual */}
+              {packageSignature ? (
+                <div className="p-2 bg-green-50 border border-green-200 rounded flex items-center gap-2">
+                  <Check className="h-4 w-4 text-green-600" />
+                  <span className="text-sm text-green-700">
+                    Assinatura capturada com sucesso
+                  </span>
+                </div>
+              ) : (
+                <p className="text-xs text-gray-500 flex items-center gap-1">
+                  <Info className="h-3 w-3" />
+                  A assinatura é opcional. Você pode pular esta etapa.
+                </p>
+              )}
+            </div>
+          )}
+          
+          <DialogFooter className="gap-2 flex-wrap">
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setShowReceiptDialog(false);
+                setPackageSignature(null);
+              }}
+            >
               Fechar
             </Button>
+            
+            {/* Botão "Pular" se for pacote e não tiver assinatura */}
+            {(saleType === 'pacote' || saleReceipt?.items?.some(item => item.type === 'pacote')) && !packageSignature && (
+              <Button 
+                variant="secondary"
+                onClick={handlePrintWithoutSignature}
+              >
+                Pular Assinatura
+              </Button>
+            )}
+            
             <Button 
-              onClick={() => {
-                // Gerar PDF do comprovante
-                const element = document.getElementById('receipt');
-                const opt = {
-                  margin: 10,
-                  filename: `Comprovante-Venda-${saleReceipt.sale_id}.pdf`,
-                  image: { type: 'jpeg', quality: 0.98 },
-                  html2canvas: { scale: 2 },
-                  jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-                };
-                
-                html2pdf().from(element).set(opt).save().then(() => {
-                  toast({
-                    title: "Sucesso",
-                    description: "Comprovante gerado com sucesso!",
-                    variant: "success"
-                  });
-                }).catch(error => {
-                  console.error("Erro ao gerar comprovante:", error);
-                  toast({
-                    title: "Erro",
-                    description: "Erro ao gerar comprovante. Tente novamente.",
-                    variant: "destructive"
-                  });
-                });
-              }}
+              onClick={handleSaveSignatureAndPrint}
               className="bg-blue-600 hover:bg-blue-700"
             >
               <Printer className="mr-2 h-4 w-4" />
-              Imprimir
+              {packageSignature ? 'Salvar e Imprimir' : 'Imprimir'}
             </Button>
           </DialogFooter>
         </DialogContent>

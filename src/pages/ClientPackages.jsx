@@ -2824,6 +2824,43 @@ export default function ClientPackages() {
                       {/* Conteúdo expandido */}
                       {expandedPackages[clientPkg.id] && (
                         <div className="mt-3 pt-3 border-t border-gray-100">
+                          {/* Assinatura de Compra */}
+                          {clientPkg.purchase_signature && (
+                            <div className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                              <div className="flex items-center justify-between mb-2">
+                                <h4 className="text-sm font-medium text-purple-900 flex items-center gap-2">
+                                  <FileText className="h-4 w-4" />
+                                  Assinatura de Compra
+                                </h4>
+                                {clientPkg.purchase_signature_date && (
+                                  <span className="text-xs text-purple-600">
+                                    {format(new Date(clientPkg.purchase_signature_date), 
+                                      "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                                  </span>
+                                )}
+                              </div>
+                              
+                              {/* Preview da assinatura */}
+                              <div className="bg-white rounded border border-purple-200 p-2 mb-2">
+                                <img 
+                                  src={clientPkg.purchase_signature} 
+                                  alt="Assinatura de compra" 
+                                  className="max-h-20 mx-auto"
+                                />
+                              </div>
+                              
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                className="w-full text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                                onClick={() => openModal(clientPkg.purchase_signature)}
+                              >
+                                <FileText className="h-4 w-4 mr-1" />
+                                Ver Assinatura em Tela Cheia
+                              </Button>
+                            </div>
+                          )}
+
                           {/* Lista de Serviços */}
                           <div className="mt-2">
                             <h4 className="text-sm font-medium mb-2">Serviços Incluídos:</h4>
@@ -3081,6 +3118,50 @@ export default function ClientPackages() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Assinatura de Compra do Pacote */}
+                  {selectedPackage.purchase_signature && (
+                    <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                      <h3 className="text-sm font-medium text-purple-900 mb-3 flex items-center gap-2">
+                        <FileText className="h-5 w-5" />
+                        Assinatura de Compra do Pacote
+                      </h3>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <div className="bg-white rounded border border-purple-200 p-3">
+                            <img 
+                              src={selectedPackage.purchase_signature} 
+                              alt="Assinatura de compra" 
+                              className="max-h-32 mx-auto"
+                            />
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <div>
+                            <span className="text-sm font-medium text-purple-700">Data da Assinatura:</span>
+                            <p className="text-sm text-purple-600">
+                              {selectedPackage.purchase_signature_date ? 
+                                format(new Date(selectedPackage.purchase_signature_date), 
+                                  "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) :
+                                'Não informado'
+                              }
+                            </p>
+                          </div>
+                          
+                          <Button 
+                            variant="outline" 
+                            className="w-full text-purple-600 hover:text-purple-700 hover:bg-purple-50 mt-3"
+                            onClick={() => openModal(selectedPackage.purchase_signature)}
+                          >
+                            <FileText className="h-4 w-4 mr-2" />
+                            Ver Assinatura em Tela Cheia
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   <div>
                     <h3 className="text-sm font-medium text-gray-500 mb-2">Serviços Incluídos</h3>

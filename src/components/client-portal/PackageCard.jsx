@@ -128,6 +128,41 @@ export default function PackageCard({ packages = [], services = [] }) {
                 {/* Conteúdo expandido */}
                 {expandedPackages[packageData.id] && (
                   <div className="space-y-4 pt-2 border-t border-gray-100 mt-2">
+                    {/* Assinatura de Compra */}
+                    {packageData.purchase_signature && (
+                      <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                        <p className="text-sm font-medium text-purple-900 mb-2 flex items-center gap-2">
+                          <FileText className="h-4 w-4" />
+                          Sua Assinatura de Compra
+                        </p>
+                        
+                        <div className="bg-white rounded border border-purple-200 p-2 mb-2">
+                          <img 
+                            src={packageData.purchase_signature} 
+                            alt="Sua assinatura" 
+                            className="max-h-16 mx-auto"
+                          />
+                        </div>
+                        
+                        {packageData.purchase_signature_date && (
+                          <p className="text-xs text-purple-600 mb-2">
+                            Assinado em: {format(new Date(packageData.purchase_signature_date), 
+                              "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                          </p>
+                        )}
+                        
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          className="text-purple-500 hover:text-purple-700 hover:bg-purple-50 w-full"
+                          onClick={() => openModal(packageData.purchase_signature)}
+                        >
+                          <FileText className="h-4 w-4 mr-1" />
+                          Ver Assinatura Completa
+                        </Button>
+                      </div>
+                    )}
+
                     {/* Histórico de sessões utilizadas */}
                     {packageData.session_history && packageData.session_history.length > 0 && (
                       <div className="space-y-2">
