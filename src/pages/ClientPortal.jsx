@@ -10,6 +10,7 @@ import SubscriptionCard from "../components/client-portal/SubscriptionCard";
 import GiftCardCard from "../components/client-portal/GiftCardCard";
 import HistoryCard from "../components/client-portal/HistoryCard";
 import ServiceShopCard from "../components/client-portal/ServiceShopCard";
+import PackageShopCard from "../components/client-portal/PackageShopCard";
 import { Client } from "@/firebase/entities";
 import { Appointment } from "@/firebase/entities";
 import { ClientPackage } from "@/firebase/entities";
@@ -396,6 +397,10 @@ export default function ClientPortal() {
               <ShoppingCart className="w-4 h-4 mr-2" />
               Comprar Serviços
             </TabsTrigger>
+            <TabsTrigger value="buypackages" className="data-[state=active]:bg-purple-100 data-[state=active]:text-purple-700">
+              <ShoppingBag className="w-4 h-4 mr-2" />
+              Comprar Pacotes
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="appointments" className="space-y-4">
@@ -423,6 +428,10 @@ export default function ClientPortal() {
 
           <TabsContent value="buyservices" className="space-y-4">
             <ServiceShopCard clientId={currentClient?.id} />
+          </TabsContent>
+
+          <TabsContent value="buypackages" className="space-y-4">
+            <PackageShopCard clientId={currentClient?.id} />
           </TabsContent>
         </Tabs>
       </main>

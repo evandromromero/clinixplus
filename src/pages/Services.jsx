@@ -50,7 +50,7 @@ export default function Services() {
   
   const [newService, setNewService] = useState({
     name: "",
-    category: "facial",
+    category: "estetica_facial",
     duration: 60,
     price: 0,
     description: "",
@@ -129,7 +129,7 @@ export default function Services() {
     setSelectedService(service);
     setNewService({
       name: service.name || "",
-      category: service.category || "facial",
+      category: service.category || "estetica_facial",
       duration: service.duration || 60,
       price: service.price || 0,
       description: service.description || "",
@@ -150,7 +150,7 @@ export default function Services() {
   const resetForm = () => {
     setNewService({
       name: "",
-      category: "facial",
+      category: "estetica_facial",
       duration: 60,
       price: 0,
       description: "",
@@ -179,6 +179,35 @@ export default function Services() {
       style: 'currency',
       currency: 'BRL'
     }).format(price);
+  };
+
+  const getCategoryLabel = (categoryValue) => {
+    const categories = {
+      'estetica_facial': 'Estética Facial',
+      'estetica_corporal': 'Estética Corporal',
+      'tratamentos_capilares': 'Tratamentos Capilares',
+      'depilacao': 'Depilação',
+      'massoterapia': 'Massoterapia',
+      'drenagem_linfatica': 'Drenagem Linfática',
+      'rejuvenescimento': 'Rejuvenescimento',
+      'emagrecimento': 'Emagrecimento',
+      'sobrancelhas_design': 'Sobrancelhas/Design',
+      'manicure_pedicure': 'Manicure/Pedicure',
+      'podologia': 'Podologia',
+      'fisioterapia': 'Fisioterapia',
+      'pilates': 'Pilates',
+      'acupuntura': 'Acupuntura',
+      'nutricao': 'Nutrição',
+      'maquiagem': 'Maquiagem',
+      'bronzeamento': 'Bronzeamento',
+      'outros': 'Outros',
+      // Categorias antigas (compatibilidade)
+      'facial': 'Facial',
+      'corporal': 'Corporal',
+      'capilar': 'Capilar',
+      'massagem': 'Massagem'
+    };
+    return categories[categoryValue] || categoryValue;
   };
 
   return (
@@ -225,7 +254,7 @@ export default function Services() {
                   <h3 className="font-semibold text-lg">{service.name}</h3>
                   <div className="flex flex-wrap gap-2 mt-1">
                     <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-purple-100 text-purple-700">
-                      {service.category}
+                      {getCategoryLabel(service.category)}
                     </span>
                     {service.return_days > 0 && (
                       <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-700">
@@ -321,11 +350,24 @@ export default function Services() {
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione a categoria" />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="facial">Facial</SelectItem>
-                    <SelectItem value="corporal">Corporal</SelectItem>
-                    <SelectItem value="capilar">Capilar</SelectItem>
-                    <SelectItem value="massagem">Massagem</SelectItem>
+                  <SelectContent className="max-h-[300px] overflow-y-auto">
+                    <SelectItem value="estetica_facial">Estética Facial</SelectItem>
+                    <SelectItem value="estetica_corporal">Estética Corporal</SelectItem>
+                    <SelectItem value="tratamentos_capilares">Tratamentos Capilares</SelectItem>
+                    <SelectItem value="depilacao">Depilação</SelectItem>
+                    <SelectItem value="massoterapia">Massoterapia</SelectItem>
+                    <SelectItem value="drenagem_linfatica">Drenagem Linfática</SelectItem>
+                    <SelectItem value="rejuvenescimento">Rejuvenescimento</SelectItem>
+                    <SelectItem value="emagrecimento">Emagrecimento</SelectItem>
+                    <SelectItem value="sobrancelhas_design">Sobrancelhas/Design</SelectItem>
+                    <SelectItem value="manicure_pedicure">Manicure/Pedicure</SelectItem>
+                    <SelectItem value="podologia">Podologia</SelectItem>
+                    <SelectItem value="fisioterapia">Fisioterapia</SelectItem>
+                    <SelectItem value="pilates">Pilates</SelectItem>
+                    <SelectItem value="acupuntura">Acupuntura</SelectItem>
+                    <SelectItem value="nutricao">Nutrição</SelectItem>
+                    <SelectItem value="maquiagem">Maquiagem</SelectItem>
+                    <SelectItem value="bronzeamento">Bronzeamento</SelectItem>
                     <SelectItem value="outros">Outros</SelectItem>
                   </SelectContent>
                 </Select>

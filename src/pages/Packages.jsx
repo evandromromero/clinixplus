@@ -29,6 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 
 export default function Packages() {
   const [packages, setPackages] = useState([]);
@@ -46,7 +47,10 @@ export default function Packages() {
     discount_type: "percentage",
     color: "#294380", // Cor padrão
     services: [],
-    desired_price: ""
+    desired_price: "",
+    available_in_shop: false,
+    is_promotion: false,
+    image_url: ""
   });
   const [selectedServiceId, setSelectedServiceId] = useState("");
   const [selectedServiceQuantity, setSelectedServiceQuantity] = useState(1);
@@ -109,7 +113,10 @@ export default function Packages() {
         discount: 0,
         discount_type: "percentage",
         color: "#294380",
-        services: []
+        services: [],
+        available_in_shop: false,
+        is_promotion: false,
+        image_url: ""
       });
       setCurrentPackage(null);
       setIsEditing(false);
@@ -139,7 +146,10 @@ export default function Packages() {
       discount: packageToEdit.discount || 0,
       discount_type: packageToEdit.discount_type || "percentage",
       color: packageToEdit.color || "#294380",
-      services: updatedServices
+      services: updatedServices,
+      available_in_shop: packageToEdit.available_in_shop || false,
+      is_promotion: packageToEdit.is_promotion || false,
+      image_url: packageToEdit.image_url || ""
     });
 
     // Recalcular o preço total após carregar os serviços
@@ -307,7 +317,10 @@ export default function Packages() {
         services: packageForm.services.map(s => ({
           service_id: s.service_id,
           quantity: s.quantity
-        }))
+        })),
+        available_in_shop: packageForm.available_in_shop,
+        is_promotion: packageForm.is_promotion,
+        image_url: packageForm.image_url
       };
 
       if (isEditing && currentPackage?.id) {
@@ -749,6 +762,51 @@ export default function Packages() {
                     </TableBody>
                   </Table>
                 )}
+              </div>
+
+              {/* Configurações da Loja (Portal do Cliente) */}
+              <div className="space-y-4 border-t pt-4">
+                <h3 className="text-sm font-medium">Configurações da Loja (Portal do Cliente)</h3>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="available_in_shop">Vender na Loja</Label>
+                      <p className="text-xs text-gray-500">Disponibilizar para compra no portal do cliente</p>
+                    </div>
+                    <Switch
+                      id="available_in_shop"
+                      checked={packageForm.available_in_shop}
+                      onCheckedChange={(checked) => setPackageForm({ ...packageForm, available_in_shop: checked })}
+                    />
+                  </div>
+
+                  {packageForm.available_in_shop && (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <Label htmlFor="is_promotion">Destacar como Promoção</Label>
+                          <p className="text-xs text-gray-500">Aparece entre os primeiros na loja</p>
+                        </div>
+                        <Switch
+                          id="is_promotion"
+                          checked={packageForm.is_promotion}
+                          onCheckedChange={(checked) => setPackageForm({ ...packageForm, is_promotion: checked })}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="image_url">URL da Imagem</Label>
+                        <Input
+                          id="image_url"
+                          value={packageForm.image_url}
+                          onChange={(e) => setPackageForm({ ...packageForm, image_url: e.target.value })}
+                          placeholder="https://exemplo.com/imagem-pacote.jpg"
+                        />
+                        <p className="text-xs text-gray-500">Imagem que aparecerá na loja (opcional)</p>
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           </div>

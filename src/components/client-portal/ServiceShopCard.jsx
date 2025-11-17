@@ -18,7 +18,10 @@ export default function ServiceShopCard({ clientId }) {
   const [services, setServices] = useState([]);
   const [filteredServices, setFilteredServices] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [showPromotionsOnly, setShowPromotionsOnly] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [categories, setCategories] = useState([]);
   const [selectedService, setSelectedService] = useState(null);
   const [showServiceDialog, setShowServiceDialog] = useState(false);
   const [showQuantityDialog, setShowQuantityDialog] = useState(false);
@@ -31,7 +34,7 @@ export default function ServiceShopCard({ clientId }) {
   const [paymentMessage, setPaymentMessage] = useState(null);
   const [cart, setCart] = useState([]);
   
-  const ITEMS_PER_PAGE = 6;
+  const ITEMS_PER_PAGE = 9;
   const totalPages = Math.ceil(filteredServices.length / ITEMS_PER_PAGE);
   const cartTotal = cart.reduce((total, item) => total + (item.price * item.quantity), 0);
   
@@ -143,6 +146,10 @@ export default function ServiceShopCard({ clientId }) {
         
         setServices(servicesData);
         setFilteredServices(servicesData);
+        
+        // Extrair categorias únicas
+        const uniqueCategories = [...new Set(servicesData.map(s => s.category).filter(Boolean))];
+        setCategories(uniqueCategories.sort());
       } catch (error) {
         console.error("Erro ao carregar serviços:", error);
       } finally {
@@ -153,20 +160,32 @@ export default function ServiceShopCard({ clientId }) {
     loadServices();
   }, [clientId]);
   
-  // Filtrar serviços quando o termo de busca mudar
+  // Filtrar serviços quando busca, categoria ou promoção mudarem
   useEffect(() => {
-    if (searchTerm.trim() === "") {
-      setFilteredServices(services);
-    } else {
-      const filtered = services.filter(service => 
+    let filtered = [...services];
+    
+    // Filtro de busca
+    if (searchTerm.trim() !== "") {
+      filtered = filtered.filter(service => 
         service.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         service.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         service.category?.toLowerCase().includes(searchTerm.toLowerCase())
       );
-      setFilteredServices(filtered);
     }
+    
+    // Filtro de categoria
+    if (selectedCategory !== "all") {
+      filtered = filtered.filter(service => service.category === selectedCategory);
+    }
+    
+    // Filtro de promoção
+    if (showPromotionsOnly) {
+      filtered = filtered.filter(service => service.is_promotion === true);
+    }
+    
+    setFilteredServices(filtered);
     setCurrentPage(1);
-  }, [searchTerm, services]);
+  }, [searchTerm, selectedCategory, showPromotionsOnly, services]);
   
   // Paginação
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
@@ -182,6 +201,36 @@ export default function ServiceShopCard({ clientId }) {
       style: 'currency',
       currency: 'BRL'
     }).format(price);
+  };
+
+  // Formatar nome da categoria
+  const getCategoryLabel = (categoryValue) => {
+    const categories = {
+      'estetica_facial': 'Estética Facial',
+      'estetica_corporal': 'Estética Corporal',
+      'tratamentos_capilares': 'Tratamentos Capilares',
+      'depilacao': 'Depilação',
+      'massoterapia': 'Massoterapia',
+      'drenagem_linfatica': 'Drenagem Linfática',
+      'rejuvenescimento': 'Rejuvenescimento',
+      'emagrecimento': 'Emagrecimento',
+      'sobrancelhas_design': 'Sobrancelhas/Design',
+      'manicure_pedicure': 'Manicure/Pedicure',
+      'podologia': 'Podologia',
+      'fisioterapia': 'Fisioterapia',
+      'pilates': 'Pilates',
+      'acupuntura': 'Acupuntura',
+      'nutricao': 'Nutrição',
+      'maquiagem': 'Maquiagem',
+      'bronzeamento': 'Bronzeamento',
+      'outros': 'Outros',
+      // Categorias antigas (compatibilidade)
+      'facial': 'Facial',
+      'corporal': 'Corporal',
+      'capilar': 'Capilar',
+      'massagem': 'Massagem'
+    };
+    return categories[categoryValue] || categoryValue;
   };
   
   // Abrir modal de detalhes do serviço
@@ -519,7 +568,7 @@ export default function ServiceShopCard({ clientId }) {
             
             <div className="flex justify-between items-center mb-2">
               <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-purple-100 text-purple-700">
-                {service.category}
+                {getCategoryLabel(service.category)}
               </span>
               <div className="flex items-center text-sm text-gray-600">
                 <Clock className="h-4 w-4 mr-1" />
@@ -580,6 +629,7 @@ export default function ServiceShopCard({ clientId }) {
       </div>
       
       <div className="p-4">
+        {/* Campo de Busca */}
         <div className="relative mb-4">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
           <Input
@@ -588,6 +638,64 @@ export default function ServiceShopCard({ clientId }) {
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-8"
           />
+        </div>
+        
+        {/* Filtros */}
+        <div className="mb-6 space-y-3">
+          {/* Filtro de Promoção */}
+          <div className="flex items-center gap-2">
+            <Button
+              variant={showPromotionsOnly ? "default" : "outline"}
+              size="sm"
+              onClick={() => setShowPromotionsOnly(!showPromotionsOnly)}
+              className={showPromotionsOnly ? "bg-red-500 hover:bg-red-600 text-white" : ""}
+            >
+              🔥 {showPromotionsOnly ? "Mostrando Promoções" : "Ver Promoções"}
+            </Button>
+            
+            {(selectedCategory !== "all" || showPromotionsOnly) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setSelectedCategory("all");
+                  setShowPromotionsOnly(false);
+                }}
+                className="text-gray-600 hover:text-gray-800"
+              >
+                Limpar Filtros
+              </Button>
+            )}
+          </div>
+          
+          {/* Filtro de Categorias */}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant={selectedCategory === "all" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setSelectedCategory("all")}
+              className={selectedCategory === "all" ? "bg-[#3475B8] hover:bg-[#2C64A0]" : ""}
+            >
+              Todas
+            </Button>
+            
+            {categories.map((category) => (
+              <Button
+                key={category}
+                variant={selectedCategory === category ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSelectedCategory(category)}
+                className={selectedCategory === category ? "bg-[#3475B8] hover:bg-[#2C64A0]" : ""}
+              >
+                {getCategoryLabel(category)}
+              </Button>
+            ))}
+          </div>
+          
+          {/* Contador de Resultados */}
+          <div className="text-sm text-gray-600">
+            {filteredServices.length} {filteredServices.length === 1 ? 'serviço encontrado' : 'serviços encontrados'}
+          </div>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -653,7 +761,7 @@ export default function ServiceShopCard({ clientId }) {
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
                   <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-purple-100 text-purple-700">
-                    {selectedService.category}
+                    {getCategoryLabel(selectedService.category)}
                   </span>
                   <div className="flex items-center text-sm text-gray-600">
                     <Clock className="h-4 w-4 mr-1" />
