@@ -1,32 +1,10 @@
-// Polyfill para process.env no navegador
-if (typeof window !== 'undefined') {
-  if (typeof process === 'undefined') {
-    window.process = {
-      env: {
-        npm_package_version: '1.0.0',
-        npm_package_name: 'clinixplus',
-        NODE_ENV: 'production'
-      }
-    };
-  } else if (typeof process.env === 'undefined') {
-    process.env = {
-      npm_package_version: '1.0.0',
-      npm_package_name: 'clinixplus',
-      NODE_ENV: 'production'
-    };
-  }
-}
-
-// Importar SDK do Mercado Pago v2
-import { MercadoPagoConfig, Preference } from 'mercadopago';
-
 /**
- * Serviço para integração com o Mercado Pago
+ * Serviço SIMPLIFICADO para integração com o Mercado Pago
+ * Usa apenas API REST - sem dependência da SDK problemática
  */
 class MercadoPagoService {
   constructor() {
     this.isInitialized = false;
-    this.client = null;
     this.config = null;
   }
 
@@ -35,7 +13,7 @@ class MercadoPagoService {
    * @returns {boolean} - Status de inicialização
    */
   checkInitialized() {
-    if (!this.isInitialized || !this.client) {
+    if (!this.isInitialized || !this.config) {
       console.error('Mercado Pago não inicializado. Chame initialize() primeiro.');
       return false;
     }
@@ -47,63 +25,28 @@ class MercadoPagoService {
    * @param {Object} config - Configurações do Mercado Pago
    */
   initialize(config = {}) {
-    console.log('Iniciando inicialização do Mercado Pago com config:', {
-      hasConfig: !!config,
-      hasAccessToken: !!config.mercadopago_access_token,
-      hasPublicKey: !!config.mercadopago_public_key,
-      enabled: config.mercadopago_enabled,
-      sandbox: config.mercadopago_sandbox
-    });
-    
-    this.config = config;
-    
-    // Verificar se estamos em ambiente de desenvolvimento (localhost)
-    const isDevelopment = typeof window !== 'undefined' && 
-      (window.location.hostname === 'localhost' || 
-       window.location.hostname === '127.0.0.1');
+    console.log('✅ Inicializando Mercado Pago (API REST)');
     
     // Verificar se o token de acesso está disponível
     if (!config.mercadopago_access_token) {
-      console.error('Access token do Mercado Pago não fornecido');
+      console.error('❌ Access token do Mercado Pago não fornecido');
       return false;
     }
     
     // Verificar se o Mercado Pago está habilitado
     if (config.mercadopago_enabled === false) {
-      console.warn('Mercado Pago está desabilitado nas configurações');
-      // Continuar mesmo assim para não quebrar o fluxo
+      console.warn('⚠️ Mercado Pago está desabilitado nas configurações');
     }
 
-    try {
-      // Na SDK v2, MercadoPagoConfig é o cliente em si
-      console.log('Criando instância do MercadoPagoConfig com token:', 
-                 config.mercadopago_access_token ? `${config.mercadopago_access_token.substring(0, 10)}...` : 'não disponível');
-      
-      // Criar instância com o token correto
-      this.client = new MercadoPagoConfig({
-        accessToken: config.mercadopago_access_token
-      });
-      
-      console.log('Instância do MercadoPagoConfig criada:', {
-        clientExists: !!this.client,
-        clientType: typeof this.client
-      });
-      
-      this.isInitialized = true;
-      this.config = config;
-      
-      console.log('Mercado Pago inicializado com sucesso:', {
-        token: config.mercadopago_access_token ? `${config.mercadopago_access_token.substring(0, 10)}...` : 'não disponível',
-        sandbox: config.mercadopago_sandbox ? 'Ativado' : 'Desativado'
-      });
-      return true;
-    } catch (error) {
-      console.error('Erro ao inicializar Mercado Pago:', error);
-      console.error('Mensagem de erro:', error.message);
-      console.error('Stack trace:', error.stack);
-      this.isInitialized = false;
-      return false;
-    }
+    this.config = config;
+    this.isInitialized = true;
+    
+    console.log('✅ Mercado Pago inicializado:', {
+      token: `${config.mercadopago_access_token.substring(0, 15)}...`,
+      sandbox: config.mercadopago_sandbox ? 'Ativado' : 'Desativado'
+    });
+    
+    return true;
   }
 
   /**
@@ -112,23 +55,19 @@ class MercadoPagoService {
    * @returns {Promise<Object>} - URL do link de pagamento
    */
   async createPaymentLink(data) {
-    console.log('Iniciando createPaymentLink com dados:', data);
+    console.log('🚀 Criando link de pagamento via API REST');
     
     if (!this.checkInitialized()) {
-      console.error('Mercado Pago não inicializado!');
+      console.error('❌ Mercado Pago não inicializado!');
       return null;
     }
 
     try {
-      // Criar um identificador único para a transação
-      const transactionId = `tx_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
-      console.log('ID de transação gerado:', transactionId);
-      
       // Construir objeto de dados para a preferência
       const preferenceData = {
-        items: [
+        items: data.items || [
           {
-            id: data.external_reference || transactionId,
+            id: data.external_reference,
             title: data.plan_name || 'Serviço',
             description: data.plan_name || 'Serviço',
             quantity: 1,
@@ -137,144 +76,93 @@ class MercadoPagoService {
           }
         ],
         payer: {
-          email: data.payer_email || 'test_user_123@testuser.com'
+          email: data.payer_email || 'cliente@email.com'
         },
-        external_reference: data.external_reference || transactionId,
+        external_reference: data.external_reference,
         statement_descriptor: 'CLINIXPLUS'
       };
       
-      // Configurar URLs de retorno
-      const baseUrl = window.location.origin + window.location.pathname;
-      preferenceData.back_urls = {
-        success: data.success_url || baseUrl,
-        failure: data.failure_url || baseUrl,
-        pending: data.pending_url || baseUrl
-      };
-      
-      // Configurar auto_return
-      preferenceData.auto_return = 'approved';
-      
-      console.log('Configuração da preferência:', JSON.stringify(preferenceData, null, 2));
-      console.log('URLs de retorno configuradas:', JSON.stringify(preferenceData.back_urls, null, 2));
-      
-      // Verificar inicialização do Mercado Pago
-      console.log('Estado do cliente Mercado Pago:', {
-        isInitialized: this.isInitialized,
-        hasClient: !!this.client,
-        hasConfig: !!this.config,
-        accessToken: (this.config && this.config.mercadopago_access_token) ? 
-          `${this.config.mercadopago_access_token.substring(0, 10)}...` : 
-          'não disponível'
-      });
-      
-      // Verificar se estamos em ambiente de desenvolvimento
-      const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      
-      // NUNCA usar simulação em produção, apenas em desenvolvimento quando explicitamente solicitado
-      // ou quando não houver token válido
-      if (isDevelopment && (!this.config || !this.config.mercadopago_access_token || 
-          (this.config.mercadopago_sandbox === true && 
-           this.config.mercadopago_access_token && 
-           this.config.mercadopago_access_token.startsWith('TEST-')))) {
-        console.log('Ambiente de desenvolvimento com sandbox ativado. Usando modo de simulação para Mercado Pago.');
-        
-        // Simular uma resposta de sucesso para ambiente de desenvolvimento
-        const mockPreferenceId = `MOCK_PREF_${transactionId}`;
-        const mockUrl = `https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=${mockPreferenceId}`;
-        
-        // Aguardar um pouco para simular a chamada à API
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        console.log('Simulando resposta do Mercado Pago:', {
-          id: mockPreferenceId,
-          init_point: mockUrl,
-          sandbox_init_point: mockUrl
-        });
-        
-        return {
-          url: mockUrl,
-          payment_id: mockPreferenceId,
-          preference_id: mockPreferenceId,
-          external_reference: data.external_reference || transactionId,
-          sandbox: true,
-          simulated: true
+      // Adicionar back_urls (sem auto_return para evitar erro 400)
+      if (data.success_url && data.failure_url && data.pending_url) {
+        preferenceData.back_urls = {
+          success: data.success_url,
+          failure: data.failure_url,
+          pending: data.pending_url
         };
+        // NÃO adicionar auto_return - causa erro 400 no Mercado Pago
       }
       
-      try {
-        // Verificar se o cliente foi inicializado corretamente
-        if (!this.client || !this.config || !this.config.mercadopago_access_token) {
-          throw new Error('Cliente Mercado Pago não inicializado corretamente ou token de acesso ausente');
-        }
+      console.log('📦 Dados da preferência:', JSON.stringify(preferenceData, null, 2));
+      
+      // Usar API REST diretamente
+      const response = await this.createPreferenceViaREST(preferenceData);
+      
+      if (response && response.id) {
+        console.log('✅ Link de pagamento criado com sucesso!');
         
-        // Na SDK v2, precisamos criar a instância de Preference com o client
-        console.log('Criando instância de Preference com client...');
-        const preference = new Preference(this.client);
-        console.log('Instância de Preference criada com sucesso');
-        
-        // Criar a preferência no Mercado Pago
-        console.log('Chamando método create da preferência com dados:', JSON.stringify(preferenceData, null, 2));
-        const response = await preference.create({ body: preferenceData });
-        console.log('Resposta bruta do Mercado Pago:', response);
-        
-        if (!response || !response.id) {
-          console.error('Resposta inválida do Mercado Pago (sem ID):', response);
-          throw new Error('Resposta inválida do Mercado Pago: ID não encontrado');
-        }
-        
-        // Na SDK v2, a resposta já é o corpo, não precisa acessar response.body
-        console.log('Resposta do Mercado Pago processada:', {
-          id: response.id,
-          init_point: response.init_point,
-          sandbox_init_point: response.sandbox_init_point
-        });
-        
-        // Determinar a URL correta com base no ambiente
-        const useSandbox = this.config && this.config.mercadopago_sandbox === true;
+        const useSandbox = this.config.mercadopago_sandbox === true;
         const paymentUrl = useSandbox
           ? response.sandbox_init_point 
           : response.init_point;
-        
-        console.log('URL de pagamento gerada:', paymentUrl);
         
         return {
           url: paymentUrl,
           payment_id: response.id,
           preference_id: response.id,
-          external_reference: response.external_reference || preferenceData.external_reference
-        };
-      } catch (apiError) {
-        console.error('Erro na API do Mercado Pago:', apiError);
-        console.error('Mensagem de erro da API:', apiError.message);
-        console.error('Stack trace do erro da API:', apiError.stack);
-        
-        // Verificar se há detalhes de erro da API
-        if (apiError.cause) {
-          console.error('Causa do erro:', apiError.cause);
-        }
-        
-        // Em caso de erro na API, usar o modo de simulação como fallback
-        console.log('Usando modo de simulação como fallback devido a erro na API');
-        
-        const mockPreferenceId = `FALLBACK_${transactionId}`;
-        const mockUrl = `https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=${mockPreferenceId}`;
-        
-        return {
-          url: mockUrl,
-          payment_id: mockPreferenceId,
-          preference_id: mockPreferenceId,
-          external_reference: data.external_reference || transactionId,
-          sandbox: true,
-          simulated: true,
-          error: apiError.message
+          external_reference: response.external_reference,
+          method: 'REST_API'
         };
       }
+      
+      throw new Error('Resposta inválida da API');
+      
     } catch (error) {
-      console.error('Erro detalhado ao criar link de pagamento:', error);
-      console.error('Mensagem de erro:', error.message);
-      console.error('Stack trace:', error.stack);
+      console.error('❌ Erro ao criar link de pagamento:', error);
       throw error;
     }
+  }
+
+  /**
+   * Cria preferência via API REST direta (fallback para SDK)
+   * @param {Object} preferenceData - Dados da preferência
+   * @returns {Promise<Object>} - Resposta da API
+   */
+  async createPreferenceViaREST(preferenceData) {
+    console.log('[REST API] Criando preferência via fetch direto...');
+    
+    if (!this.config || !this.config.mercadopago_access_token) {
+      throw new Error('Token de acesso não disponível');
+    }
+    
+    const apiUrl = this.config.mercadopago_sandbox 
+      ? 'https://api.mercadopago.com/checkout/preferences'
+      : 'https://api.mercadopago.com/checkout/preferences';
+    
+    console.log('[REST API] URL da API:', apiUrl);
+    console.log('[REST API] Dados da preferência:', JSON.stringify(preferenceData, null, 2));
+    
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.config.mercadopago_access_token}`
+      },
+      body: JSON.stringify(preferenceData)
+    });
+    
+    console.log('[REST API] Status da resposta:', response.status);
+    console.log('[REST API] Headers da resposta:', Object.fromEntries(response.headers.entries()));
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[REST API] Erro na resposta:', errorText);
+      throw new Error(`API REST falhou: ${response.status} - ${errorText}`);
+    }
+    
+    const data = await response.json();
+    console.log('[REST API] Dados recebidos:', data);
+    
+    return data;
   }
 
   /**

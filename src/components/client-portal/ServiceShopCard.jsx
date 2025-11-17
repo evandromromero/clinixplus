@@ -428,6 +428,10 @@ export default function ServiceShopCard({ clientId }) {
           
           // Fechar modal do carrinho
           setShowCartDialog(false);
+          
+          // Redirecionar para página de pagamento do Mercado Pago
+          console.log('🚀 Redirecionando para Mercado Pago...');
+          window.location.href = paymentResponse.url;
         } else {
           console.error('Resposta do Mercado Pago não contém URL:', paymentResponse);
         }

@@ -228,6 +228,19 @@ export default function ClientPortal() {
     }
   };
   
+  // Função para recarregar dados do cliente
+  const refreshClientData = async () => {
+    if (currentClient) {
+      try {
+        console.log('[ClientPortal] Recarregando dados do cliente...');
+        await loadClientData({ client: currentClient });
+        console.log('[ClientPortal] Dados recarregados com sucesso!');
+      } catch (error) {
+        console.error('[ClientPortal] Erro ao recarregar dados:', error);
+      }
+    }
+  };
+  
   const handleLogout = () => {
     // Limpar dados de login do localStorage
     localStorage.removeItem('clientPortalLogin');
@@ -386,7 +399,10 @@ export default function ClientPortal() {
           </TabsList>
 
           <TabsContent value="appointments" className="space-y-4">
-            <AppointmentCard appointments={appointments} />
+            <AppointmentCard 
+              appointments={appointments} 
+              onRefresh={refreshClientData}
+            />
           </TabsContent>
 
           <TabsContent value="packages" className="space-y-4">
