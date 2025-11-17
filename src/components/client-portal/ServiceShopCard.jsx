@@ -117,15 +117,29 @@ export default function ServiceShopCard({ clientId }) {
           }
         }
         
-        // Carregar serviços
+        // Carregar serviços disponíveis na loja
         const servicesRef = collection(db, 'services');
-        const servicesQuery = query(servicesRef, where("show_on_website", "==", true));
+        const servicesQuery = query(servicesRef, where("available_in_shop", "==", true));
         const snapshot = await getDocs(servicesQuery);
         
-        const servicesData = snapshot.docs.map(doc => ({
+        const allServices = snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
-        })).sort((a, b) => (a.website_order || 999) - (b.website_order || 999));
+        }));
+        
+        // Separar promoções e serviços normais
+        const promotions = allServices.filter(s => s.is_promotion === true);
+        const regular = allServices.filter(s => s.is_promotion !== true);
+        
+        // Ordenar alfabeticamente cada grupo
+        const sortAlphabetically = (a, b) => 
+          (a.name || '').localeCompare(b.name || '', 'pt-BR', { sensitivity: 'base' });
+        
+        promotions.sort(sortAlphabetically);
+        regular.sort(sortAlphabetically);
+        
+        // Juntar: promoções primeiro, depois normais
+        const servicesData = [...promotions, ...regular];
         
         setServices(servicesData);
         setFilteredServices(servicesData);
@@ -494,7 +508,14 @@ export default function ServiceShopCard({ clientId }) {
           )}
           
           <div className="p-4">
-            <h3 className="font-medium text-lg mb-1">{service.name}</h3>
+            <div className="flex items-start justify-between mb-1">
+              <h3 className="font-medium text-lg">{service.name}</h3>
+              {service.is_promotion && (
+                <Badge className="bg-red-500 text-white text-xs">
+                  🔥 PROMOÇÃO
+                </Badge>
+              )}
+            </div>
             
             <div className="flex justify-between items-center mb-2">
               <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-purple-100 text-purple-700">

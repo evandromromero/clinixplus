@@ -60,7 +60,9 @@ export default function Services() {
     image_url: "",
     show_on_website: false,
     show_price_on_website: true,
-    website_order: 999
+    website_order: 999,
+    available_in_shop: false,
+    is_promotion: false
   });
 
   useEffect(() => {
@@ -137,7 +139,9 @@ export default function Services() {
       image_url: service.image_url || "",
       show_on_website: service.show_on_website || false,
       show_price_on_website: service.show_price_on_website !== undefined ? service.show_price_on_website : true,
-      website_order: service.website_order || 999
+      website_order: service.website_order || 999,
+      available_in_shop: service.available_in_shop || false,
+      is_promotion: service.is_promotion || false
     });
     setIsEditing(true);
     setShowNewServiceDialog(true);
@@ -156,7 +160,9 @@ export default function Services() {
       image_url: "",
       show_on_website: false,
       show_price_on_website: true,
-      website_order: 999
+      website_order: 999,
+      available_in_shop: false,
+      is_promotion: false
     });
     setSelectedService(null);
     setIsEditing(false);
@@ -431,6 +437,37 @@ export default function Services() {
                       />
                     </div>
                   </>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-4 border-t pt-4">
+              <h3 className="text-sm font-medium">Configurações da Loja (Portal do Cliente)</h3>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="available_in_shop">Vender na Loja</Label>
+                    <p className="text-xs text-gray-500">Disponibilizar para compra no portal do cliente</p>
+                  </div>
+                  <Switch
+                    id="available_in_shop"
+                    checked={newService.available_in_shop}
+                    onCheckedChange={(checked) => setNewService({ ...newService, available_in_shop: checked })}
+                  />
+                </div>
+
+                {newService.available_in_shop && (
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="is_promotion">Destacar como Promoção</Label>
+                      <p className="text-xs text-gray-500">Aparece entre os primeiros na loja</p>
+                    </div>
+                    <Switch
+                      id="is_promotion"
+                      checked={newService.is_promotion}
+                      onCheckedChange={(checked) => setNewService({ ...newService, is_promotion: checked })}
+                    />
+                  </div>
                 )}
               </div>
             </div>
