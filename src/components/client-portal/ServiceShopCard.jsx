@@ -595,7 +595,7 @@ export default function ServiceShopCard({ clientId }) {
                 className="bg-[#3475B8] hover:bg-[#2C64A0]"
               >
                 <ShoppingCart className="w-4 h-4 mr-1" />
-                Comprar
+                Adicionar
               </Button>
             </div>
           </div>

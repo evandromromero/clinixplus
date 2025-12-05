@@ -406,7 +406,7 @@ export default function PackageShopCard({ clientId }) {
                 size="sm"
               >
                 <ShoppingCart className="w-4 h-4 mr-1" />
-                Comprar
+                Adicionar
               </Button>
             </div>
           </div>
