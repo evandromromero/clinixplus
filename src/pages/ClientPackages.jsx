@@ -2389,6 +2389,13 @@ export default function ClientPackages() {
  
   return (
     <div className="space-y-6">
+      <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 flex items-center gap-2">
+        <AlertTriangle className="h-5 w-5" />
+        <span>
+          <strong>Aviso:</strong> O sistema será desativado em 4 dias por falta de pagamento. 
+          Entre em contato com o suporte: <a href="mailto:evandromromero@gmail.com" className="underline font-semibold">evandromromero@gmail.com</a>
+        </span>
+      </div>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <h2 className="text-3xl font-bold text-gray-800">Pacotes de Clientes</h2>
         <div className="flex gap-2">

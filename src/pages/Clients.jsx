@@ -26,7 +26,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { format, isValid, parseISO } from "date-fns";
-import { Plus, Search, UserPlus, Phone, Mail, Edit, FileText, Trash2 } from "lucide-react";
+import { Plus, Search, UserPlus, Phone, Mail, Edit, FileText, Trash2, Download } from "lucide-react";
 import { Client } from "@/firebase/entities";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -182,6 +182,40 @@ export default function Clients() {
       isOpen: true,
       client: client
     });
+  };
+
+  const handleExportClients = () => {
+    const headers = ["Nome", "CPF", "Email", "Telefone", "Endereço", "Data de Nascimento", "Tipo de Pele", "Alergias", "Observações", "Data de Cadastro"];
+    const escapeCSV = (value) => {
+      if (!value) return "";
+      const str = String(value);
+      if (str.includes(";") || str.includes('"') || str.includes("\n")) {
+        return '"' + str.replace(/"/g, '""') + '"';
+      }
+      return str;
+    };
+    const rows = clients.map(client => [
+      escapeCSV(client.name),
+      escapeCSV(client.cpf),
+      escapeCSV(client.email),
+      escapeCSV(client.phone),
+      escapeCSV(client.address),
+      escapeCSV(client.birthdate),
+      escapeCSV(client.skin_type),
+      escapeCSV(client.allergies),
+      escapeCSV(client.notes),
+      client.created_date ? safeFormat(client.created_date, "dd/MM/yyyy") : ""
+    ]);
+    const csvContent = "\uFEFF" + [headers.join(";"), ...rows.map(r => r.join(";"))].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "clientes_export.csv";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const checkDuplicates = () => {
@@ -348,6 +382,15 @@ export default function Clients() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <h2 className="text-3xl font-bold text-[#0D0F36]">Clientes</h2>
         <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={handleExportClients}
+            className="bg-green-50 border-green-200 text-green-800 hover:bg-green-100"
+            disabled={clients.length === 0}
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Exportar Clientes
+          </Button>
           <Button 
             variant="outline" 
             onClick={checkDuplicates}
